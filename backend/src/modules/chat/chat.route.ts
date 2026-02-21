@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { auth } from "@/middlewares/authMiddleware";
-import * as chatController from "./chat.controller";
-import { streamChat } from "./chat.stream";
+import * as chatController from "./chat.controller.js";
+import { streamChat } from "./chat.stream.js";
 
 const router = Router();
 

@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import ChatService from "./chat.service";
-import { validateCreateChatSchema, validateUpdateChatSchema } from "./chat.validators";
+import ChatService from "./chat.service.js";
+import { validateCreateChatSchema, validateUpdateChatSchema } from "./chat.validators.js";
 
 const chatService = new ChatService();
 

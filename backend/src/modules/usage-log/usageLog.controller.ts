@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import UsageLogService from "./usageLog.service";
+import UsageLogService from "./usageLog.service.js";
 
 const usageLogService = new UsageLogService();
 

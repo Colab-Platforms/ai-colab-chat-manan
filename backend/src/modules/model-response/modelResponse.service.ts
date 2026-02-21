@@ -1,7 +1,7 @@
 import prisma from "@root/prisma";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CompleteResponseBody } from "./modelResponse.types";
+import { CompleteResponseBody } from "./modelResponse.types.js";
 
 class ModelResponseService {
     async completeResponse(userId: number, data: CompleteResponseBody) {

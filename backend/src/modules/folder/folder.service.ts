@@ -1,7 +1,7 @@
 import prisma from "@root/prisma";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CreateFolderBody, UpdateFolderBody } from "./folder.types";
+import { CreateFolderBody, UpdateFolderBody } from "./folder.types.js";
 import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
 
 class FolderService {

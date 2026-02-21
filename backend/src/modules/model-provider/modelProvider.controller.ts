@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import ModelProviderService from "./modelProvider.service";
-import { validateCreateModelProviderSchema, validateUpdateModelProviderSchema } from "./modelProvider.validators";
+import ModelProviderService from "./modelProvider.service.js";
+import { validateCreateModelProviderSchema, validateUpdateModelProviderSchema } from "./modelProvider.validators.js";
 
 const modelProviderService = new ModelProviderService();
 

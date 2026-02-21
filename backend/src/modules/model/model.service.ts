@@ -1,7 +1,7 @@
 import prisma from "@root/prisma";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CreateModelBody, UpdateModelBody } from "./model.types";
+import { CreateModelBody, UpdateModelBody } from "./model.types.js";
 import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
 import { buildPrismaQuery } from "prisma-qb";
 

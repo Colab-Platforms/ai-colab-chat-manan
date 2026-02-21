@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import FolderService from "./folder.service";
-import { validateCreateFolderSchema, validateUpdateFolderSchema } from "./folder.validators";
+import FolderService from "./folder.service.js";
+import { validateCreateFolderSchema, validateUpdateFolderSchema } from "./folder.validators.js";
 
 const folderService = new FolderService();
 

@@ -2,7 +2,7 @@ import prisma from "@root/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CreateChatBody } from "./chat.types";
+import { CreateChatBody } from "./chat.types.js";
 import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
 
 class ChatService {

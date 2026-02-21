@@ -1,9 +1,9 @@
 import prisma from "@root/prisma";
-import { seedRoles } from "./roles.seed";
-import { seedModelProviders } from "./modelProviders.seed";
-import { seedModels } from "./models.seed";
-import { seedPlans } from "./plans.seed";
-import { seedSuperAdmin } from "./superAdmin.seed";
+import { seedRoles } from "./roles.seed.js";
+import { seedModelProviders } from "./modelProviders.seed.js";
+import { seedModels } from "./models.seed.js";
+import { seedPlans } from "./plans.seed.js";
+import { seedSuperAdmin } from "./superAdmin.seed.js";
 
 async function main() {
     console.log("🌱 Starting seed...\n");

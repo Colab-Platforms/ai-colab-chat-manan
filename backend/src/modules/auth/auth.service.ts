@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { hashPassword, comparePassword } from "@/utils/auth";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { RegisterBody, LoginBody, AdminLoginBody, userSelectFields } from "./auth.types";
+import { RegisterBody, LoginBody, AdminLoginBody, userSelectFields } from "./auth.types.js";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);

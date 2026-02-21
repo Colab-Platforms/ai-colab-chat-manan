@@ -4,7 +4,7 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { userProfileSelectFields, UpdateProfileBody } from "./user.types";
+import { userProfileSelectFields, UpdateProfileBody } from "./user.types.js";
 import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
 import { buildPrismaQuery } from "prisma-qb";
 

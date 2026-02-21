@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import WalletService from "./wallet.service";
+import WalletService from "./wallet.service.js";
 
 const walletService = new WalletService();
 

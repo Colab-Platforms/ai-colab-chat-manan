@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import STATUS_CODES from "./statusCodes";
+import STATUS_CODES from "./statusCodes.js";
 
 export const sendResponse = (
   res: Response,

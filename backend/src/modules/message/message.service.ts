@@ -1,7 +1,7 @@
 import prisma from "@root/prisma";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CreateMessageBody } from "./message.types";
+import { CreateMessageBody } from "./message.types.js";
 
 class MessageService {
     async create(userId: number, data: CreateMessageBody) {

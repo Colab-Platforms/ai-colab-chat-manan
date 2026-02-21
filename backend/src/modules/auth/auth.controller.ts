@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import AuthService from "./auth.service";
-import { validateRegisterSchema, validateLoginSchema, validateAdminLoginSchema } from "./auth.validators";
+import AuthService from "./auth.service.js";
+import { validateRegisterSchema, validateLoginSchema, validateAdminLoginSchema } from "./auth.validators.js";
 
 const authService = new AuthService();
 

@@ -1,7 +1,7 @@
 import prisma from "@root/prisma";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CreatePlanBody, UpdatePlanBody } from "./plan.types";
+import { CreatePlanBody, UpdatePlanBody } from "./plan.types.js";
 import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
 import { buildPrismaQuery } from "prisma-qb";
 

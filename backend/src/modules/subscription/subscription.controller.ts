@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import SubscriptionService from "./subscription.service";
-import { validateCreateSubscriptionSchema } from "./subscription.validators";
+import SubscriptionService from "./subscription.service.js";
+import { validateCreateSubscriptionSchema } from "./subscription.validators.js";
 
 const subscriptionService = new SubscriptionService();
 

@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import UserService from "./user.service";
-import { validateUpdateProfileSchema } from "./user.validators";
+import UserService from "./user.service.js";
+import { validateUpdateProfileSchema } from "./user.validators.js";
 
 const userService = new UserService();
 

@@ -1,14 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import routes from "./routes";
-import { errorHandler } from "./middlewares/errorHandler";
+import routes from "./routes.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 import path from "path";
 import helmet from "helmet";
-import sanitizeMiddleware from "./middlewares/sanitize";
-import { notFoundHandler } from "./middlewares/notFoundHandler";
+import sanitizeMiddleware from "./middlewares/sanitize.js";
+import { notFoundHandler } from "./middlewares/notFoundHandler.js";
 import compression from "compression";
-import { startCronJobs } from "./crons";
+import { startCronJobs } from "./crons/index.js";
 
 dotenv.config();
 const app = express();

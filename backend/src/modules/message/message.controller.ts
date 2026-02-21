@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import MessageService from "./message.service";
-import { validateCreateMessageSchema } from "./message.validators";
+import MessageService from "./message.service.js";
+import { validateCreateMessageSchema } from "./message.validators.js";
 
 const messageService = new MessageService();
 

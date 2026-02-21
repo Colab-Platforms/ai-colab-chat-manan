@@ -1,5 +1,5 @@
-import tokenResetCron from "./tokenReset";
-import subscriptionExpiryCron from "./subscriptionExpiry";
+import tokenResetCron from "./tokenReset.js";
+import subscriptionExpiryCron from "./subscriptionExpiry.js";
 
 export const startCronJobs = () => {
     tokenResetCron();

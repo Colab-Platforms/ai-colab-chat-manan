@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import PlanService from "./plan.service";
-import { validateCreatePlanSchema, validateUpdatePlanSchema } from "./plan.validators";
+import PlanService from "./plan.service.js";
+import { validateCreatePlanSchema, validateUpdatePlanSchema } from "./plan.validators.js";
 
 const planService = new PlanService();
 

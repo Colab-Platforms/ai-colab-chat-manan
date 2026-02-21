@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils";
 import STATUS_CODES from "@/utils/statusCodes";
-import AttachmentService from "./attachment.service";
-import { validateCreateAttachmentSchema } from "./attachment.validators";
+import AttachmentService from "./attachment.service.js";
+import { validateCreateAttachmentSchema } from "./attachment.validators.js";
 
 const attachmentService = new AttachmentService();
 

@@ -2,7 +2,7 @@ import prisma from "@root/prisma";
 import dayjs from "dayjs";
 import { ApiError } from "@/utils/ApiError";
 import STATUS_CODES from "@/utils/statusCodes";
-import { CreateSubscriptionBody } from "./subscription.types";
+import { CreateSubscriptionBody } from "./subscription.types.js";
 
 class SubscriptionService {
     async create(userId: number, data: CreateSubscriptionBody) {
