@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { sendResponse } from "@/utils/responseUtils";
-import STATUS_CODES from "@/utils/statusCodes";
+import { sendResponse } from "@/utils/responseUtils.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import SubscriptionService from "./subscription.service.js";
 import { validateCreateSubscriptionSchema } from "./subscription.validators.js";
 

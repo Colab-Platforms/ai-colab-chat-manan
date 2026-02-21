@@ -1,7 +1,7 @@
-import prisma from "@root/prisma";
+import prisma from "@root/prisma.js";
 import dayjs from "dayjs";
-import { ApiError } from "@/utils/ApiError";
-import STATUS_CODES from "@/utils/statusCodes";
+import { ApiError } from "@/utils/ApiError.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreateSubscriptionBody } from "./subscription.types.js";
 
 class SubscriptionService {

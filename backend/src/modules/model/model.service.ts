@@ -1,8 +1,8 @@
-import prisma from "@root/prisma";
-import { ApiError } from "@/utils/ApiError";
-import STATUS_CODES from "@/utils/statusCodes";
+import prisma from "@root/prisma.js";
+import { ApiError } from "@/utils/ApiError.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreateModelBody, UpdateModelBody } from "./model.types.js";
-import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
+import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils.js";
 import { buildPrismaQuery } from "prisma-qb";
 
 class ModelService {

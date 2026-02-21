@@ -1,9 +1,9 @@
-import prisma from "@root/prisma";
+import prisma from "@root/prisma.js";
 import { v4 as uuidv4 } from "uuid";
-import { ApiError } from "@/utils/ApiError";
-import STATUS_CODES from "@/utils/statusCodes";
+import { ApiError } from "@/utils/ApiError.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreateChatBody } from "./chat.types.js";
-import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
+import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils.js";
 
 class ChatService {
     async create(userId: number, data: CreateChatBody) {

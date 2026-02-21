@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import prisma from "@root/prisma";
+import prisma from "@root/prisma.js";
 import dayjs from "dayjs";
 
 // Monthly token reset — runs at midnight on the 1st of every month

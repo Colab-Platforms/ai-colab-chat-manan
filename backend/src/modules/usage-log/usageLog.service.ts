@@ -1,5 +1,5 @@
-import prisma from "@root/prisma";
-import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils";
+import prisma from "@root/prisma.js";
+import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils.js";
 import { buildPrismaQuery } from "prisma-qb";
 
 class UsageLogService {

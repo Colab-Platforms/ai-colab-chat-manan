@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import prisma from "@root/prisma";
+import prisma from "@root/prisma.js";
 import OpenAI from "openai";
 
 interface SendMessageBody {

@@ -1,6 +1,6 @@
-import prisma from "@root/prisma";
-import { ApiError } from "@/utils/ApiError";
-import STATUS_CODES from "@/utils/statusCodes";
+import prisma from "@root/prisma.js";
+import { ApiError } from "@/utils/ApiError.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreateMessageBody } from "./message.types.js";
 
 class MessageService {

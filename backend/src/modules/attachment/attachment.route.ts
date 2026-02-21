@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { auth } from "@/middlewares/authMiddleware";
-import { uploadAttachment as multerUpload } from "@/middlewares/uploadMiddleware";
+import { auth } from "@/middlewares/authMiddleware.js";
+import { uploadAttachment as multerUpload } from "@/middlewares/uploadMiddleware.js";
 import * as attachmentController from "./attachment.controller.js";
 
 const router = Router();

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { auth } from "@/middlewares/authMiddleware";
+import { auth } from "@/middlewares/authMiddleware.js";
 import * as folderController from "./folder.controller.js";
 
 const router = Router();

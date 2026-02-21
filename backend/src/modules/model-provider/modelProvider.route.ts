@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { auth } from "@/middlewares/authMiddleware";
+import { auth } from "@/middlewares/authMiddleware.js";
 import * as modelProviderController from "./modelProvider.controller.js";
 
 const router = Router();

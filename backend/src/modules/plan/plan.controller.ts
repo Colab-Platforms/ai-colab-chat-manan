@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { sendResponse } from "@/utils/responseUtils";
-import STATUS_CODES from "@/utils/statusCodes";
+import { sendResponse } from "@/utils/responseUtils.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import PlanService from "./plan.service.js";
 import { validateCreatePlanSchema, validateUpdatePlanSchema } from "./plan.validators.js";
 

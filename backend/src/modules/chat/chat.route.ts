@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { auth } from "@/middlewares/authMiddleware";
+import { auth } from "@/middlewares/authMiddleware.js";
 import * as chatController from "./chat.controller.js";
 import { streamChat } from "./chat.stream.js";
 

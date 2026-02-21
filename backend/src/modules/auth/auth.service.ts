@@ -1,11 +1,11 @@
-import prisma from "@root/prisma";
+import prisma from "@root/prisma.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import jwt from "jsonwebtoken";
-import { hashPassword, comparePassword } from "@/utils/auth";
-import { ApiError } from "@/utils/ApiError";
-import STATUS_CODES from "@/utils/statusCodes";
+import { hashPassword, comparePassword } from "@/utils/auth.js";
+import { ApiError } from "@/utils/ApiError.js";
+import STATUS_CODES from "@/utils/statusCodes.js";
 import { RegisterBody, LoginBody, AdminLoginBody, userSelectFields } from "./auth.types.js";
 
 dayjs.extend(utc);
