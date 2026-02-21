@@ -1,7 +1,7 @@
 import prisma from "@root/prisma.js";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
 import jwt from "jsonwebtoken";
 import { hashPassword, comparePassword } from "@/utils/auth.js";
 import { ApiError } from "@/utils/ApiError.js";
