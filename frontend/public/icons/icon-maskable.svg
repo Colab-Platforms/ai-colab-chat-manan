@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Maskable: safe zone is the inner 80% — keep all content centered well within -->
+  <!-- Full bleed background -->
+  <rect width="512" height="512" fill="#0a0a0a"/>
+  <!-- Inner rounded bg (safe zone visual) -->
+  <rect x="56" y="56" width="400" height="400" rx="88" fill="#1a1a1a"/>
+  <!-- Sparkle star (scaled slightly smaller for safe zone) -->
+  <g transform="translate(256,256)">
+    <path d="M0,-90 L18,-18 L90,0 L18,18 L0,90 L-18,18 L-90,0 L-18,-18 Z" fill="#ffffff" opacity="0.95"/>
+    <path d="M66,-66 L73,-55 L84,-48 L73,-41 L66,-30 L59,-41 L48,-48 L59,-55 Z" fill="#ffffff" opacity="0.55"/>
+    <path d="M-66,50 L-61,41 L-52,36 L-61,31 L-66,22 L-71,31 L-80,36 L-71,41 Z" fill="#ffffff" opacity="0.38"/>
+  </g>
+</svg>

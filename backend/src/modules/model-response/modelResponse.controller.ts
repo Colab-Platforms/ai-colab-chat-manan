@@ -1,0 +1,22 @@
+import { Request, Response } from "express";
+import { sendResponse } from "@/utils/responseUtils";
+import STATUS_CODES from "@/utils/statusCodes";
+import ModelResponseService from "./modelResponse.service";
+import { validateCompleteResponseSchema } from "./modelResponse.validators";
+
+const modelResponseService = new ModelResponseService();
+
+export const completeResponse = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { error, value } = validateCompleteResponseSchema(req.body);
+        if (error) {
+            sendResponse(res, false, error, error.message, STATUS_CODES.BAD_REQUEST);
+            return;
+        }
+        const result = await modelResponseService.completeResponse(req.user!.id, value);
+        sendResponse(res, true, result, "Response completed successfully", STATUS_CODES.CREATED);
+    } catch (error: any) {
+        console.error("Complete response error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};

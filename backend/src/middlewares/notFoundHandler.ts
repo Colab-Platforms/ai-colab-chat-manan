@@ -1,0 +1,14 @@
+import { Request, Response, NextFunction } from "express";
+import STATUS_CODES from "@/utils/statusCodes";
+import { sendResponse } from "@/utils/responseUtils";
+
+export const notFoundHandler = (req: Request, res: Response, _next: NextFunction) => {
+    const msg = `Route not found: ${req.method} ${req.originalUrl}`;
+    try {
+        console.error(msg);
+    } catch (e) {
+        console.error(msg);
+    }
+    sendResponse(res, false, null, "Route not found", STATUS_CODES.NOT_FOUND);
+    return;
+};

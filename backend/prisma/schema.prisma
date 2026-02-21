@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Role {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  isActive  Boolean    @default(true)
+  isDeleted Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+  userRoles UserRole[]
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  firstName     String
+  lastName      String
+  email         String         @unique
+  phoneNumber   String?        @unique
+  password      String
+  isActive      Boolean        @default(true)
+  isVerified    Boolean        @default(false)
+  isDeleted     Boolean        @default(false)
+  timezone      String         @default("Asia/Kolkata")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+  folders       Folder[]
+  chats         Chat[]
+  usageLogs     UsageLog[]
+  subscriptions Subscription[]
+  userWallet    UserWallet?
+  userRoles     UserRole[]
+}
+
+model UserRole {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  roleId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  role      Role      @relation(fields: [roleId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, roleId])
+}
+
+model UserWallet {
+  id                 Int       @id @default(autoincrement())
+  userId             Int       @unique
+  user               User      @relation(fields: [userId], references: [id])
+  tokensRemaining    Int       @default(0)
+  tokensUsed         Int       @default(0)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+  REFUND
+  ADJUSTMENT
+}
+
+model Folder {
+  id        Int       @id @default(autoincrement())
+  name      String
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  chats     Chat[]
+}
+
+model Chat {
+  id         Int             @id @default(autoincrement())
+  title      String?
+  userId     Int
+  folderId   Int?
+  messages   Message[]
+  responses  ModelResponse[]
+  isArchived Boolean         @default(false)
+  isShared   Boolean         @default(false)
+  isDeleted  Boolean         @default(false)
+  shareId    String?         @unique
+  sharedAt   DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  deletedAt  DateTime?
+  user       User            @relation(fields: [userId], references: [id])
+  folder     Folder?         @relation(fields: [folderId], references: [id])
+  usageLogs  UsageLog[]
+
+  @@index([userId])
+  @@index([folderId])
+}
+
+model Message {
+  id             Int             @id @default(autoincrement())
+  chatId         Int
+  role           MessageRole
+  content        String
+  chat           Chat            @relation(fields: [chatId], references: [id])
+  attachments    Attachment[]
+  editedFromId   Int?
+  isDeleted      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  modelResponses ModelResponse[]
+
+  @@index([chatId])
+  @@index([createdAt])
+}
+
+model ModelResponse {
+  id               Int            @id @default(autoincrement())
+  chatId           Int
+  messageId        Int
+  modelId          Int
+  content          String
+  promptTokens     Int            @default(0)
+  completionTokens Int            @default(0)
+  totalTokens      Int            @default(0)
+  status           ResponseStatus @default(PENDING)
+  chat             Chat           @relation(fields: [chatId], references: [id])
+  message          Message        @relation(fields: [messageId], references: [id])
+  model            Model          @relation(fields: [modelId], references: [id])
+  createdAt        DateTime       @default(now())
+  completedAt      DateTime?
+
+  @@index([chatId])
+  @@index([messageId])
+  @@index([modelId])
+  @@index([status])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ResponseStatus {
+  PENDING
+  STREAMING
+  COMPLETED
+  FAILED
+}
+
+model Model {
+  id              Int             @id @default(autoincrement())
+  name            String
+  modelProviderId Int
+  externalId      String
+  inputCostPer1k  Decimal
+  outputCostPer1k Decimal
+  description     String?
+  isActive        Boolean         @default(true)
+  isDeleted       Boolean         @default(false)
+  responses       ModelResponse[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  usageLogs       UsageLog[]
+  modelProvider   ModelProvider   @relation(fields: [modelProviderId], references: [id])
+
+  @@unique([modelProviderId, externalId])
+}
+
+model ModelProvider {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  apiKey      String?
+  isActive    Boolean   @default(true)
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  models      Model[]
+}
+
+model Attachment {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  fileName  String
+  fileUrl   String
+  mimeType  String
+  fileSize  Int
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id])
+}
+
+model UsageLog {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  modelId          Int
+  chatId           Int?
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  user             User     @relation(fields: [userId], references: [id])
+  model            Model    @relation(fields: [modelId], references: [id])
+  chat             Chat?    @relation(fields: [chatId], references: [id])
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([modelId])
+  @@index([createdAt])
+}
+
+model Plan {
+  id             Int            @id @default(autoincrement())
+  name           String
+  monthlyPrice   Decimal
+  quarterlyPrice Decimal
+  yearlyPrice    Decimal
+  tokenLimit     Int //monthly limit
+  features       Json
+  isActive       Boolean        @default(true)
+  isDeleted      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+  subscriptions  Subscription[]
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  TRIAL
+}
+
+model Subscription {
+  id           Int                @id @default(autoincrement())
+  userId       Int
+  planId       Int
+  status       SubscriptionStatus
+  billingCycle SubscriptionCycle
+  autoRenew    Boolean            @default(true)
+  startedAt    DateTime
+  expiresAt    DateTime?
+  user         User               @relation(fields: [userId], references: [id])
+  plan         Plan               @relation(fields: [planId], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum SubscriptionCycle {
+  MONTHLY
+  YEARLY
+  QUARTERLY
+}

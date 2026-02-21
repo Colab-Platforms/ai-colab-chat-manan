@@ -1,0 +1,85 @@
+import api from "@/lib/api";
+
+export const chatService = {
+  create: (data: { title?: string; folderId?: number }) => api.post("/chats", data),
+  list: (params?: Record<string, string>) => api.get("/chats", { params }),
+  getById: (id: number) => api.get(`/chats/${id}`),
+  archive: (id: number) => api.patch(`/chats/${id}/archive`),
+  share: (id: number) => api.patch(`/chats/${id}/share`),
+  getShared: (shareId: string) => api.get(`/chats/shared/${shareId}`),
+  delete: (id: number) => api.delete(`/chats/${id}`),
+  update: (id: number, data: { title?: string; folderId?: number | null }) => api.put(`/chats/${id}`, data),
+};
+
+export const messageService = {
+  create: (data: { chatId: number; content: string; editedFromId?: number }) => api.post("/messages", data),
+};
+
+export const modelService = {
+  list: (params?: Record<string, string>) => api.get("/models", { params }),
+  getById: (id: number) => api.get(`/models/${id}`),
+  create: (data: any) => api.post("/models", data),
+  update: (id: number, data: any) => api.put(`/models/${id}`, data),
+  delete: (id: number) => api.delete(`/models/${id}`),
+};
+
+export const modelResponseService = {
+  complete: (data: any) => api.post("/model-responses/complete", data),
+};
+
+export const folderService = {
+  create: (data: { name: string }) => api.post("/folders", data),
+  list: (params?: Record<string, string>) => api.get("/folders", { params }),
+  update: (id: number, data: { name: string }) => api.put(`/folders/${id}`, data),
+  delete: (id: number) => api.delete(`/folders/${id}`),
+};
+
+export const userService = {
+  getProfile: () => api.get("/users/profile"),
+  updateProfile: (data: { firstName?: string; lastName?: string; phoneNumber?: string }) => api.put("/users/profile", data),
+  list: (params?: Record<string, string>) => api.get("/users", { params }),
+  update: (id: number, data: any) => api.put(`/users/${id}`, data),
+  delete: (id: number) => api.delete(`/users/${id}`),
+  makeAdmin: (id: number) => api.patch(`/users/${id}/make-admin`),
+};
+
+export const walletService = {
+  get: () => api.get("/wallet"),
+};
+
+export const subscriptionService = {
+  create: (data: { planId: number; billingCycle: string }) => api.post("/subscriptions", data),
+  getCurrent: () => api.get("/subscriptions/current"),
+  cancel: () => api.patch("/subscriptions/cancel"),
+};
+
+export const planService = {
+  list: (params?: Record<string, string>) => api.get("/plans", { params }),
+  getById: (id: number) => api.get(`/plans/${id}`),
+  create: (data: any) => api.post("/plans", data),
+  update: (id: number, data: any) => api.put(`/plans/${id}`, data),
+  delete: (id: number) => api.delete(`/plans/${id}`),
+};
+
+export const usageLogService = {
+  list: (params?: Record<string, string>) => api.get("/usage-logs", { params }),
+};
+
+export const modelProviderService = {
+  list: (params?: Record<string, string>) => api.get("/model-providers", { params }),
+  getById: (id: number) => api.get(`/model-providers/${id}`),
+  create: (data: any) => api.post("/model-providers", data),
+  update: (id: number, data: any) => api.put(`/model-providers/${id}`, data),
+  delete: (id: number) => api.delete(`/model-providers/${id}`),
+};
+
+export const attachmentService = {
+  upload: (messageId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("messageId", messageId.toString());
+    formData.append("file", file);
+    return api.post("/attachments", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+};

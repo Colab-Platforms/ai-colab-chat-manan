@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background -->
+  <rect width="512" height="512" rx="120" fill="#0a0a0a"/>
+  <!-- Sparkle / AI icon -->
+  <g transform="translate(256,256)">
+    <!-- Main sparkle star -->
+    <path d="M0,-110 L22,-22 L110,0 L22,22 L0,110 L-22,22 L-110,0 L-22,-22 Z" fill="#ffffff" opacity="0.95"/>
+    <!-- Small sparkle top-right -->
+    <path d="M80,-80 L88,-66 L102,-58 L88,-50 L80,-36 L72,-50 L58,-58 L72,-66 Z" fill="#ffffff" opacity="0.6"/>
+    <!-- Small sparkle bottom-left -->
+    <path d="M-80,60 L-74,49 L-63,43 L-74,37 L-80,26 L-86,37 L-97,43 L-86,49 Z" fill="#ffffff" opacity="0.4"/>
+  </g>
+</svg>
