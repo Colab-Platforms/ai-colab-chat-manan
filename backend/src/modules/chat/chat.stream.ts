@@ -12,6 +12,8 @@ export async function streamChat(req: Request, res: Response) {
     const chatId = Number(req.params.chatId);
     const { content, modelId } = req.body as SendMessageBody;
 
+    console.log("🎯 streamChat hit:", { userId, chatId, content, modelId });
+
     try {
         // Validate inputs
         if (!content?.trim()) {
@@ -108,6 +110,7 @@ export async function streamChat(req: Request, res: Response) {
         console.log("  Messages:", conversationHistory.length);
 
         try {
+            console.log("🚀 Creating OpenRouter client...");
             const client = new OpenAI({
                 baseURL: "https://openrouter.ai/api/v1",
                 apiKey: apiKey || "",
@@ -117,6 +120,10 @@ export async function streamChat(req: Request, res: Response) {
                 },
             });
 
+            console.log("📤 Sending request to OpenRouter...");
+            console.log("  model:", model.externalId);
+            console.log("  messages:", JSON.stringify(conversationHistory, null, 2));
+
             const stream = await client.chat.completions.create({
                 model: model.externalId,
                 messages: conversationHistory,
@@ -124,7 +131,10 @@ export async function streamChat(req: Request, res: Response) {
                 stream_options: { include_usage: true },
             });
 
+            console.log("📡 OpenRouter stream started, reading chunks...");
+            let chunkIndex = 0;
             for await (const chunk of stream) {
+
                 const delta = chunk.choices?.[0]?.delta?.content;
                 if (delta) {
                     fullContent += delta;
@@ -140,6 +150,8 @@ export async function streamChat(req: Request, res: Response) {
                     completionTokens = chunk.usage.completion_tokens || 0;
                 }
             }
+            console.log("✅ Stream complete. Total chunks:", chunkIndex);
+            console.log("📝 Full content:", fullContent);
         } catch (aiError: any) {
             console.error("❌ OpenRouter Error:");
             console.error("  Status:", aiError.status);

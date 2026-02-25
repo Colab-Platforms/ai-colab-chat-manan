@@ -35,12 +35,17 @@ export default function ChatPage() {
   const [streamingContent, setStreamingContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const firstMessageSent = useRef(false);
+  const isStreamingRef = useRef(false);
 
   const fetchChat = useCallback(async () => {
     try {
       const res = await chatService.getById(chatId);
       const chat = res.data.data;
-      setMessages(chat.messages || []);
+
+      setMessages((prev) => {
+        if (isStreamingRef.current) return prev;
+        return chat.messages || [];
+      });
 
       const tabs: Record<number, number> = {};
       (chat.messages || []).forEach((msg: Message) => {
@@ -48,7 +53,11 @@ export default function ChatPage() {
           tabs[msg.id] = msg.modelResponses[0].model.id;
         }
       });
-      setActiveModelTabs(tabs);
+      
+      setActiveModelTabs((prev) => {
+        if (isStreamingRef.current) return prev;
+        return tabs;
+      });
     } catch { /* ignore */ }
   }, [chatId]);
 
@@ -105,6 +114,7 @@ export default function ChatPage() {
     if (isSending) return;
     setIsSending(true);
     setIsStreaming(true);
+    isStreamingRef.current = true;
     setStreamingContent("");
 
     const targetModelId = modelId || selectedModels[0];
@@ -230,12 +240,14 @@ export default function ChatPage() {
       }
 
       // Refresh to get real IDs from DB
+      isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
       toast.error(err.message || "Failed to send message");
       // Remove placeholder messages
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id && m.id !== streamingMsgId));
     } finally {
+      isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
       setStreamingContent("");

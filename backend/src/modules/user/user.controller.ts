@@ -3,6 +3,7 @@ import { sendResponse } from "@/utils/responseUtils.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import UserService from "./user.service.js";
 import { validateUpdateProfileSchema } from "./user.validators.js";
+import { uploadToCloudinary } from "@/utils/cloudinary.js";
 
 const userService = new UserService();
 
@@ -25,6 +26,12 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
+        // If a file was uploaded, push it to Cloudinary
+        if (req.file) {
+            const { url } = await uploadToCloudinary(req.file.buffer);
+            value.profileImage = url;
+        }
+
         const result = await userService.updateProfile(req.user!.id, value);
         sendResponse(res, true, result, "Profile updated successfully", STATUS_CODES.OK);
     } catch (error: any) {
@@ -35,7 +42,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
 
 export const listUsers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result = await userService.listUsers(req.query);
+        const result = await userService.listUsers(req.query, req.user!.role, req.user!.id);
         sendResponse(res, true, result, "Users fetched successfully", STATUS_CODES.OK);
     } catch (error: any) {
         console.error("List users error", error);
@@ -45,7 +52,15 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
 
 export const softDeleteUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result = await userService.softDelete(parseInt(req.params.id as string));
+        const targetId = parseInt(req.params.id as string);
+        const isAdmin = req.user!.role === "ADMIN" || req.user!.role === "SUPERADMIN";
+
+        if (!isAdmin && req.user!.id !== targetId) {
+            sendResponse(res, false, null, "You can only delete your own account", STATUS_CODES.FORBIDDEN);
+            return;
+        }
+
+        const result = await userService.softDelete(targetId);
         sendResponse(res, true, result, "User deleted successfully", STATUS_CODES.OK);
     } catch (error: any) {
         console.error("Delete user error", error);
@@ -53,22 +68,32 @@ export const softDeleteUser = async (req: Request, res: Response): Promise<void>
     }
 };
 
-export const makeAdmin = async (req: Request, res: Response): Promise<void> => {
+export const adminUpdateUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result = await userService.makeAdmin(parseInt(req.params.id as string));
-        sendResponse(res, true, result, "User promoted to ADMIN", STATUS_CODES.OK);
+        const result = await userService.adminUpdateUser(parseInt(req.params.id as string), req.body, req.user!.role);
+        sendResponse(res, true, result, "User updated successfully", STATUS_CODES.OK);
     } catch (error: any) {
-        console.error("Make admin error", error);
+        console.error("Admin update user error", error);
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };
 
-export const adminUpdateUser = async (req: Request, res: Response): Promise<void> => {
+export const getUserUsage = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result = await userService.adminUpdateUser(parseInt(req.params.id as string), req.body);
-        sendResponse(res, true, result, "User updated successfully", STATUS_CODES.OK);
+        const result = await userService.getUserUsage(parseInt(req.params.id as string), req.query);
+        sendResponse(res, true, result, "User usage fetched successfully", STATUS_CODES.OK);
     } catch (error: any) {
-        console.error("Admin update user error", error);
+        console.error("Get user usage error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};
+
+export const getUserSubscription = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const result = await userService.getUserSubscription(parseInt(req.params.id as string));
+        sendResponse(res, true, result, "User subscription fetched successfully", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Get user subscription error", error);
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };

@@ -8,6 +8,11 @@ class UsageLogService {
 
         const { where, orderBy } = buildPrismaQuery({
             query,
+            searchFields: [
+                { field: "firstName", model: "user" },
+                { field: "lastName", model: "user" },
+                { field: "email", model: "user" },
+            ],
             filterFields: [
                 { key: "userId", field: "userId", type: "number" },
                 { key: "modelId", field: "modelId", type: "number" },

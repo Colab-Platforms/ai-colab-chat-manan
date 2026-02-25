@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { modelProviderService } from "@/lib/services";
-import { Loader2, Eye, Pencil, Trash2, Plus, Save } from "lucide-react";
+import { Loader2, Eye, Pencil, Trash2, Save } from "lucide-react";
 import { toast } from "react-toastify";
 
 export default function ProvidersAdminPage() {
@@ -46,14 +46,12 @@ export default function ProvidersAdminPage() {
   useEffect(() => { fetchProviders(); }, [fetchProviders]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openCreate = () => { setForm({ name: "", description: "", website: "", isActive: true }); setEditProvider({ _isNew: true }); };
   const openEdit = (p: any) => { setForm({ name: p.name, description: p.description || "", website: p.website || "", isActive: p.isActive }); setEditProvider(p); };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (editProvider._isNew) { await modelProviderService.create(form); toast.success("Provider created"); }
-      else { await modelProviderService.update(editProvider.id, form); toast.success("Provider updated"); }
+      await modelProviderService.update(editProvider.id, form); toast.success("Provider updated");
       setEditProvider(null); fetchProviders();
     } catch { toast.error("Failed to save"); } finally { setSaving(false); }
   };
@@ -90,7 +88,7 @@ export default function ProvidersAdminPage() {
         page={page} pageSize={pageSize} totalRecords={pagination.totalRecords || 0} totalPages={pagination.totalPages || 1}
         hasNextPage={pagination.hasNextPage} hasPreviousPage={pagination.hasPreviousPage}
         onPageChange={setPage} onPageSizeChange={setPageSize}
-        headerActions={<Button className="gap-2" onClick={openCreate}><Plus className="w-4 h-4" /> Add Provider</Button>}
+        headerActions={<></>}
         filters={[{ key: "isActive", label: "Active", type: "boolean" }]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
@@ -115,7 +113,7 @@ export default function ProvidersAdminPage() {
       {/* Create/Edit */}
       <Dialog open={!!editProvider} onOpenChange={() => setEditProvider(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editProvider?._isNew ? "Create Provider" : "Edit Provider"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edit Provider</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><label className="text-sm font-medium">Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="space-y-1"><label className="text-sm font-medium">Description</label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} /></div>
@@ -125,7 +123,7 @@ export default function ProvidersAdminPage() {
               <label htmlFor="providerActive" className="text-sm">Active</label>
             </div>
           </div>
-          <DialogFooter><Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {editProvider?._isNew ? "Create" : "Save"}</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

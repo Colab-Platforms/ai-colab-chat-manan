@@ -1,32 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
 import {
   LayoutDashboard, Wallet, CreditCard, BarChart3,
   UserCircle, Users, Bot, Building, CreditCard as PlansIcon,
-  ArrowLeft, Menu, X, Sun, Moon, LogOut, MessageSquare, MoreHorizontal
+  ArrowLeft, Menu, X, Archive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useTheme } from "@/context/theme-context";
-import { useRouter } from "next/navigation";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AppSidebar } from "@/components/sidebar/sidebar";
 
 const userNav = [
   { label: "Dashboard", href: "/profile", icon: LayoutDashboard },
   { label: "Wallet", href: "/profile/wallet", icon: Wallet },
   { label: "Subscription", href: "/profile/subscription", icon: CreditCard },
-  { label: "Usage", href: "/profile/usage", icon: BarChart3 },
+  { label: "My Usage", href: "/profile/usage", icon: BarChart3 },
   { label: "My Account", href: "/profile/account", icon: UserCircle },
+  { label: "Archived Chats", href: "/profile/archived", icon: Archive },
 ];
 
 const adminNav = [
@@ -34,28 +31,116 @@ const adminNav = [
   { label: "Plans", href: "/profile/plans", icon: PlansIcon },
   { label: "Models", href: "/profile/models", icon: Bot },
   { label: "Providers", href: "/profile/providers", icon: Building },
+  { label: "Usage", href: "/profile/admin-usage", icon: BarChart3 },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, hasRole, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const router = useRouter();
+  const { hasRole } = useAuth();
   const pathname = usePathname();
-  const isAdmin = hasRole("ADMIN") || hasRole("SUPER_ADMIN");
+  const isAdmin = hasRole("ADMIN") || hasRole("SUPERADMIN");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
-  const navContent = (
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebarCollapsed");
+    if (saved === "true") setCollapsed(true);
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebarCollapsed", String(next));
+      return next;
+    });
+  };
+
+  // ─── Icons shown in the collapsed 64-px sidebar ───────────────────────────
+  const collapsedIcons = (
     <>
-      <div className="p-4 border-b border-border/30">
-        <Link href="/">
-          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground w-full justify-start cursor-pointer">
+      {/* Back to chat */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link href="/">
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent side="right">Back to Chat</TooltipContent>
+      </Tooltip>
+
+      <div className="w-8 h-px bg-border/50 my-2" />
+
+      {/* User nav icons */}
+      {userNav.map((item) => {
+        const isActive = pathname === item.href;
+        return (
+          <Tooltip key={item.href}>
+            <TooltipTrigger asChild>
+              <Link href={item.href}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-9 w-9 rounded-lg cursor-pointer ${
+                    isActive
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+                  }`}
+                >
+                  <item.icon className="w-4 h-4" />
+                </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">{item.label}</TooltipContent>
+          </Tooltip>
+        );
+      })}
+
+      {isAdmin && (
+        <>
+          <div className="w-8 h-px bg-border/50 my-2" />
+          {adminNav.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                  <Link href={item.href}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-9 w-9 rounded-lg cursor-pointer ${
+                        isActive
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+                      }`}
+                    >
+                      <item.icon className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </>
+      )}
+    </>
+  );
+
+  // ─── Expanded inner content ───────────────────────────────────────────────
+  const innerContent = (
+    <>
+      {/* Back to chat link — sits just below the logo/collapse row */}
+      <div className="px-3 pb-2">
+        <Link href="/" onClick={() => setMobileOpen(false)}>
+          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground justify-start cursor-pointer w-full">
             <ArrowLeft className="w-4 h-4" />
             Back to Chat
           </Button>
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-1">
         <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">General</p>
         {userNav.map((item) => {
           const isActive = pathname === item.href;
@@ -67,7 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer
                 ${isActive
                   ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
                 }`}
             >
               <item.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} />
@@ -91,7 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer
                     ${isActive
                       ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
                     }`}
                 >
                   <item.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} />
@@ -105,17 +190,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </>
   );
 
+  const sidebarContent = (
+    <AppSidebar
+      variant="settings"
+      collapsed={false}
+      onToggleCollapse={toggleCollapsed}
+      onMobileClose={() => setMobileOpen(false)}
+      collapsedIcons={collapsedIcons}
+    >
+      {innerContent}
+    </AppSidebar>
+  );
+
+  const collapsedSidebarContent = (
+    <AppSidebar
+      variant="settings"
+      collapsed={true}
+      onToggleCollapse={toggleCollapsed}
+      onMobileClose={() => setMobileOpen(false)}
+      collapsedIcons={collapsedIcons}
+    >
+      {innerContent}
+    </AppSidebar>
+  );
+
   return (
-    <div className="flex h-full">
-      {/* Mobile toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="md:hidden fixed top-3 left-3 z-50 cursor-pointer"
-        onClick={() => setMobileOpen(!mobileOpen)}
-      >
-        {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </Button>
+    <div className="flex h-full relative bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 text-foreground">
+      {/* Mobile top bar — same pattern as chat layout */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-3 bg-background/80 backdrop-blur-md border-b border-border/50 justify-between">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="cursor-pointer -ml-2 text-foreground"
+          onClick={() => setMobileOpen(!mobileOpen)}
+        >
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </Button>
+        <span className="font-semibold text-sm">Settings</span>
+        <div className="w-8" />{/* spacer to center the title */}
+      </div>
 
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -124,50 +237,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:relative z-40 h-full w-[280px] flex-shrink-0 border-r border-border/40
-        bg-background md:bg-gradient-to-b md:from-muted/30 md:via-background md:to-muted/20 flex flex-col
-        transition-transform duration-200
-        ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        fixed md:relative z-50 h-full flex-shrink-0 border-r border-border/40
+        bg-background md:bg-transparent flex flex-col
+        transition-all duration-300 ease-in-out overflow-hidden
+        ${mobileOpen ? "translate-x-0 w-[280px]" : "-translate-x-full md:translate-x-0"}
+        ${collapsed ? "md:w-[64px]" : "md:w-[280px]"}
       `}>
-        {navContent}
-
-        {/* User profile */}
-        <div className="p-3 mt-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-2 text-sm cursor-pointer hover:bg-muted overflow-hidden">
-                <Avatar className="w-9 h-9 border border-border/50">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                    {user?.firstName?.[0]}{user?.lastName?.[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col items-start min-w-0 flex-1">
-                  <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
-                  {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
-                </div>
-                <MoreHorizontal className="w-4 h-4 ml-auto text-muted-foreground flex-shrink-0" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[240px]">
-              <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
-                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                {theme === "dark" ? "Light Mode" : "Dark Mode"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setMobileOpen(false); router.push("/"); }} className="gap-2 cursor-pointer">
-                <MessageSquare className="w-4 h-4" /> Go to Chat
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { logout(); router.replace("/login"); }} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
-                <LogOut className="w-4 h-4" /> Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Desktop: show collapsed or expanded */}
+        <div className="hidden md:flex h-full">
+          {collapsed ? collapsedSidebarContent : (
+            <div className="w-[280px] min-w-[280px] h-full flex flex-col">
+              {sidebarContent}
+            </div>
+          )}
+        </div>
+        {/* Mobile: always show expanded */}
+        <div className="md:hidden h-full flex flex-col w-[280px] min-w-[280px]">
+          {sidebarContent}
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto p-4 md:p-6 pt-14 md:pt-6">
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
+        <div className="max-w-5xl mx-auto p-4 md:p-6">
           {children}
         </div>
       </main>

@@ -58,7 +58,7 @@ export default function SubscriptionPage() {
       </div>
 
       {subscription && (
-        <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/5 border-border/30">
+        <Card className="bg-card/90 backdrop-blur-sm border-border/30">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -83,7 +83,7 @@ export default function SubscriptionPage() {
         </Card>
       )}
 
-      <Card className="border-border/30">
+      <Card className="border-border/30 bg-card/90 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base">Available Plans</CardTitle>
           <CardDescription>Choose the plan that works for you</CardDescription>
@@ -91,7 +91,7 @@ export default function SubscriptionPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {plans.map((plan: any) => (
-              <div key={plan.id} className="border border-border/40 rounded-xl p-5 space-y-3 bg-gradient-to-br from-muted/30 to-background hover:shadow-md transition-shadow">
+              <div key={plan.id} className="border border-border/40 rounded-xl p-5 space-y-3 bg-card/80 hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-lg">{plan.name}</h3>
                   <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">

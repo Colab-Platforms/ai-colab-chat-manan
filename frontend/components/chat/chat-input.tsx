@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, Loader2, Mic, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon
+  Plus, Loader2, Mic, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -30,6 +30,8 @@ interface ChatInputProps {
   onSend: (content: string, files?: File[]) => void;
   isSending: boolean;
   forceReset?: boolean;
+  initialPrompt?: string;
+  onPromptClear?: () => void;
 }
 
 type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH";
@@ -42,6 +44,8 @@ export function ChatInput({
   onSend,
   isSending,
   forceReset,
+  initialPrompt,
+  onPromptClear,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -76,6 +80,19 @@ export function ChatInput({
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [content]);
+
+  useEffect(() => {
+    if (initialPrompt) {
+      setContent(initialPrompt);
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        // Move cursor to end
+        const len = initialPrompt.length;
+        textareaRef.current.setSelectionRange(len, len);
+      }
+      onPromptClear?.();
+    }
+  }, [initialPrompt, onPromptClear]);
 
   const handleSubmit = () => {
     if (!content.trim() || isSending) return;
@@ -196,10 +213,13 @@ export function ChatInput({
 
             <div className="flex items-center gap-2 flex-shrink-0 mb-0.5 mr-1">
               <div className="h-6 w-px bg-border/60 mr-1 hidden sm:block" />
+              {/* Hide mic on mobile when user is typing to save space */}
               <Button 
                 variant="ghost" 
                 size="icon" 
                 className={`h-10 w-10 rounded-full transition-colors ${
+                  content.trim() ? "hidden sm:inline-flex" : "inline-flex"
+                } ${
                   isListening 
                     ? "text-destructive bg-destructive/10 hover:bg-destructive/20" 
                     : "text-muted-foreground hover:bg-muted"
@@ -246,19 +266,31 @@ export function ChatInput({
                 <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2">Capabilities</DropdownMenuLabel>
                 <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("STANDARD")}>
                   <div className="w-4 flex justify-center">{chatType === "STANDARD" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <span>Standard Chat</span>
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-muted-foreground mr-1" />
+                    <span>Standard Chat</span>
+                  </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("WEB_SEARCH")}>
                   <div className="w-4 flex justify-center">{chatType === "WEB_SEARCH" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <span>Web Search</span>
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-muted-foreground mr-1" />
+                    <span>Web Search</span>
+                  </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("DEEP_RESEARCH")}>
                   <div className="w-4 flex justify-center">{chatType === "DEEP_RESEARCH" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <span>Deep Research</span>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-muted-foreground mr-1" />
+                    <span>Deep Research</span>
+                  </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("IMAGE_GENERATION")}>
                   <div className="w-4 flex justify-center">{chatType === "IMAGE_GENERATION" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <span>Image Generation</span>
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-muted-foreground mr-1" />
+                    <span>Image Generation</span>
+                  </div>
                 </DropdownMenuItem>
                 
                 <DropdownMenuSeparator className="my-2" />

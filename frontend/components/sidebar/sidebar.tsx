@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -34,6 +34,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Plus,
   MessageSquare,
   Folder,
@@ -42,7 +48,7 @@ import {
   Sun,
   Moon,
   LogOut,
-  User,
+  Settings,
   ChevronRight,
   Archive,
   Trash2,
@@ -50,10 +56,16 @@ import {
   Edit2,
   CornerUpRight,
   Share,
-  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
 import { toast } from "react-toastify";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Chat {
   id: number;
@@ -68,6 +80,212 @@ interface FolderItem {
   name: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AppSidebar – Unified shell used by both chat and settings variants
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AppSidebarProps {
+  /** "chat"     → footer shows Settings link
+   *  "settings" → footer shows Go to Chat link */
+  variant: "chat" | "settings";
+  /** Scrollable inner content rendered between header and footer */
+  children: ReactNode;
+  /** Optional icon buttons shown inside the 64-px collapsed sidebar */
+  collapsedIcons?: ReactNode;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  /** Called when a mobile-overlay action should close the sheet */
+  onMobileClose?: () => void;
+  /** Called on logout; if omitted the component calls logout() directly */
+  onLogout?: () => void;
+}
+
+export function AppSidebar({
+  variant,
+  children,
+  collapsedIcons,
+  collapsed,
+  onToggleCollapse,
+  onMobileClose,
+  onLogout,
+}: AppSidebarProps) {
+  const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+
+  const handleClose = () => onMobileClose?.();
+
+  const handleLogout = () => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      logout();
+      router.replace("/login");
+    }
+  };
+
+  // ─── Collapsed icon-only sidebar (desktop) ───────────────────────────────
+  if (collapsed) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <div className="h-full flex flex-col items-center bg-[#ffffff80] dark:bg-[#00000080] text-sidebar-foreground w-[64px] min-w-[64px] py-3 gap-1">
+          {/* Logo */}
+          <div className="mb-1">
+            <Image src="/black.webp" alt="AI Colab" width={28} height={28} className="dark:hidden opacity-90 h-auto" priority />
+            <Image src="/white.webp" alt="AI Colab" width={28} height={28} className="hidden dark:block opacity-90 h-auto" priority />
+          </div>
+
+          {/* Expand toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer"
+                onClick={onToggleCollapse}
+              >
+                <PanelLeftOpen className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Expand sidebar</TooltipContent>
+          </Tooltip>
+
+          {/* Variant-specific collapsed icons */}
+          {collapsedIcons}
+
+          <div className="flex-1" />
+
+          {/* User Avatar */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full cursor-pointer p-0">
+                <Avatar className="w-8 h-8 border border-border/50">
+                  {user?.profileImage && <AvatarImage src={user.profileImage} alt="Profile" className="object-cover" />}
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="end" className="w-[200px]">
+              <div className="px-2 py-1.5 border-b border-border/50 mb-1">
+                <span className="font-medium text-sm">{user?.firstName} {user?.lastName}</span>
+                {user?.email && <p className="text-xs text-muted-foreground mt-0.5">{user?.email}</p>}
+              </div>
+              <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
+                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              </DropdownMenuItem>
+              {variant === "chat" ? (
+                <DropdownMenuItem onClick={() => { handleClose(); router.push("/profile"); }} className="gap-2 cursor-pointer">
+                  <Settings className="w-4 h-4" /> Settings
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => { handleClose(); router.push("/"); }} className="gap-2 cursor-pointer">
+                  <MessageSquare className="w-4 h-4" /> Go to Chat
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
+                <LogOut className="w-4 h-4" /> Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  // ─── Full expanded sidebar ────────────────────────────────────────────────
+  return (
+    <div className="h-full flex flex-col bg-[#ffffff80] dark:bg-[#00000080] text-sidebar-foreground w-full">
+      {/* Logo & collapse toggle */}
+      <div className="px-5 pt-5 pb-2 flex items-center justify-between">
+        <div>
+          <Image src="/black.webp" alt="AI Colab" width={100} height={28} className="dark:hidden opacity-90 h-auto" priority />
+          <Image src="/white.webp" alt="AI Colab" width={100} height={28} className="hidden dark:block opacity-90 h-auto" priority />
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Mobile close button — same role as Sheet's built-in X */}
+          {onMobileClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer md:hidden"
+              onClick={onMobileClose}
+              aria-label="Close sidebar"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          )}
+          {/* Desktop collapse button */}
+          {onToggleCollapse && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer hidden md:flex"
+              onClick={onToggleCollapse}
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Inner content (scrollable area, nav links, etc.) */}
+      {children}
+
+      <Separator className="opacity-50" />
+
+      {/* Footer / User Profile */}
+      <div className="p-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-2 text-sm cursor-pointer hover:bg-sidebar-accent overflow-hidden">
+              <Avatar className="w-9 h-9 border border-border/50">
+                {user?.profileImage && <AvatarImage src={user.profileImage} alt="Profile" className="object-cover" />}
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col items-start min-w-0 flex-1">
+                <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
+                {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
+              </div>
+              <MoreHorizontal className="w-4 h-4 ml-auto text-muted-foreground flex-shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[240px]">
+            <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {theme === "dark" ? "Light Mode" : "Dark Mode"}
+            </DropdownMenuItem>
+            {variant === "chat" ? (
+              <DropdownMenuItem onClick={() => { handleClose(); router.push("/profile"); }} className="gap-2 cursor-pointer">
+                <Settings className="w-4 h-4" /> Settings
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => { handleClose(); router.push("/"); }} className="gap-2 cursor-pointer">
+                <MessageSquare className="w-4 h-4" /> Go to Chat
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
+              <LogOut className="w-4 h-4" /> Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sidebar – Chat sidebar (wraps AppSidebar with chat-specific children)
+// Call site in (chat)/layout.tsx stays unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface SidebarProps {
   chats: Chat[];
   folders: FolderItem[];
@@ -76,13 +294,13 @@ interface SidebarProps {
   onLogout: () => void;
   hasMore?: boolean;
   onLoadMore?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, hasMore, onLoadMore }: SidebarProps) {
-  const { user } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const router = useRouter();
+export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, hasMore, onLoadMore, collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
@@ -118,6 +336,9 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
       await chatService.delete(deleteTarget);
       toast.success("Chat deleted");
       onRefresh();
+      if (pathname === `/c/${deleteTarget}`) {
+        router.push("/");
+      }
       setDeleteTarget(null);
     } catch {
       toast.error("Failed to delete chat");
@@ -132,6 +353,9 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
     try {
       await chatService.archive(chatId);
       onRefresh();
+      if (pathname === `/c/${chatId}`) {
+        router.push("/");
+      }
     } catch { /* ignore */ }
   };
 
@@ -207,14 +431,50 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
 
   const unfoldered = filteredChats.filter((c) => !c.folderId);
 
-  return (
-    <div className="h-full flex flex-col bg-[#ffffff80] dark:bg-[#00000080] text-sidebar-foreground">
-      {/* Logos */}
-      <div className="px-5 pt-5 pb-2">
-        <Image src="/black.webp" alt="AI Colab" width={100} height={28} className="dark:hidden opacity-90 h-auto" priority />
-        <Image src="/white.webp" alt="AI Colab" width={100} height={28} className="hidden dark:block opacity-90 h-auto" priority />
-      </div>
+  // ─── Collapsed icon-only icons for chat variant ───
+  const collapsedIcons = (
+    <>
+      {/* New Chat */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer"
+            onClick={handleNewChat}
+          >
+            <Plus className="w-5 h-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">New Chat</TooltipContent>
+      </Tooltip>
 
+      {/* Search */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer"
+            onClick={() => { if (onToggleCollapse) onToggleCollapse(); }}
+          >
+            <Search className="w-4 h-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Search chats</TooltipContent>
+      </Tooltip>
+    </>
+  );
+
+  return (
+    <AppSidebar
+      variant="chat"
+      collapsed={collapsed}
+      onToggleCollapse={onToggleCollapse}
+      onMobileClose={onMobileClose}
+      onLogout={onLogout}
+      collapsedIcons={collapsedIcons}
+    >
       {/* New Chat & Folders */}
       <div className="p-3 pb-2 space-y-2">
         <Button
@@ -332,41 +592,6 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
         </div>
       </ScrollArea>
 
-      <Separator className="opacity-50" />
-
-      {/* Footer / User Profile */}
-      <div className="p-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-2 text-sm cursor-pointer hover:bg-sidebar-accent overflow-hidden">
-              <Avatar className="w-9 h-9 border border-border/50">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col items-start min-w-0 flex-1">
-                <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
-                {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
-              </div>
-              <MoreHorizontal className="w-4 h-4 ml-auto text-muted-foreground flex-shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[240px]">
-            <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
-              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              {theme === "dark" ? "Light Mode" : "Dark Mode"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { onMobileClose(); router.push("/profile"); }} className="gap-2 cursor-pointer">
-              <Settings className="w-4 h-4" /> Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
-              <LogOut className="w-4 h-4" /> Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       {/* Delete confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
@@ -384,8 +609,8 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
             <DialogTitle>New Project Folder</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <Input 
-              placeholder="e.g. Marketing Campaign" 
+            <Input
+              placeholder="e.g. Marketing Campaign"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               autoFocus
@@ -398,6 +623,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       {/* Rename Folder Modal */}
       <Dialog open={!!renameFolderTarget} onOpenChange={(open) => !open && setRenameFolderTarget(null)}>
         <DialogContent>
@@ -405,7 +631,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
             <DialogTitle>Rename Project</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <Input 
+            <Input
               value={renameFolderTarget?.name || ""}
               onChange={(e) => setRenameFolderTarget(prev => prev ? { ...prev, name: e.target.value } : null)}
               autoFocus
@@ -414,7 +640,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameFolderTarget(null)}>Cancel</Button>
-            <Button onClick={() => renameFolderTarget && handleRenameFolder(renameFolderTarget.id, renameFolderTarget.name)} disabled={!renameFolderTarget?.name.trim()}>Save Options</Button>
+            <Button onClick={() => renameFolderTarget && handleRenameFolder(renameFolderTarget.id, renameFolderTarget.name)} disabled={!renameFolderTarget?.name.trim()}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -436,10 +662,13 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-    </div>
+    </AppSidebar>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatItem – unchanged
+// ─────────────────────────────────────────────────────────────────────────────
 
 function ChatItem({
   chat,

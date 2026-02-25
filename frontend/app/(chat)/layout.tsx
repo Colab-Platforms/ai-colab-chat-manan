@@ -4,11 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Sidebar } from "@/components/sidebar/sidebar";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu, Settings, LogOut, Sun, Moon, User } from "lucide-react";
+import { Menu, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
-import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +40,21 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Hydrate sidebar collapsed state from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebarCollapsed");
+    if (saved === "true") setSidebarCollapsed(true);
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebarCollapsed", String(next));
+      return next;
+    });
+  };
 
   const isProfileRoute = pathname.startsWith("/profile");
 
@@ -49,13 +62,13 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     try {
       const res = await chatService.list({ page: pageNum.toString(), pageSize: "10" });
       const fetched = res.data.data?.data || [];
-      
+
       setChats(prev => {
         if (pageNum === 1) return fetched;
         const exists = new Set(prev.map((c: any) => c.id));
         return [...prev, ...fetched.filter((c: any) => !exists.has(c.id))];
       });
-      
+
       setPage(pageNum);
       setHasMore(fetched.length === 10);
     } catch { /* ignore */ }
@@ -120,29 +133,32 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       onLogout={handleLogout}
       hasMore={hasMore}
       onLoadMore={() => { if (hasMore) fetchChats(page + 1); }}
+      collapsed={sidebarCollapsed}
+      onToggleCollapse={toggleSidebarCollapsed}
     />
   );
 
   return (
     <div className="h-dvh flex bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 overflow-hidden text-foreground">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-[280px] flex-shrink-0 border-r border-border/50">
+      <aside
+        className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-all duration-300 ease-in-out ${
+          sidebarCollapsed ? "w-[64px]" : "w-[280px]"
+        }`}
+      >
         {sidebarContent}
       </aside>
 
-      {/* Mobile sidebar and top navigation */}
+      {/* Mobile top navigation bar — rendered first so sidebar (same z) sits on top via DOM order */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-3 bg-background/80 backdrop-blur-md border-b border-border/50 justify-between">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="cursor-pointer -ml-2 text-foreground">
-              <Menu className="w-5 h-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-[280px] p-0">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            {sidebarContent}
-          </SheetContent>
-        </Sheet>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="cursor-pointer -ml-2 text-foreground"
+          onClick={() => setMobileOpen(true)}
+        >
+          <Menu className="w-5 h-5" />
+        </Button>
         <span className="font-semibold text-sm">AI Colab</span>
         <div className="flex-shrink-0">
           <DropdownMenu>
@@ -175,6 +191,23 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Mobile overlay — below sidebar and top bar */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile sidebar — z-50, rendered after top bar in DOM so it sits on top naturally */}
+      <aside className={`
+        md:hidden fixed z-50 h-full w-[280px] flex-shrink-0 border-r border-border/40
+        bg-background flex flex-col transition-all duration-300 ease-in-out
+        ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
+        {sidebarContent}
+      </aside>
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 md:pt-0 pt-14">

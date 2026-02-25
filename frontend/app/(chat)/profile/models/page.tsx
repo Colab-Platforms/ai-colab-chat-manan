@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { modelService, modelProviderService } from "@/lib/services";
-import { Loader2, Eye, Pencil, Trash2, Plus, Save } from "lucide-react";
+import { Loader2, Eye, Pencil, Trash2, Save } from "lucide-react";
 import { toast } from "react-toastify";
 
 export default function ModelsAdminPage() {
@@ -49,14 +49,12 @@ export default function ModelsAdminPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openCreate = () => { setForm({ ...defaultForm, modelProviderId: providers[0]?.id || 0 }); setEditModel({ _isNew: true }); };
   const openEdit = (m: any) => { setForm({ name: m.name, externalId: m.externalId, modelProviderId: m.modelProviderId, inputCostPer1k: m.inputCostPer1k, outputCostPer1k: m.outputCostPer1k, maxTokens: m.maxTokens, isActive: m.isActive }); setEditModel(m); };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (editModel._isNew) { await modelService.create(form); toast.success("Model created"); }
-      else { await modelService.update(editModel.id, form); toast.success("Model updated"); }
+      await modelService.update(editModel.id, form); toast.success("Model updated");
       setEditModel(null); fetchData();
     } catch { toast.error("Failed to save"); } finally { setSaving(false); }
   };
@@ -99,7 +97,7 @@ export default function ModelsAdminPage() {
         page={page} pageSize={pageSize} totalRecords={pagination.totalRecords || 0} totalPages={pagination.totalPages || 1}
         hasNextPage={pagination.hasNextPage} hasPreviousPage={pagination.hasPreviousPage}
         onPageChange={setPage} onPageSizeChange={setPageSize}
-        headerActions={<Button className="gap-2" onClick={openCreate}><Plus className="w-4 h-4" /> Add Model</Button>}
+        headerActions={<></>}
         filters={[{ key: "isActive", label: "Active", type: "boolean" }]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
@@ -126,7 +124,7 @@ export default function ModelsAdminPage() {
       {/* Create/Edit */}
       <Dialog open={!!editModel} onOpenChange={() => setEditModel(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editModel?._isNew ? "Create Model" : "Edit Model"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edit Model</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><label className="text-sm font-medium">Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="space-y-1"><label className="text-sm font-medium">External ID</label><Input value={form.externalId} onChange={(e) => setForm({ ...form, externalId: e.target.value })} placeholder="e.g. openai/gpt-4.1" /></div>
@@ -146,7 +144,7 @@ export default function ModelsAdminPage() {
               <label htmlFor="isActive" className="text-sm">Active</label>
             </div>
           </div>
-          <DialogFooter><Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {editModel?._isNew ? "Create" : "Save"}</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

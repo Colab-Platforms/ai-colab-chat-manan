@@ -9,6 +9,7 @@ interface User {
   lastName: string;
   email: string;
   phoneNumber?: string;
+  profileImage?: string;
   timezone: string;
   userRoles: { role: { id: number; name: string } }[];
 }
@@ -73,14 +74,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasRole = useCallback(
     (role: string) => {
       if (!user) return false;
-      return user.userRoles.some((ur) => ur.role.name === role);
+      const normalize = (r: string) => r.replace(/_/g, "").toUpperCase();
+      const target = normalize(role);
+      return user.userRoles.some((ur) => normalize(ur.role.name) === target);
     },
     [user]
   );
 
-  const refreshUser = useCallback(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) setUser(JSON.parse(storedUser));
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.get("/users/profile");
+      const userData = res.data.data;
+      setUser(userData);
+      localStorage.setItem("user", JSON.stringify(userData));
+    } catch {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) setUser(JSON.parse(storedUser));
+    }
   }, []);
 
   return (

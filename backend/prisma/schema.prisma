@@ -27,6 +27,7 @@ model User {
   isActive      Boolean        @default(true)
   isVerified    Boolean        @default(false)
   isDeleted     Boolean        @default(false)
+  profileImage  String?
   timezone      String         @default("Asia/Kolkata")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt

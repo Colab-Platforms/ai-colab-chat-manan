@@ -48,6 +48,7 @@ interface DataTableProps<T = any> {
   filters?: FilterOption[];
   activeFilters?: Record<string, string>;
   onFilterChange?: (key: string, value: string) => void;
+  loading?: boolean;
 }
 
 // Debounce hook
@@ -145,7 +146,7 @@ export function DataTable<T extends Record<string, any>>({
                   placeholder={searchPlaceholder}
                   value={localSearch}
                   onChange={(e) => setLocalSearch(e.target.value)}
-                  className="pl-9 h-9"
+                  className="pl-9 h-9 bg-card/90"
                 />
               </div>
             )}
@@ -167,7 +168,7 @@ export function DataTable<T extends Record<string, any>>({
                 </Button>
                 {/* Filter dropdown */}
                 {filterOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-64 bg-popover border border-border rounded-xl shadow-lg p-4 space-y-3">
+                  <div className="fixed inset-x-3 top-auto z-50 sm:absolute sm:inset-auto sm:right-0 sm:top-11 sm:w-64 bg-popover border border-border rounded-xl shadow-lg p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold">Filters</span>
                       <button onClick={() => setFilterOpen(false)} className="cursor-pointer text-muted-foreground hover:text-foreground">
@@ -239,7 +240,7 @@ export function DataTable<T extends Record<string, any>>({
       )}
 
       {/* Table */}
-      <div className="border border-border/30 rounded-xl overflow-hidden">
+      <div className="border border-border/30 rounded-xl overflow-hidden bg-card/90 backdrop-blur-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -247,7 +248,7 @@ export function DataTable<T extends Record<string, any>>({
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    className={`px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider ${col.sortable ? "cursor-pointer select-none hover:text-foreground transition-colors" : ""} ${col.className || ""}`}
+                    className={`px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap ${col.sortable ? "cursor-pointer select-none hover:text-foreground transition-colors" : ""} ${col.className || ""}`}
                     onClick={() => col.sortable && handleSort(col.key)}
                   >
                     <div className="flex items-center gap-1">
@@ -269,7 +270,7 @@ export function DataTable<T extends Record<string, any>>({
                 data.map((row, i) => (
                   <tr key={row.id || i} className="border-b border-border/20 last:border-0 hover:bg-muted/20 transition-colors">
                     {columns.map((col) => (
-                      <td key={col.key} className={`px-4 py-3 ${col.className || ""}`}>
+                      <td key={col.key} className={`px-4 py-3 whitespace-nowrap ${col.className || ""}`}>
                         {col.render ? col.render(row) : row[col.key]}
                       </td>
                     ))}

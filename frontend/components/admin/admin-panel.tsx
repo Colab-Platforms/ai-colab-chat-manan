@@ -15,12 +15,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Users, CreditCard, Bot, Building, BarChart3, Loader2, Trash2, ShieldCheck, Search } from "lucide-react";
+import { Users, CreditCard, Bot, Building, BarChart3, Loader2, Trash2, Search } from "lucide-react";
 import { userService, planService, modelService, modelProviderService, usageLogService } from "@/lib/services";
 
 export function AdminPanel() {
   const { hasRole } = useAuth();
-  const isSuperAdmin = hasRole("SUPER_ADMIN");
+  const isSuperAdmin = hasRole("SUPERADMIN");
 
   return (
     <Tabs defaultValue="users" className="space-y-4">
@@ -29,14 +29,12 @@ export function AdminPanel() {
         <TabsTrigger value="plans" className="gap-1.5 text-xs"><CreditCard className="w-3 h-3" /> Plans</TabsTrigger>
         <TabsTrigger value="models" className="gap-1.5 text-xs"><Bot className="w-3 h-3" /> Models</TabsTrigger>
         {isSuperAdmin && <TabsTrigger value="providers" className="gap-1.5 text-xs"><Building className="w-3 h-3" /> Providers</TabsTrigger>}
-        <TabsTrigger value="usage" className="gap-1.5 text-xs"><BarChart3 className="w-3 h-3" /> Usage</TabsTrigger>
       </TabsList>
 
       <TabsContent value="users"><UsersTable /></TabsContent>
       <TabsContent value="plans"><PlansTable /></TabsContent>
       <TabsContent value="models"><ModelsTable /></TabsContent>
       {isSuperAdmin && <TabsContent value="providers"><ProvidersTable /></TabsContent>}
-      <TabsContent value="usage"><UsageTable /></TabsContent>
     </Tabs>
   );
 }
@@ -59,10 +57,6 @@ function UsersTable() {
 
   const handleDelete = async (id: number) => {
     try { await userService.delete(id); fetch(); } catch { /* ignore */ }
-  };
-
-  const handleMakeAdmin = async (id: number) => {
-    try { await userService.makeAdmin(id); fetch(); } catch { /* ignore */ }
   };
 
   if (loading) return <Loader />;
@@ -97,9 +91,6 @@ function UsersTable() {
                   ))}
                 </TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button size="sm" variant="ghost" onClick={() => handleMakeAdmin(u.id)} title="Make Admin">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                  </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(u.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -293,60 +284,6 @@ function ProvidersTable() {
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(p.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-function UsageTable() {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetch = useCallback(async () => {
-    try {
-      const res = await usageLogService.list();
-      setLogs(res.data.data?.data || []);
-    } catch { /* ignore */ } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetch(); }, [fetch]);
-
-  if (loading) return <Loader />;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Usage Logs</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead className="text-right">Prompt</TableHead>
-              <TableHead className="text-right">Completion</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Date</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {logs.map((log: any) => (
-              <TableRow key={log.id}>
-                <TableCell className="font-medium">{log.user?.firstName} {log.user?.lastName}</TableCell>
-                <TableCell>{log.model?.name}</TableCell>
-                <TableCell className="text-right font-mono text-xs">{log.promptTokens?.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-mono text-xs">{log.completionTokens?.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-mono text-xs font-medium">{log.totalTokens?.toLocaleString()}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {new Date(log.createdAt).toLocaleString()}
                 </TableCell>
               </TableRow>
             ))}

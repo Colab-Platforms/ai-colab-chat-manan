@@ -45,7 +45,8 @@ class UserService {
             data: {
                 firstName: data.firstName,
                 lastName: data.lastName,
-                phoneNumber: data.phoneNumber,
+                phoneNumber: data.phoneNumber?.trim() || null,
+                ...(data.profileImage && { profileImage: data.profileImage }),
             },
             select: userProfileSelectFields,
         });
@@ -53,10 +54,10 @@ class UserService {
         return formatUser(updatedUser);
     }
 
-    async listUsers(query: any) {
+    async listUsers(query: any, callerRole: string, callerId: number) {
         const { take, skip, page, pageSize } = getPaginationOptions(query, 10);
 
-        const { where, orderBy } = buildPrismaQuery({
+        const { where: qbWhere, orderBy } = buildPrismaQuery({
             query,
             searchFields: [
                 { field: "firstName" },
@@ -77,10 +78,36 @@ class UserService {
             allowedQueryKeys: ["page", "pageSize"],
         });
 
+        // Determine which roles the caller can see
+        const visibleRoles = callerRole === "SUPERADMIN"
+            ? ["USER", "ADMIN"]
+            : ["USER"]; // ADMIN can only see USER-role users
+
+        const where = {
+            ...qbWhere,
+            id: { not: callerId }, // exclude self
+            userRoles: {
+                some: {
+                    role: { name: { in: visibleRoles } },
+                },
+                none: {
+                    role: { name: { in: ["SUPERADMIN", "SUPER_ADMIN"] } },
+                },
+            },
+        };
+
         const [users, totalRecords] = await Promise.all([
             prisma.user.findMany({
                 where,
-                select: userProfileSelectFields,
+                select: {
+                    ...userProfileSelectFields,
+                    subscriptions: {
+                        where: { status: { in: ["ACTIVE", "TRIAL"] } },
+                        orderBy: { createdAt: "desc" },
+                        take: 1,
+                        include: { plan: { select: { id: true, name: true } } },
+                    },
+                },
                 skip,
                 take,
                 orderBy,
@@ -92,16 +119,24 @@ class UserService {
         return formatPaginationResponse(formattedUsers, totalRecords, page, pageSize);
     }
 
-    async adminUpdateUser(userId: number, data: any) {
+    async adminUpdateUser(userId: number, data: any, callerRole: string) {
         const user = await prisma.user.findFirst({
             where: { id: userId, isDeleted: false },
+            include: { userRoles: { include: { role: true } } },
         });
 
         if (!user) {
             throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
         }
 
-        const updatedUser = await prisma.user.update({
+        // Prevent editing SUPERADMIN users
+        const isSuperAdmin = user.userRoles.some((ur) => ur.role.name === "SUPERADMIN" || ur.role.name === "SUPER_ADMIN");
+        if (isSuperAdmin) {
+            throw new ApiError("Cannot modify a SUPERADMIN account", STATUS_CODES.FORBIDDEN);
+        }
+
+        // Update basic profile fields
+        await prisma.user.update({
             where: { id: userId },
             data: {
                 firstName: data.firstName,
@@ -109,19 +144,63 @@ class UserService {
                 phoneNumber: data.phoneNumber,
                 isActive: data.isActive,
             },
+        });
+
+        // Sync roles if provided and caller is SUPERADMIN
+        if (data.roles && Array.isArray(data.roles) && callerRole === "SUPERADMIN") {
+            // Filter out SUPERADMIN from the input — it can never be assigned
+            const requestedRoles: string[] = data.roles.filter((r: string) => r !== "SUPERADMIN" && r !== "SUPER_ADMIN");
+
+            // Ensure USER role is always present
+            if (!requestedRoles.includes("USER")) {
+                requestedRoles.push("USER");
+            }
+
+            // Get all role records
+            const allRoles = await prisma.role.findMany({
+                where: { name: { in: requestedRoles } },
+            });
+
+            const roleIds = allRoles.map((r) => r.id);
+
+            // Remove existing non-SUPERADMIN roles
+            await prisma.userRole.deleteMany({
+                where: {
+                    userId,
+                    role: { name: { notIn: ["SUPERADMIN", "SUPER_ADMIN"] } },
+                },
+            });
+
+            // Re-create with requested roles
+            await prisma.userRole.createMany({
+                data: roleIds.map((roleId) => ({ userId, roleId })),
+                skipDuplicates: true,
+            });
+        }
+
+        // Return fresh user with updated roles
+        const freshUser = await prisma.user.findFirst({
+            where: { id: userId },
             select: userProfileSelectFields,
         });
 
-        return formatUser(updatedUser);
+        return formatUser(freshUser);
     }
 
     async softDelete(userId: number) {
         const user = await prisma.user.findFirst({
             where: { id: userId, isDeleted: false },
+            include: { userRoles: { include: { role: true } } },
         });
 
         if (!user) {
             throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+        }
+
+        // Prevent deletion of SUPERADMIN
+        const isSuperAdmin = user.userRoles.some((ur) => ur.role.name === "SUPERADMIN" || ur.role.name === "SUPER_ADMIN");
+        if (isSuperAdmin) {
+            throw new ApiError("SUPERADMIN account cannot be deleted", STATUS_CODES.FORBIDDEN);
         }
 
         await prisma.user.update({
@@ -132,31 +211,49 @@ class UserService {
         return { message: "User deleted successfully" };
     }
 
-    async makeAdmin(userId: number) {
-        const user = await prisma.user.findFirst({
-            where: { id: userId, isDeleted: false },
-            include: { userRoles: { include: { role: true } } },
+    async getUserUsage(userId: number, query: any) {
+        const { take, skip, page, pageSize } = getPaginationOptions(query, 10);
+
+        // Token summary
+        const summary = await prisma.usageLog.aggregate({
+            where: { userId },
+            _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
+            _count: true,
         });
 
-        if (!user) {
-            throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
-        }
+        // Paginated usage logs
+        const [logs, totalRecords] = await Promise.all([
+            prisma.usageLog.findMany({
+                where: { userId },
+                skip,
+                take,
+                orderBy: { createdAt: "desc" },
+                include: {
+                    model: { select: { id: true, name: true } },
+                },
+            }),
+            prisma.usageLog.count({ where: { userId } }),
+        ]);
 
-        const hasAdminRole = user.userRoles.some((ur) => ur.role.name === "ADMIN");
-        if (hasAdminRole) {
-            throw new ApiError("User is already an ADMIN", STATUS_CODES.CONFLICT);
-        }
+        return {
+            summary: {
+                totalPromptTokens: summary._sum.promptTokens || 0,
+                totalCompletionTokens: summary._sum.completionTokens || 0,
+                totalTokens: summary._sum.totalTokens || 0,
+                totalPrompts: summary._count || 0,
+            },
+            usage: formatPaginationResponse(logs, totalRecords, page, pageSize),
+        };
+    }
 
-        const adminRole = await prisma.role.findUnique({ where: { name: "ADMIN" } });
-        if (!adminRole) {
-            throw new ApiError("ADMIN role not found", STATUS_CODES.SERVER_ERROR);
-        }
-
-        await prisma.userRole.create({
-            data: { userId, roleId: adminRole.id },
+    async getUserSubscription(userId: number) {
+        const subscription = await prisma.subscription.findFirst({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+            include: { plan: true },
         });
 
-        return { message: "User promoted to ADMIN successfully" };
+        return subscription;
     }
 }
 

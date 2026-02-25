@@ -36,11 +36,14 @@ export const folderService = {
 
 export const userService = {
   getProfile: () => api.get("/users/profile"),
-  updateProfile: (data: { firstName?: string; lastName?: string; phoneNumber?: string }) => api.put("/users/profile", data),
+  updateProfile: (data: FormData) => api.put("/users/profile", data, {
+    headers: { "Content-Type": "multipart/form-data" },
+  }),
   list: (params?: Record<string, string>) => api.get("/users", { params }),
   update: (id: number, data: any) => api.put(`/users/${id}`, data),
   delete: (id: number) => api.delete(`/users/${id}`),
-  makeAdmin: (id: number) => api.patch(`/users/${id}/make-admin`),
+  getUserUsage: (id: number, params?: Record<string, string>) => api.get(`/users/${id}/usage`, { params }),
+  getUserSubscription: (id: number) => api.get(`/users/${id}/subscription`),
 };
 
 export const walletService = {

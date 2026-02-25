@@ -72,7 +72,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <Card key={stat.label} className={`bg-gradient-to-br ${stat.gradient} border-border/30 shadow-sm hover:shadow-md transition-shadow`}>
+          <Card key={stat.label} className={`bg-card/90 backdrop-blur-sm border-border/30 shadow-sm hover:shadow-md transition-shadow overflow-hidden`}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -90,7 +90,7 @@ export default function DashboardPage() {
 
       {/* Usage bar */}
       {wallet && (
-        <Card className="border-border/30">
+        <Card className="border-border/30 bg-card/90 backdrop-blur-sm">
           <CardContent className="p-6">
             <h3 className="text-sm font-semibold mb-3">Token Usage</h3>
             <div className="w-full bg-muted rounded-full h-3 overflow-hidden">

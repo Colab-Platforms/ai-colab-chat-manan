@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,10 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { userService } from "@/lib/services";
-import { Loader2, Eye, Pencil, ShieldCheck, Trash2, Save } from "lucide-react";
+import { Loader2, Eye, Pencil, Trash2, Save, BarChart3, Coins, TrendingUp, Hash, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "react-toastify";
 
 export default function UsersAdminPage() {
+  const { hasRole } = useAuth();
+  const isSuperAdmin = hasRole("SUPERADMIN");
+
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -19,13 +23,27 @@ export default function UsersAdminPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState<any>({});
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+
+  // View modal
   const [viewUser, setViewUser] = useState<any>(null);
+
+  // Edit modal
   const [editUser, setEditUser] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ firstName: "", lastName: "", phoneNumber: "", isActive: true, roles: [] as string[] });
+  const [editSubscription, setEditSubscription] = useState<any>(null);
+  const [editSubLoading, setEditSubLoading] = useState(false);
+
+  // Delete state
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ firstName: "", lastName: "", phoneNumber: "", isActive: true });
-  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+
+  // Usage modal
+  const [usageUser, setUsageUser] = useState<any>(null);
+  const [usageData, setUsageData] = useState<any>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usagePage, setUsagePage] = useState(1);
 
   const handleFilterChange = (key: string, value: string) => {
     setActiveFilters((prev) => ({ ...prev, [key]: value }));
@@ -50,16 +68,43 @@ export default function UsersAdminPage() {
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openEdit = (u: any) => {
-    setForm({ firstName: u.firstName, lastName: u.lastName, phoneNumber: u.phoneNumber || "", isActive: u.isActive });
+  // ─── Edit handlers ───
+  const openEdit = async (u: any) => {
+    const currentRoles = u.userRoles?.map((ur: any) => ur.role.name) || [];
+    setForm({
+      firstName: u.firstName,
+      lastName: u.lastName,
+      phoneNumber: u.phoneNumber || "",
+      isActive: u.isActive,
+      roles: currentRoles,
+    });
     setEditUser(u);
+    setEditSubscription(null);
+    setEditSubLoading(true);
+    try {
+      const res = await userService.getUserSubscription(u.id);
+      setEditSubscription(res.data.data);
+    } catch {
+      setEditSubscription(null);
+    } finally {
+      setEditSubLoading(false);
+    }
   };
 
   const handleSave = async () => {
     if (!editUser) return;
     setSaving(true);
     try {
-      await userService.update(editUser.id, form);
+      const payload: any = {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phoneNumber: form.phoneNumber,
+        isActive: form.isActive,
+      };
+      if (isSuperAdmin) {
+        payload.roles = form.roles;
+      }
+      await userService.update(editUser.id, payload);
       toast.success("User updated");
       setEditUser(null);
       fetchUsers();
@@ -68,6 +113,16 @@ export default function UsersAdminPage() {
     }
   };
 
+  const toggleRole = (role: string) => {
+    setForm((prev) => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter((r) => r !== role)
+        : [...prev.roles, role],
+    }));
+  };
+
+  // ─── Delete handlers ───
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
@@ -81,28 +136,50 @@ export default function UsersAdminPage() {
     }
   };
 
-  const handleMakeAdmin = async (id: number) => {
+  // ─── Usage modal ───
+  const openUsage = async (u: any, pg = 1) => {
+    setUsageUser(u);
+    setUsageLoading(true);
+    setUsagePage(pg);
     try {
-      await userService.makeAdmin(id);
-      toast.success("User promoted to admin");
-      fetchUsers();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed");
+      const res = await userService.getUserUsage(u.id, { page: String(pg), pageSize: "10" });
+      setUsageData(res.data.data);
+    } catch {
+      toast.error("Failed to load usage");
+    } finally {
+      setUsageLoading(false);
     }
   };
 
   const columns: Column[] = [
-    { key: "firstName", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.firstName} {r.lastName}</span> },
-    { key: "email", label: "Email", sortable: true, render: (r) => <span className="text-muted-foreground">{r.email}</span> },
-    { key: "roles", label: "Roles", render: (r) => r.userRoles?.map((ur: any) => <Badge key={ur.role.id} variant="secondary" className="mr-1 text-xs">{ur.role.name}</Badge>) },
-    { key: "isActive", label: "Status", sortable: false, render: (r) => <Badge variant={r.isActive ? "default" : "secondary"}>{r.isActive ? "Active" : "Inactive"}</Badge> },
+    {
+      key: "firstName", label: "Name", sortable: true,
+      render: (r) => <span className="font-medium">{r.firstName} {r.lastName}</span>,
+    },
+    {
+      key: "email", label: "Email", sortable: true,
+      render: (r) => <span className="text-muted-foreground">{r.email}</span>,
+    },
+    {
+      key: "isActive", label: "Status", sortable: false,
+      render: (r) => <Badge variant={r.isActive ? "default" : "secondary"}>{r.isActive ? "Active" : "Inactive"}</Badge>,
+    },
+    {
+      key: "subscription", label: "Plan",
+      render: (r) => {
+        const sub = r.subscriptions?.[0];
+        return sub?.plan?.name
+          ? <Badge variant="outline" className="text-xs">{sub.plan.name}</Badge>
+          : <span className="text-muted-foreground text-xs">None</span>;
+      },
+    },
     {
       key: "actions", label: "Actions", className: "text-right",
       render: (r) => (
         <div className="flex justify-end gap-1">
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewUser(r)} title="View"><Eye className="w-3.5 h-3.5" /></Button>
+          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openUsage(r)} title="Usage"><BarChart3 className="w-3.5 h-3.5" /></Button>
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(r)} title="Edit"><Pencil className="w-3.5 h-3.5" /></Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleMakeAdmin(r.id)} title="Make Admin"><ShieldCheck className="w-3.5 h-3.5" /></Button>
           <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(r.id)} title="Delete"><Trash2 className="w-3.5 h-3.5" /></Button>
         </div>
       ),
@@ -137,7 +214,7 @@ export default function UsersAdminPage() {
         onFilterChange={handleFilterChange}
       />
 
-      {/* View */}
+      {/* ─── View Modal ─── */}
       <Dialog open={!!viewUser} onOpenChange={() => setViewUser(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>User Details</DialogTitle></DialogHeader>
@@ -156,19 +233,75 @@ export default function UsersAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit */}
+      {/* ─── Edit Modal ─── */}
       <Dialog open={!!editUser} onOpenChange={() => setEditUser(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1"><label className="text-sm font-medium">First name</label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-              <div className="space-y-1"><label className="text-sm font-medium">Last name</label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+          <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+            {/* Profile section */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Profile</h4>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                  {editUser?.firstName?.[0]}{editUser?.lastName?.[0]}
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{editUser?.email}</p>
+                  <p className="text-xs text-muted-foreground">Joined {editUser?.createdAt ? new Date(editUser.createdAt).toLocaleDateString() : ""}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1"><label className="text-sm font-medium">First name</label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
+                <div className="space-y-1"><label className="text-sm font-medium">Last name</label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+              </div>
+              <div className="space-y-1"><label className="text-sm font-medium">Phone</label><Input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} /></div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} id="userActive" className="rounded" />
+                <label htmlFor="userActive" className="text-sm">Active</label>
+              </div>
             </div>
-            <div className="space-y-1"><label className="text-sm font-medium">Phone</label><Input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} /></div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} id="userActive" className="rounded" />
-              <label htmlFor="userActive" className="text-sm">Active</label>
+
+            {/* Roles section */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Roles</h4>
+              <div className="flex flex-wrap gap-2">
+                {["USER", "ADMIN"].map((role) => (
+                  <button
+                    key={role}
+                    onClick={() => isSuperAdmin && role !== "USER" ? toggleRole(role) : undefined}
+                    disabled={role === "USER" || !isSuperAdmin}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-colors border ${
+                      form.roles.includes(role)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                    } ${role === "USER" || !isSuperAdmin ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isSuperAdmin ? "USER role is always assigned. Click to toggle ADMIN role." : "Only SUPERADMIN can modify roles."}
+              </p>
+            </div>
+
+            {/* Subscription section (read-only) */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Subscription</h4>
+              {editSubLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading...</div>
+              ) : editSubscription ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/30 rounded-xl p-4">
+                  <div><span className="text-muted-foreground">Plan:</span> <span className="font-medium">{editSubscription.plan?.name || "N/A"}</span></div>
+                  <div><span className="text-muted-foreground">Status:</span> <Badge variant={editSubscription.status === "ACTIVE" ? "default" : "secondary"}>{editSubscription.status}</Badge></div>
+                  <div><span className="text-muted-foreground">Billing:</span> <span className="font-medium">{editSubscription.billingCycle}</span></div>
+                  <div><span className="text-muted-foreground">Auto-renew:</span> <span className="font-medium">{editSubscription.autoRenew ? "Yes" : "No"}</span></div>
+                  <div><span className="text-muted-foreground">Started:</span> <span className="font-medium">{editSubscription.startedAt ? new Date(editSubscription.startedAt).toLocaleDateString() : "N/A"}</span></div>
+                  <div><span className="text-muted-foreground">Expires:</span> <span className="font-medium">{editSubscription.expiresAt ? new Date(editSubscription.expiresAt).toLocaleDateString() : "N/A"}</span></div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No subscription found</p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -177,6 +310,82 @@ export default function UsersAdminPage() {
               Save
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Usage Modal ─── */}
+      <Dialog open={!!usageUser} onOpenChange={() => { setUsageUser(null); setUsageData(null); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>Usage — {usageUser?.firstName} {usageUser?.lastName}</DialogTitle></DialogHeader>
+          {usageLoading ? (
+            <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : usageData ? (
+            <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Total Tokens", value: usageData.summary?.totalTokens?.toLocaleString() || "0", icon: Coins, color: "text-emerald-500 bg-emerald-500/10" },
+                  { label: "Prompt Tokens", value: usageData.summary?.totalPromptTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-blue-500 bg-blue-500/10" },
+                  { label: "Completion Tokens", value: usageData.summary?.totalCompletionTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-purple-500 bg-purple-500/10" },
+                  { label: "Total Prompts", value: usageData.summary?.totalPrompts?.toLocaleString() || "0", icon: Hash, color: "text-amber-500 bg-amber-500/10" },
+                ].map((card) => (
+                  <div key={card.label} className="bg-card border border-border/30 rounded-xl p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${card.color}`}><card.icon className="w-3.5 h-3.5" /></div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{card.label}</p>
+                    <p className="text-lg font-bold">{card.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Usage table */}
+              <div className="border border-border/30 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border/30">
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Model</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Prompt</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Completion</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usageData.usage?.data?.length === 0 ? (
+                        <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No usage data</td></tr>
+                      ) : (
+                        usageData.usage?.data?.map((log: any) => (
+                          <tr key={log.id} className="border-b border-border/20 last:border-0 hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</td>
+                            <td className="px-4 py-2.5 whitespace-nowrap font-medium">{log.model?.name || "—"}</td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap">{log.promptTokens?.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap">{log.completionTokens?.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap font-semibold">{log.totalTokens?.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination */}
+                {usageData.usage?.totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/10 text-xs text-muted-foreground">
+                    <span>Page {usagePage} of {usageData.usage.totalPages} ({usageData.usage.totalRecords} records)</span>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="outline" className="h-7 w-7" disabled={!usageData.usage.hasPreviousPage} onClick={() => openUsage(usageUser, usagePage - 1)}>
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="icon" variant="outline" className="h-7 w-7" disabled={!usageData.usage.hasNextPage} onClick={() => openUsage(usageUser, usagePage + 1)}>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 

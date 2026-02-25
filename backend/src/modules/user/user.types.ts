@@ -4,6 +4,7 @@ export const userProfileSelectFields = {
     lastName: true,
     email: true,
     phoneNumber: true,
+    profileImage: true,
     isActive: true,
     isVerified: true,
     timezone: true,
@@ -25,4 +26,5 @@ export interface UpdateProfileBody {
     firstName?: string;
     lastName?: string;
     phoneNumber?: string;
+    profileImage?: string;
 }
