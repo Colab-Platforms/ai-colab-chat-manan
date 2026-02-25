@@ -149,6 +149,24 @@ class ChatService {
         return chat;
     }
 
+    async feedback(userId: number, responseId: number, isLiked: boolean | null) {
+        const response = await prisma.modelResponse.findFirst({
+            where: { id: responseId },
+            include: { chat: { select: { userId: true, isDeleted: true } } },
+        });
+
+        if (!response || response.chat.userId !== userId || response.chat.isDeleted) {
+            throw new ApiError("Response not found", STATUS_CODES.NOT_FOUND);
+        }
+
+        const updated = await prisma.modelResponse.update({
+            where: { id: responseId },
+            data: { isLiked },
+        });
+
+        return updated;
+    }
+
     async softDelete(userId: number, chatId: number) {
         const chat = await prisma.chat.findFirst({
             where: { id: chatId, userId, isDeleted: false },

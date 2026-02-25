@@ -16,9 +16,11 @@ interface MessageListProps {
   messages: Message[];
   activeModelTabs: Record<number, number>;
   onModelTabChange: (messageId: number, modelId: number) => void;
+  onRegenerate?: (messageId: number, modelId: number) => void;
+  onFeedback?: (responseId: number, isLiked: boolean | null) => void;
 }
 
-export function MessageList({ messages, activeModelTabs, onModelTabChange }: MessageListProps) {
+export function MessageList({ messages, activeModelTabs, onModelTabChange, onRegenerate, onFeedback }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,8 @@ export function MessageList({ messages, activeModelTabs, onModelTabChange }: Mes
             message={message}
             activeModelTab={activeModelTabs[message.id]}
             onModelTabChange={(modelId) => onModelTabChange(message.id, modelId)}
+            onRegenerate={onRegenerate}
+            onFeedback={onFeedback}
           />
         ))}
         <div ref={bottomRef} />

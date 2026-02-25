@@ -254,6 +254,164 @@ export default function ChatPage() {
     }
   };
 
+  const handleRegenerate = async (messageId: number, modelId: number) => {
+    if (isSending) return;
+    setIsSending(true);
+    setIsStreaming(true);
+    isStreamingRef.current = true;
+    setStreamingContent("");
+
+    // Find the target assistant message
+    const targetMsg = messages.find(m => m.id === messageId);
+    if (!targetMsg || targetMsg.role !== "ASSISTANT") {
+      toast.error("Can only regenerate assistant messages");
+      setIsSending(false);
+      setIsStreaming(false);
+      return;
+    }
+
+    // Add streaming placeholder under the same message
+    const streamingRespId = Date.now();
+    setMessages((prev) => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          modelResponses: [
+            ...(msg.modelResponses || []),
+            {
+              id: streamingRespId,
+              model: { id: modelId, name: models.find((m) => m.id === modelId)?.name || "AI" },
+              content: "",
+              status: "STREAMING",
+              tokensUsed: null,
+            }
+          ]
+        };
+      }
+      return msg;
+    }));
+    setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
+
+    try {
+      const token = localStorage.getItem("token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+      const response = await fetch(`${apiUrl}/chats/${chatId}/messages/${messageId}/regenerate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ modelId }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to regenerate message");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let buffer = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          
+          buffer = lines.pop() || "";
+
+          for (const chunkStr of lines) {
+            const line = chunkStr.trim();
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.type === "token") {
+                accumulated += parsed.content;
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === messageId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((mr) =>
+                            mr.id === streamingRespId
+                              ? { ...mr, content: accumulated, status: "STREAMING" }
+                              : mr
+                          ),
+                        }
+                      : msg
+                  )
+                );
+              } else if (parsed.type === "error") {
+                toast.error(parsed.message);
+              } else if (parsed.type === "done") {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === messageId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((mr) =>
+                            mr.id === streamingRespId
+                              ? { ...mr, content: accumulated, status: "COMPLETED" }
+                              : mr
+                          ),
+                        }
+                      : msg
+                  )
+                );
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+
+      isStreamingRef.current = false;
+      await fetchChat();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to regenerate message");
+      // Remove placeholder response
+      setMessages((prev) => prev.map(msg => {
+        if (msg.id === messageId) {
+          return {
+            ...msg,
+            modelResponses: msg.modelResponses?.filter(mr => mr.id !== streamingRespId)
+          };
+        }
+        return msg;
+      }));
+    } finally {
+      isStreamingRef.current = false;
+      setIsSending(false);
+      setIsStreaming(false);
+      setStreamingContent("");
+    }
+  };
+
+  const handleFeedback = async (responseId: number, isLiked: boolean | null) => {
+    try {
+      // Optimistic update
+      setMessages((prev) => prev.map(msg => ({
+        ...msg,
+        modelResponses: msg.modelResponses?.map(mr => 
+          mr.id === responseId ? { ...mr, isLiked } : mr
+        )
+      })));
+      await chatService.feedback(chatId, responseId, isLiked);
+    } catch (err: any) {
+      toast.error("Failed to submit feedback");
+      fetchChat(); // Revert on failure
+    }
+  };
+
   const handleModelTabChange = (messageId: number, modelId: number) => {
     setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
   };
@@ -264,6 +422,8 @@ export default function ChatPage() {
         messages={messages}
         activeModelTabs={activeModelTabs}
         onModelTabChange={handleModelTabChange}
+        onRegenerate={handleRegenerate}
+        onFeedback={handleFeedback}
       />
       <ChatInput
         models={models}

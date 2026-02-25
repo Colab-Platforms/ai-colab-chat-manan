@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { auth } from "@/middlewares/authMiddleware.js";
 import * as chatController from "./chat.controller.js";
-import { streamChat } from "./chat.stream.js";
+import { streamChat, regenerateChat } from "./chat.stream.js";
 
 const router = Router();
 
@@ -14,5 +14,7 @@ router.patch("/:id/share", auth("USER", "ADMIN", "SUPERADMIN"), chatController.s
 router.put("/:id", auth("USER", "ADMIN", "SUPERADMIN"), chatController.updateChat);
 router.delete("/:id", auth("USER", "ADMIN", "SUPERADMIN"), chatController.deleteChat);
 router.post("/:chatId/send", auth("USER", "ADMIN", "SUPERADMIN"), streamChat);
+router.post("/:chatId/messages/:messageId/regenerate", auth("USER", "ADMIN", "SUPERADMIN"), regenerateChat);
+router.post("/:chatId/responses/:responseId/feedback", auth("USER", "ADMIN", "SUPERADMIN"), chatController.feedback);
 
 export default router;

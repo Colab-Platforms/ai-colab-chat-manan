@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { sendResponse } from "@/utils/responseUtils.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import ChatService from "./chat.service.js";
-import { validateCreateChatSchema, validateUpdateChatSchema } from "./chat.validators.js";
+import { validateCreateChatSchema, validateUpdateChatSchema, validateFeedbackSchema } from "./chat.validators.js";
 
 const chatService = new ChatService();
 
@@ -92,6 +92,21 @@ export const deleteChat = async (req: Request, res: Response): Promise<void> => 
         sendResponse(res, true, result, "Chat deleted successfully", STATUS_CODES.OK);
     } catch (error: any) {
         console.error("Delete chat error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};
+
+export const feedback = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { error, value } = validateFeedbackSchema(req.body);
+        if (error) {
+            sendResponse(res, false, error, error.message, STATUS_CODES.BAD_REQUEST);
+            return;
+        }
+        const result = await chatService.feedback(req.user!.id, parseInt(req.params.responseId as string), value.isLiked);
+        sendResponse(res, true, result, "Feedback updated successfully", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Feedback error", error);
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };

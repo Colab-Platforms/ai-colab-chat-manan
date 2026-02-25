@@ -251,3 +251,200 @@ export async function streamChat(req: Request, res: Response) {
         }
     }
 }
+
+export async function regenerateChat(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const chatId = Number(req.params.chatId);
+    const messageId = Number(req.params.messageId);
+    const { modelId } = req.body as { modelId: number };
+
+    console.log("🎯 regenerateChat hit:", { userId, chatId, messageId, modelId });
+
+    try {
+        if (!modelId) {
+            res.status(400).json({ status: false, message: "modelId is required" });
+            return;
+        }
+
+        const chat = await prisma.chat.findFirst({
+            where: { id: chatId, userId, isDeleted: false },
+        });
+        if (!chat) {
+            res.status(404).json({ status: false, message: "Chat not found" });
+            return;
+        }
+
+        const model = await prisma.model.findFirst({
+            where: { id: modelId, isActive: true, isDeleted: false },
+            include: { modelProvider: true },
+        });
+        if (!model) {
+            res.status(404).json({ status: false, message: "Model not found or inactive" });
+            return;
+        }
+
+        const wallet = await prisma.userWallet.findUnique({ where: { userId } });
+        if (!wallet || wallet.tokensRemaining <= 0) {
+            res.status(400).json({ status: false, message: "Insufficient tokens" });
+            return;
+        }
+
+        const allMessages = await prisma.message.findMany({
+            where: { chatId, isDeleted: false },
+            orderBy: { createdAt: "asc" },
+            include: {
+                modelResponses: {
+                    where: { status: "COMPLETED" },
+                    take: 1,
+                    orderBy: { createdAt: "desc" },
+                },
+            },
+        });
+
+        const targetIndex = allMessages.findIndex(m => m.id === messageId);
+        if (targetIndex === -1 || allMessages[targetIndex].role !== "ASSISTANT") {
+            res.status(404).json({ status: false, message: "Target assistant message not found" });
+            return;
+        }
+
+        const previousMessages = allMessages.slice(0, targetIndex);
+        const conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
+        for (const msg of previousMessages) {
+            if (msg.role === "USER") {
+                conversationHistory.push({ role: "user", content: msg.content });
+            } else if (msg.role === "ASSISTANT" && msg.modelResponses[0]?.content) {
+                conversationHistory.push({ role: "assistant", content: msg.modelResponses[0].content });
+            }
+        }
+
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("X-Accel-Buffering", "no");
+        res.flushHeaders();
+
+        res.write(`data: ${JSON.stringify({ type: "message_id", userMessageId: previousMessages[previousMessages.length - 1]?.id || 0 })}\n\n`);
+        if (typeof (res as any).flush === "function") {
+            (res as any).flush();
+        }
+
+        let fullContent = "";
+        let promptTokens = 0;
+        let completionTokens = 0;
+
+        const apiKey = process.env.OPENROUTER_API_KEY;
+
+        try {
+            const client = new OpenAI({
+                baseURL: "https://openrouter.ai/api/v1",
+                apiKey: apiKey || "",
+                defaultHeaders: {
+                    "HTTP-Referer": "http://localhost:3000",
+                    "X-Title": "AI Colab Chat",
+                },
+            });
+
+            const stream = await client.chat.completions.create({
+                model: model.externalId,
+                messages: conversationHistory as any,
+                stream: true,
+                stream_options: { include_usage: true },
+            });
+
+            for await (const chunk of stream) {
+                const delta = chunk.choices?.[0]?.delta?.content;
+                if (delta) {
+                    fullContent += delta;
+                    res.write(`data: ${JSON.stringify({ type: "token", content: delta })}\n\n`);
+                    if (typeof (res as any).flush === "function") {
+                        (res as any).flush();
+                    }
+                }
+
+                if (chunk.usage) {
+                    promptTokens = chunk.usage.prompt_tokens || 0;
+                    completionTokens = chunk.usage.completion_tokens || 0;
+                }
+            }
+        } catch (aiError: any) {
+            console.error("❌ OpenRouter Error in regenerate:", aiError.message);
+            try {
+                await prisma.modelResponse.create({
+                    data: {
+                        chatId,
+                        messageId,
+                        modelId: model.id,
+                        content: fullContent || "",
+                        promptTokens: promptTokens || 0,
+                        completionTokens: completionTokens || 0,
+                        totalTokens: (promptTokens || 0) + (completionTokens || 0),
+                        status: "FAILED",
+                        completedAt: new Date(),
+                    },
+                });
+            } catch (dbErr) {
+                console.error("Failed to save partial AI response to DB", dbErr);
+            }
+
+            res.write(`data: ${JSON.stringify({ type: "error", message: aiError.message || "AI request failed" })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+            return;
+        }
+
+        const totalTokens = promptTokens + completionTokens;
+
+        await prisma.$transaction(async (tx) => {
+            await tx.modelResponse.create({
+                data: {
+                    chatId,
+                    messageId,
+                    modelId: model.id,
+                    content: fullContent,
+                    promptTokens,
+                    completionTokens,
+                    totalTokens,
+                    status: "COMPLETED",
+                    completedAt: new Date(),
+                },
+            });
+
+            if (totalTokens > 0) {
+                await tx.usageLog.create({
+                    data: {
+                        userId,
+                        modelId: model.id,
+                        chatId,
+                        promptTokens,
+                        completionTokens,
+                        totalTokens,
+                    },
+                });
+
+                await tx.userWallet.update({
+                    where: { userId },
+                    data: {
+                        tokensRemaining: { decrement: totalTokens },
+                        tokensUsed: { increment: totalTokens },
+                    },
+                });
+            }
+        });
+
+        res.write(`data: ${JSON.stringify({ type: "done", promptTokens, completionTokens, totalTokens })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+    } catch (error: any) {
+        console.error("Regenerate chat error:", error);
+        if (!res.headersSent) {
+            res.status(error.statusCode || 500).json({
+                status: false,
+                message: error.message || "Internal server error",
+            });
+        } else {
+            res.write(`data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+        }
+    }
+}

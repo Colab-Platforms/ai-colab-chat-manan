@@ -9,6 +9,7 @@ export const chatService = {
   getShared: (shareId: string) => api.get(`/chats/shared/${shareId}`),
   delete: (id: number) => api.delete(`/chats/${id}`),
   update: (id: number, data: { title?: string; folderId?: number | null }) => api.put(`/chats/${id}`, data),
+  feedback: (chatId: number, responseId: number, isLiked: boolean | null) => api.post(`/chats/${chatId}/responses/${responseId}/feedback`, { isLiked }),
 };
 
 export const messageService = {

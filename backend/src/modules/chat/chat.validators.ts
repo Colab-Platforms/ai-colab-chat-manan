@@ -17,3 +17,11 @@ const updateChatSchema = Joi.object({
 export const validateUpdateChatSchema = (data: unknown) => {
     return updateChatSchema.validate(data, { abortEarly: false });
 };
+
+const feedbackSchema = Joi.object({
+    isLiked: Joi.boolean().allow(null).required(),
+});
+
+export const validateFeedbackSchema = (data: unknown) => {
+    return feedbackSchema.validate(data, { abortEarly: false });
+};
