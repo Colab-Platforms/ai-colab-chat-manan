@@ -41,3 +41,15 @@ export const uploadToCloudinary = (
 export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
     await cloudinary.uploader.destroy(publicId);
 };
+
+/**
+ * Extract publicId from a Cloudinary URL
+ */
+export const extractPublicId = (url: string): string | null => {
+    try {
+        const matches = url.match(/\/upload\/(?:v\d+\/)?(.+?)\.[a-zA-Z0-9]+$/);
+        return matches ? matches[1] : null;
+    } catch (e) {
+        return null;
+    }
+};

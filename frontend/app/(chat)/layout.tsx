@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/context/theme-context";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Chat {
   id: number;
@@ -165,8 +165,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden">
                 <Avatar className="w-8 h-8 border border-border/50">
+                  {user?.profileImage && <AvatarImage src={user.profileImage} alt={`${user?.firstName} ${user?.lastName}`} />}
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                    {user?.firstName?.[0]?.toUpperCase()}{user?.lastName?.[0]?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               </Button>

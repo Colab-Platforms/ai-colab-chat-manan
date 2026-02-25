@@ -3,7 +3,7 @@ import { sendResponse } from "@/utils/responseUtils.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import UserService from "./user.service.js";
 import { validateUpdateProfileSchema } from "./user.validators.js";
-import { uploadToCloudinary } from "@/utils/cloudinary.js";
+import { deleteFromCloudinary, extractPublicId, uploadToCloudinary } from "@/utils/cloudinary.js";
 
 const userService = new UserService();
 
@@ -28,8 +28,21 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
 
         // If a file was uploaded, push it to Cloudinary
         if (req.file) {
+            // Fetch current profile to check for existing Cloudinary image
+            const currentUser = await userService.getProfile(req.user!.id);
+
             const { url } = await uploadToCloudinary(req.file.buffer);
             value.profileImage = url;
+
+            // Delete old profile picture if it's from Cloudinary
+            if (currentUser.profileImage && currentUser.profileImage.includes("cloudinary.com")) {
+                const publicId = extractPublicId(currentUser.profileImage);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId).catch(err => {
+                        console.error("Failed to delete old profile image from Cloudinary:", err);
+                    });
+                }
+            }
         }
 
         const result = await userService.updateProfile(req.user!.id, value);
