@@ -21,7 +21,7 @@ const userNav = [
   { label: "Dashboard", href: "/profile", icon: LayoutDashboard },
   { label: "Wallet", href: "/profile/wallet", icon: Wallet },
   { label: "Subscription", href: "/profile/subscription", icon: CreditCard },
-  { label: "My Usage", href: "/profile/usage", icon: BarChart3 },
+  { label: "My Usage", href: "/profile/my-usage", icon: BarChart3 },
   { label: "My Account", href: "/profile/account", icon: UserCircle },
   { label: "Archived Chats", href: "/profile/archived", icon: Archive },
 ];
@@ -31,7 +31,7 @@ const adminNav = [
   { label: "Plans", href: "/profile/plans", icon: PlansIcon },
   { label: "Models", href: "/profile/models", icon: Bot },
   { label: "Providers", href: "/profile/providers", icon: Building },
-  { label: "Usage", href: "/profile/admin-usage", icon: BarChart3 },
+  { label: "Usage", href: "/profile/usage", icon: BarChart3 },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

@@ -38,6 +38,7 @@ model User {
   subscriptions Subscription[]
   userWallet    UserWallet?
   userRoles     UserRole[]
+  // walletTransactions WalletTransaction[]
 }
 
 model UserRole {
@@ -65,12 +66,21 @@ model UserWallet {
   updatedAt          DateTime  @updatedAt
 }
 
-enum WalletTransactionType {
-  CREDIT
-  DEBIT
-  REFUND
-  ADJUSTMENT
-}
+// model WalletTransaction {
+//   id        Int                   @id @default(autoincrement())
+//   userId    Int
+//   user      User                  @relation(fields: [userId], references: [id])
+//   amount    Int
+//   type      WalletTransactionType
+//   meta      Json?
+//   createdAt DateTime              @default(now())
+//   updatedAt DateTime              @updatedAt
+// }
+
+// enum WalletTransactionType {
+//   CREDIT
+//   DEBIT
+// }
 
 model Folder {
   id        Int       @id @default(autoincrement())
@@ -212,17 +222,18 @@ model Attachment {
 }
 
 model UsageLog {
-  id               Int      @id @default(autoincrement())
+  id               Int             @id @default(autoincrement())
   userId           Int
   modelId          Int
   chatId           Int?
+  capability       ModelCapability @default(STANDARD)
   promptTokens     Int
   completionTokens Int
   totalTokens      Int
-  user             User     @relation(fields: [userId], references: [id])
-  model            Model    @relation(fields: [modelId], references: [id])
-  chat             Chat?    @relation(fields: [chatId], references: [id])
-  createdAt        DateTime @default(now())
+  user             User            @relation(fields: [userId], references: [id])
+  model            Model           @relation(fields: [modelId], references: [id])
+  chat             Chat?           @relation(fields: [chatId], references: [id])
+  createdAt        DateTime        @default(now())
 
   @@index([userId])
   @@index([modelId])
