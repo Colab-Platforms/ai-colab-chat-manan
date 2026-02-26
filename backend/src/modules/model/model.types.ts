@@ -6,6 +6,7 @@ export interface CreateModelBody {
   externalId: string;
   capabilities: ModelCapability[];
   description?: string;
+  isActive?: boolean;
 }
 
 export interface UpdateModelBody {

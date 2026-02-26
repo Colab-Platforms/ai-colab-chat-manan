@@ -16,6 +16,7 @@ const createModelSchema = Joi.object({
     .min(1)
     .required(),
   description: Joi.string().trim().allow(null, "").optional(),
+  isActive: Joi.boolean().optional(),
 });
 
 const updateModelSchema = Joi.object({
