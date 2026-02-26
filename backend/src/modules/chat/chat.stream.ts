@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "@root/prisma.js";
-import OpenAI from "openai";
 import { uploadToCloudinary } from "@/utils/cloudinary.js";
+import { createOpenRouterStream } from "@/utils/openrouter.js";
 
 interface SendMessageBody {
   content: string;
@@ -112,35 +112,12 @@ export async function streamChat(req: Request, res: Response) {
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    console.log("🔑 OpenRouter Debug:");
-    console.log("  Key exists:", !!apiKey);
-    console.log("  Key length:", apiKey?.length || 0);
-    console.log("  Key prefix:", apiKey?.substring(0, 12) + "...");
-    console.log("  Model:", model.externalId);
-    console.log("  Messages:", conversationHistory.length);
-
     try {
-      const client = new OpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: apiKey || "",
-        defaultHeaders: {
-          "HTTP-Referer": "http://localhost:3000",
-          "X-Title": "AI Colab Chat",
-        },
-      });
-
-      const stream = (await client.chat.completions.create({
+      const stream = await createOpenRouterStream({
         model: model.externalId,
         messages: conversationHistory,
-        stream: true,
-        stream_options: { include_usage: true },
-        modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,
-        plugins:
-          chatType === "WEB_SEARCH"
-            ? [{ id: "web", max_results: 5 }]
-            : undefined,
-      } as any)) as unknown as AsyncIterable<any>;
+        chatType,
+      });
 
       for await (const chunk of stream) {
         let delta = chunk.choices?.[0]?.delta?.content || "";
@@ -398,29 +375,12 @@ export async function regenerateChat(req: Request, res: Response) {
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-
     try {
-      const client = new OpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: apiKey || "",
-        defaultHeaders: {
-          "HTTP-Referer": "http://localhost:3000",
-          "X-Title": "AI Colab Chat",
-        },
-      });
-
-      const stream = (await client.chat.completions.create({
+      const stream = await createOpenRouterStream({
         model: model.externalId,
-        messages: conversationHistory as any,
-        stream: true,
-        stream_options: { include_usage: true },
-        modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,
-        plugins:
-          chatType === "WEB_SEARCH"
-            ? [{ id: "web", max_results: 5 }]
-            : undefined,
-      } as any)) as unknown as AsyncIterable<any>;
+        messages: conversationHistory,
+        chatType,
+      });
 
       for await (const chunk of stream) {
         let delta = chunk.choices?.[0]?.delta?.content || "";
