@@ -20,6 +20,7 @@ interface Model {
   id: number;
   name: string;
   description: string | null;
+  capabilities?: string[];
 }
 
 interface ChatInputProps {
@@ -27,7 +28,7 @@ interface ChatInputProps {
   selectedModels: number[];
   onModelChange: (ids: number[]) => void;
   maxModels: number;
-  onSend: (content: string, files?: File[]) => void;
+  onSend: (content: string, files?: File[], chatType?: ChatType) => void;
   isSending: boolean;
   forceReset?: boolean;
   initialPrompt?: string;
@@ -69,6 +70,18 @@ export function ChatInput({
   const handleChatTypeChange = (type: ChatType) => {
     setChatType(type);
     localStorage.setItem("preferredChatType", type);
+
+    // Filter selected models to only keep those that support the new chat type
+    const validModelsForNewType = models.filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(type));
+    const newSelectedModels = selectedModels.filter(id => validModelsForNewType.some(m => m.id === id));
+    
+    // If none of the previously selected models support the new type, fallback to the first valid one
+    if (newSelectedModels.length === 0 && validModelsForNewType.length > 0) {
+      onModelChange([validModelsForNewType[0].id]);
+    } else if (newSelectedModels.length !== selectedModels.length) {
+      // If some were removed, update the selection
+      onModelChange(newSelectedModels);
+    }
   };
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -96,7 +109,7 @@ export function ChatInput({
 
   const handleSubmit = () => {
     if (!content.trim() || isSending) return;
-    onSend(content.trim(), files.length > 0 ? files : undefined);
+    onSend(content.trim(), files.length > 0 ? files : undefined, chatType);
     setContent("");
     setFiles([]);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -301,7 +314,9 @@ export function ChatInput({
                 </DropdownMenuLabel>
                 
                 <div className="max-h-[250px] overflow-y-auto scrollbar-thin">
-                  {models.map((model) => (
+                  {models
+                    .filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(chatType))
+                    .map((model) => (
                     <DropdownMenuItem 
                       key={model.id} 
                       className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2 items-start"

@@ -8,8 +8,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { modelService, modelProviderService } from "@/lib/services";
-import { Loader2, Eye, Pencil, Trash2, Save } from "lucide-react";
+import { Loader2, Eye, Pencil, Trash2, Save, Plus } from "lucide-react";
 import { toast } from "react-toastify";
+
+const CAPABILITY_OPTIONS = [
+  { value: "STANDARD", label: "Standard" },
+  { value: "DEEP_RESEARCH", label: "Deep Research" },
+  { value: "IMAGE_GENERATION", label: "Image Generation" },
+  { value: "WEB_SEARCH", label: "Web Search" },
+];
 
 export default function ModelsAdminPage() {
   const [models, setModels] = useState<any[]>([]);
@@ -26,7 +33,7 @@ export default function ModelsAdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const defaultForm = { name: "", externalId: "", modelProviderId: 0, inputCostPer1k: 0, outputCostPer1k: 0, maxTokens: 4096, isActive: true };
+  const defaultForm = { name: "", externalId: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true };
   const [form, setForm] = useState(defaultForm);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const handleFilterChange = (key: string, value: string) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
@@ -49,12 +56,17 @@ export default function ModelsAdminPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openEdit = (m: any) => { setForm({ name: m.name, externalId: m.externalId, modelProviderId: m.modelProviderId, inputCostPer1k: m.inputCostPer1k, outputCostPer1k: m.outputCostPer1k, maxTokens: m.maxTokens, isActive: m.isActive }); setEditModel(m); };
+  const openEdit = (m: any) => { setForm({ name: m.name, externalId: m.externalId, modelProviderId: m.modelProviderId, capabilities: m.capabilities || ["STANDARD"], isActive: m.isActive }); setEditModel(m); };
+  const handleOpenCreate = () => { setForm(defaultForm); setEditModel({ id: "new" }); };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await modelService.update(editModel.id, form); toast.success("Model updated");
+      if (editModel.id === "new") {
+        await modelService.create(form); toast.success("Model created");
+      } else {
+        await modelService.update(editModel.id, form); toast.success("Model updated");
+      }
       setEditModel(null); fetchData();
     } catch { toast.error("Failed to save"); } finally { setSaving(false); }
   };
@@ -75,7 +87,7 @@ export default function ModelsAdminPage() {
     { key: "name", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "externalId", label: "External ID", render: (r) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.externalId}</code> },
     { key: "provider", label: "Provider", render: (r) => r.modelProvider?.name },
-    { key: "cost", label: "Cost (in/out)", render: (r) => <span className="text-xs">${r.inputCostPer1k} / ${r.outputCostPer1k}</span> },
+    { key: "capabilities", label: "Capabilities", render: (r) => <div className="flex flex-wrap gap-1">{r.capabilities?.map((c: string) => <Badge key={c} variant="outline" className="text-[10px]">{c.replace("_", " ")}</Badge>)}</div> },
     { key: "isActive", label: "Status", sortable: true, render: (r) => <Badge variant={r.isActive ? "default" : "secondary"} className="cursor-pointer" onClick={() => handleToggleActive(r)}>{r.isActive ? "Active" : "Disabled"}</Badge> },
     {
       key: "actions", label: "Actions", className: "text-right",
@@ -97,7 +109,7 @@ export default function ModelsAdminPage() {
         page={page} pageSize={pageSize} totalRecords={pagination.totalRecords || 0} totalPages={pagination.totalPages || 1}
         hasNextPage={pagination.hasNextPage} hasPreviousPage={pagination.hasPreviousPage}
         onPageChange={setPage} onPageSizeChange={setPageSize}
-        headerActions={<></>}
+        headerActions={<Button onClick={handleOpenCreate} size="sm" className="gap-2"><Plus className="w-4 h-4" /> Add Model</Button>}
         filters={[{ key: "isActive", label: "Active", type: "boolean" }]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
@@ -112,9 +124,10 @@ export default function ModelsAdminPage() {
               <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{viewModel.name}</span></div>
               <div><span className="text-muted-foreground">External ID:</span> <code className="text-xs bg-muted px-1 rounded">{viewModel.externalId}</code></div>
               <div><span className="text-muted-foreground">Provider:</span> {viewModel.modelProvider?.name}</div>
-              <div><span className="text-muted-foreground">Input Cost/1k:</span> ${viewModel.inputCostPer1k}</div>
-              <div><span className="text-muted-foreground">Output Cost/1k:</span> ${viewModel.outputCostPer1k}</div>
-              <div><span className="text-muted-foreground">Max Tokens:</span> {viewModel.maxTokens?.toLocaleString()}</div>
+              <div>
+                <span className="text-muted-foreground block mb-1">Capabilities:</span> 
+                <div className="flex flex-wrap gap-1">{viewModel.capabilities?.map((c: string) => <Badge key={c} variant="outline">{c.replace("_", " ")}</Badge>)}</div>
+              </div>
               <div><span className="text-muted-foreground">Status:</span> <Badge variant={viewModel.isActive ? "default" : "secondary"}>{viewModel.isActive ? "Active" : "Disabled"}</Badge></div>
             </div>
           )}
@@ -131,13 +144,31 @@ export default function ModelsAdminPage() {
             <div className="space-y-1">
               <label className="text-sm font-medium">Provider</label>
               <select className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background" value={form.modelProviderId} onChange={(e) => setForm({ ...form, modelProviderId: parseInt(e.target.value) })}>
+                <option value={0} disabled>Select Provider</option>
                 {providers.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1"><label className="text-xs font-medium">Input $/1k</label><Input type="number" step="0.001" value={form.inputCostPer1k} onChange={(e) => setForm({ ...form, inputCostPer1k: parseFloat(e.target.value) || 0 })} /></div>
-              <div className="space-y-1"><label className="text-xs font-medium">Output $/1k</label><Input type="number" step="0.001" value={form.outputCostPer1k} onChange={(e) => setForm({ ...form, outputCostPer1k: parseFloat(e.target.value) || 0 })} /></div>
-              <div className="space-y-1"><label className="text-xs font-medium">Max Tokens</label><Input type="number" value={form.maxTokens} onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value) || 4096 })} /></div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Capabilities</label>
+              <div className="grid grid-cols-2 gap-2">
+                {CAPABILITY_OPTIONS.map(opt => (
+                  <div key={opt.value} className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id={`cap-${opt.value}`}
+                      checked={form.capabilities.includes(opt.value)} 
+                      onChange={(e) => {
+                        const newCaps = e.target.checked 
+                          ? [...form.capabilities, opt.value]
+                          : form.capabilities.filter(c => c !== opt.value);
+                        setForm({ ...form, capabilities: newCaps });
+                      }} 
+                      className="rounded" 
+                    />
+                    <label htmlFor={`cap-${opt.value}`} className="text-xs">{opt.label}</label>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} id="isActive" className="rounded" />

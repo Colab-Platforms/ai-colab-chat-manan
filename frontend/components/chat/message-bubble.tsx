@@ -132,7 +132,7 @@ export function MessageBubble({ message, activeModelTab, onModelTabChange, onReg
               ) : activeResponse.status === "FAILED" ? (
                 <p className="text-sm text-destructive">Response failed. Please try again.</p>
               ) : (
-                <TypingIndicator />
+                <TypingIndicator isImageMode={typeof window !== 'undefined' && localStorage.getItem('preferredChatType') === 'IMAGE_GENERATION'} />
               )
             ) : (
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -240,7 +240,21 @@ export function MessageBubble({ message, activeModelTab, onModelTabChange, onReg
   );
 }
 
-function TypingIndicator() {
+function TypingIndicator({ isImageMode }: { isImageMode?: boolean }) {
+  if (isImageMode) {
+    return (
+      <div className="flex flex-col gap-3 py-2 animate-pulse">
+        <div className="w-full h-48 sm:h-64 bg-muted-foreground/10 rounded-xl flex items-center justify-center border border-dashed border-muted-foreground/20">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
+            <RefreshCw className="w-8 h-8 animate-spin" />
+            <span className="text-sm font-medium">Generating image...</span>
+            <span className="text-xs text-center max-w-[200px]">This process can take 3-5 minutes depending on the model's complexity.</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-1 py-1">
       <div className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />

@@ -55,7 +55,7 @@ export default function NewChatPage() {
     fetchModels();
   }, [fetchModels]);
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, files?: File[], chatType?: string) => {
     if (isSending) return;
     setIsSending(true);
 
@@ -63,7 +63,7 @@ export default function NewChatPage() {
       const chatRes = await chatService.create({ title: content.substring(0, 50) });
       const chatId = chatRes.data.data.id;
       window.dispatchEvent(new Event('refresh-chats'));
-      router.push(`/c/${chatId}?firstMessage=${encodeURIComponent(content)}&models=${selectedModels.join(",")}`);
+      router.push(`/c/${chatId}?firstMessage=${encodeURIComponent(content)}&models=${selectedModels.join(",")}&chatType=${chatType || "STANDARD"}`);
     } catch {
       setIsSending(false);
     }

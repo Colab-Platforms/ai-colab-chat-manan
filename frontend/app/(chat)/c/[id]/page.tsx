@@ -99,18 +99,19 @@ export default function ChatPage() {
   useEffect(() => {
     const firstMessage = searchParams.get("firstMessage");
     const modelIds = searchParams.get("models");
+    const initChatType = searchParams.get("chatType");
     if (!firstMessage || firstMessageSent.current || models.length === 0) return;
     firstMessageSent.current = true;
 
     const modelIdList = modelIds?.split(",").map(Number).filter(Boolean) || selectedModels;
     if (modelIdList.length > 0) setSelectedModels(modelIdList);
 
-    sendMessage(firstMessage, modelIdList[0] || selectedModels[0]);
+    sendMessage(firstMessage, modelIdList[0] || selectedModels[0], initChatType || "STANDARD");
     window.history.replaceState({}, "", `/c/${chatId}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [models, searchParams]);
 
-  const sendMessage = async (content: string, modelId?: number) => {
+  const sendMessage = async (content: string, modelId?: number, chatType?: string) => {
     if (isSending) return;
     setIsSending(true);
     setIsStreaming(true);
@@ -163,7 +164,7 @@ export default function ChatPage() {
           "Accept": "text/event-stream",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content, modelId: targetModelId }),
+        body: JSON.stringify({ content, modelId: targetModelId, chatType }),
       });
 
       if (!response.ok) {
@@ -303,7 +304,7 @@ export default function ChatPage() {
           "Accept": "text/event-stream",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ modelId }),
+        body: JSON.stringify({ modelId, chatType: localStorage.getItem("preferredChatType") || "STANDARD" }),
       });
 
       if (!response.ok) {
@@ -430,7 +431,7 @@ export default function ChatPage() {
         selectedModels={selectedModels}
         onModelChange={handleModelChange}
         maxModels={-1}
-        onSend={(content, files) => sendMessage(content)}
+        onSend={(content, files, chatType) => sendMessage(content, undefined, chatType)}
         isSending={isSending}
       />
     </div>

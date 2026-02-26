@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Download, X } from "lucide-react";
 
 interface MarkdownRendererProps {
   content: string;
@@ -31,12 +33,96 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+function CustomImage({ src, alt }: { src?: string; alt?: string }) {
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (!src) return;
+      
+      const response = await fetch(src);
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `generated-image-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error("Failed to download image", err);
+      window.open(src, "_blank");
+    }
+  };
+
   return (
-    <div className="prose-chat">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
+    <span className="relative group inline-block my-4">
+      <PhotoView src={src}>
+        <img
+          src={src}
+          alt={alt || "Generated Image"}
+          className="max-w-full h-auto rounded-xl shadow-sm border border-border/50 cursor-pointer transition-opacity group-hover:opacity-90 align-middle"
+          loading="lazy"
+        />
+      </PhotoView>
+      <button
+        onClick={handleDownload}
+        className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+        title="Download image"
+      >
+        <Download className="w-4 h-4" />
+      </button>
+    </span>
+  );
+}
+
+export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+  const handleDownloadGlobal = async (src: string) => {
+    try {
+      if (!src) return;
+      const response = await fetch(src);
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `generated-image-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error("Failed to download image", err);
+      window.open(src, "_blank");
+    }
+  };
+
+  return (
+    <PhotoProvider
+      maskOpacity={0.95}
+      toolbarRender={({ index, images }: any) => {
+        const currentImage = images[index];
+        return (
+          <div className="flex gap-4 mr-4 items-center">
+            <button
+              onClick={() => handleDownloadGlobal(currentImage?.src || "")}
+              className="text-white/80 hover:text-white transition-colors"
+              title="Download image"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          </div>
+        );
+      }}
+    >
+      <div className="prose-chat">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          urlTransform={(value) => value}
+          components={{
+            img({ src, alt }) {
+              return <CustomImage src={typeof src === "string" ? src : undefined} alt={alt} />;
+            },
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || "");
             const codeString = String(children).replace(/\n$/, "");
@@ -137,6 +223,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
       >
         {content}
       </ReactMarkdown>
-    </div>
+      </div>
+    </PhotoProvider>
   );
 }

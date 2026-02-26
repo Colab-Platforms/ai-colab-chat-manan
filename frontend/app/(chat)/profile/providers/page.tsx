@@ -25,7 +25,7 @@ export default function ProvidersAdminPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", website: "", isActive: true });
+  const [form, setForm] = useState({ name: "", description: "", isActive: true });
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const handleFilterChange = (key: string, value: string) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
 
@@ -46,7 +46,7 @@ export default function ProvidersAdminPage() {
   useEffect(() => { fetchProviders(); }, [fetchProviders]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openEdit = (p: any) => { setForm({ name: p.name, description: p.description || "", website: p.website || "", isActive: p.isActive }); setEditProvider(p); };
+  const openEdit = (p: any) => { setForm({ name: p.name, description: p.description || "", isActive: p.isActive }); setEditProvider(p); };
 
   const handleSave = async () => {
     setSaving(true);
@@ -66,7 +66,6 @@ export default function ProvidersAdminPage() {
   const columns: Column[] = [
     { key: "name", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "description", label: "Description", render: (r) => <span className="text-muted-foreground text-sm truncate max-w-[200px] block">{r.description || "—"}</span> },
-    { key: "website", label: "Website", render: (r) => r.website ? <a href={r.website} target="_blank" className="text-primary hover:underline text-xs">{r.website}</a> : "—" },
     { key: "isActive", label: "Status", render: (r) => <Badge variant={r.isActive ? "default" : "secondary"}>{r.isActive ? "Active" : "Disabled"}</Badge> },
     {
       key: "actions", label: "Actions", className: "text-right",
@@ -102,7 +101,6 @@ export default function ProvidersAdminPage() {
             <div className="space-y-2 text-sm">
               <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{viewProvider.name}</span></div>
               <div><span className="text-muted-foreground">Description:</span> {viewProvider.description || "N/A"}</div>
-              <div><span className="text-muted-foreground">Website:</span> {viewProvider.website || "N/A"}</div>
               <div><span className="text-muted-foreground">Status:</span> <Badge variant={viewProvider.isActive ? "default" : "secondary"}>{viewProvider.isActive ? "Active" : "Disabled"}</Badge></div>
               <div className="text-muted-foreground text-xs">Created: {new Date(viewProvider.createdAt).toLocaleString()}</div>
             </div>
@@ -117,7 +115,6 @@ export default function ProvidersAdminPage() {
           <div className="space-y-3">
             <div className="space-y-1"><label className="text-sm font-medium">Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="space-y-1"><label className="text-sm font-medium">Description</label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} /></div>
-            <div className="space-y-1"><label className="text-sm font-medium">Website</label><Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://" /></div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} id="providerActive" className="rounded" />
               <label htmlFor="providerActive" className="text-sm">Active</label>

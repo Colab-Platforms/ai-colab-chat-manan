@@ -154,6 +154,13 @@ enum MessageRole {
   SYSTEM
 }
 
+enum ModelCapability {
+  STANDARD
+  DEEP_RESEARCH
+  IMAGE_GENERATION
+  WEB_SEARCH
+}
+
 enum ResponseStatus {
   PENDING
   STREAMING
@@ -162,21 +169,20 @@ enum ResponseStatus {
 }
 
 model Model {
-  id              Int             @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   name            String
   modelProviderId Int
   externalId      String
-  inputCostPer1k  Decimal
-  outputCostPer1k Decimal
+  capabilities    ModelCapability[] @default([STANDARD])
   description     String?
-  isActive        Boolean         @default(true)
-  isDeleted       Boolean         @default(false)
+  isActive        Boolean           @default(true)
+  isDeleted       Boolean           @default(false)
   responses       ModelResponse[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   deletedAt       DateTime?
   usageLogs       UsageLog[]
-  modelProvider   ModelProvider   @relation(fields: [modelProviderId], references: [id])
+  modelProvider   ModelProvider     @relation(fields: [modelProviderId], references: [id])
 
   @@unique([modelProviderId, externalId])
 }

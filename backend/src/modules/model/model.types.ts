@@ -1,16 +1,18 @@
+import { ModelCapability } from "@prisma/client";
+
 export interface CreateModelBody {
-    name: string;
-    modelProviderId: number;
-    externalId: string;
-    inputCostPer1k: number;
-    outputCostPer1k: number;
-    description?: string;
+  name: string;
+  modelProviderId: number;
+  externalId: string;
+  capabilities: ModelCapability[];
+  description?: string;
 }
 
 export interface UpdateModelBody {
-    name?: string;
-    inputCostPer1k?: number;
-    outputCostPer1k?: number;
-    description?: string;
-    isActive?: boolean;
+  name?: string;
+  modelProviderId?: number;
+  externalId?: string;
+  capabilities?: ModelCapability[];
+  description?: string;
+  isActive?: boolean;
 }
