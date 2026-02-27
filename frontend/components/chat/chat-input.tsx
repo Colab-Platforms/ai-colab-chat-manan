@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, Loader2, Mic, MicOff, AudioLines, Square, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
+  Plus, Loader2, Mic, Square, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -196,7 +196,7 @@ export function ChatInput({
           {/* Mic error message */}
           {micError && (
             <div className="flex items-center gap-2 mx-2 mb-1 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-xs">
-              <MicOff className="w-3.5 h-3.5 flex-shrink-0" />
+              <Mic className="w-3.5 h-3.5 flex-shrink-0" />
               <span className="flex-1">{micError}</span>
               <button onClick={() => startListening()} className="underline hover:no-underline flex-shrink-0">Retry</button>
             </div>
@@ -266,29 +266,21 @@ export function ChatInput({
 
             <div className="flex items-center gap-2 flex-shrink-0 mb-0.5 mr-1">
               <div className="h-6 w-px bg-border/60 mr-1 hidden sm:block" />
-              {/* Mic button: always visible while listening, hidden on mobile when typing & idle */}
+              {/* Mic button: Mic icon when idle, Square (stop) when listening */}
               {isMicSupported && (
                 <Button 
                   variant="ghost" 
                   size="icon" 
                   className={`h-10 w-10 rounded-full transition-all duration-200 ${
-                    micStatus !== "idle"
-                      ? "inline-flex" // Always visible while listening/stopping
-                      : content.trim() ? "hidden sm:inline-flex" : "inline-flex"
-                  } ${
                     micStatus === "listening"
-                      ? "text-primary bg-primary/10 hover:bg-primary/20 ring-2 ring-primary/30 animate-pulse"
-                      : micStatus === "stopping"
-                        ? "text-destructive bg-destructive/10 hover:bg-destructive/20"
-                        : "text-muted-foreground hover:bg-muted"
+                      ? "inline-flex text-white bg-destructive hover:bg-destructive/90 shadow-md animate-pulse"
+                      : content.trim() ? "hidden sm:inline-flex text-muted-foreground hover:bg-muted" : "inline-flex text-muted-foreground hover:bg-muted"
                   }`}
                   onClick={handleMicToggle}
-                  title={micStatus === "idle" ? "Start voice input" : micStatus === "listening" ? "Stop listening" : "Stopping..."}
+                  title={micStatus === "idle" ? "Start voice input" : "Stop listening"}
                 >
                   {micStatus === "listening" ? (
-                    <AudioLines className="w-5 h-5" />
-                  ) : micStatus === "stopping" ? (
-                    <Square className="w-4 h-4" />
+                    <Square className="w-4 h-4 fill-current" />
                   ) : (
                     <Mic className="w-5 h-5" />
                   )}

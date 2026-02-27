@@ -2,23 +2,21 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-export type SpeechStatus = "idle" | "listening" | "stopping";
+export type SpeechStatus = "idle" | "listening";
 
 interface UseSpeechRecognitionOptions {
   onResult?: (transcript: string) => void;
-  onEnd?: () => void;
   onError?: (message: string) => void;
 }
 
 interface UseSpeechRecognitionReturn {
   status: SpeechStatus;
   isSupported: boolean;
+  errorMessage: string | null;
   startListening: () => void;
   stopListening: () => void;
-  errorMessage: string | null;
 }
 
-// Extend the Window interface for webkitSpeechRecognition
 interface SpeechRecognitionEvent {
   resultIndex: number;
   results: SpeechRecognitionResultList;
@@ -27,20 +25,19 @@ interface SpeechRecognitionEvent {
 export function useSpeechRecognition(
   options: UseSpeechRecognitionOptions = {},
 ): UseSpeechRecognitionReturn {
-  const { onResult, onEnd, onError } = options;
+  const { onResult, onError } = options;
   const [status, setStatus] = useState<SpeechStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const onResultRef = useRef(onResult);
-  const onEndRef = useRef(onEnd);
   const onErrorRef = useRef(onError);
+  // Flag: true when user wants to be listening (prevents auto-stop)
+  const wantListeningRef = useRef(false);
 
-  // Keep refs up to date
   useEffect(() => {
     onResultRef.current = onResult;
-    onEndRef.current = onEnd;
     onErrorRef.current = onError;
-  }, [onResult, onEnd, onError]);
+  }, [onResult, onError]);
 
   const isSupported =
     typeof window !== "undefined" &&
@@ -62,8 +59,8 @@ export function useSpeechRecognition(
 
     const recognition = new SpeechRecognition();
 
-    // Configure for English + Hinglish
-    recognition.lang = "hi-IN"; // Hindi covers Hinglish (Hindi + English mixed)
+    // en-IN handles both English and Hinglish (romanized Hindi)
+    recognition.lang = "en-IN";
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
@@ -82,7 +79,6 @@ export function useSpeechRecognition(
         }
       }
 
-      // Send the full transcript (final + interim) to the callback
       const fullTranscript = (finalTranscript + interimTranscript).trim();
       if (fullTranscript && onResultRef.current) {
         onResultRef.current(fullTranscript);
@@ -90,53 +86,67 @@ export function useSpeechRecognition(
     };
 
     recognition.onend = () => {
-      setStatus("idle");
-      recognitionRef.current = null;
-      onEndRef.current?.();
-    };
-
-    recognition.onerror = (event: any) => {
-      // "aborted" is expected when we call stop/abort
-      if (event.error !== "aborted") {
-        let msg = "Speech recognition failed.";
-        if (event.error === "not-allowed") {
-          msg =
-            "Microphone access denied. Please allow microphone permission in your browser settings and try again.";
-        } else if (event.error === "no-speech") {
-          msg = "No speech detected. Please try again.";
-        } else if (event.error === "network") {
-          msg = "Network error. Please check your connection.";
+      // If user still wants to listen, auto-restart (prevents silence auto-stop)
+      if (wantListeningRef.current) {
+        try {
+          recognition.start();
+        } catch {
+          setStatus("idle");
+          wantListeningRef.current = false;
+          recognitionRef.current = null;
         }
-        setErrorMessage(msg);
-        onErrorRef.current?.(msg);
-        console.warn("Speech recognition error:", event.error);
+        return;
       }
       setStatus("idle");
       recognitionRef.current = null;
     };
 
+    recognition.onerror = (event: any) => {
+      if (event.error === "aborted") return;
+
+      // On "no-speech", just restart silently if user still wants listening
+      if (event.error === "no-speech") {
+        // onend will handle the restart via wantListeningRef
+        return;
+      }
+
+      let msg = "Speech recognition failed.";
+      if (event.error === "not-allowed") {
+        msg =
+          "Microphone access denied. Please allow microphone permission in your browser settings and try again.";
+      } else if (event.error === "network") {
+        msg = "Network error. Please check your connection.";
+      }
+      setErrorMessage(msg);
+      onErrorRef.current?.(msg);
+      console.warn("Speech recognition error:", event.error);
+      wantListeningRef.current = false;
+      setStatus("idle");
+      recognitionRef.current = null;
+    };
+
     recognitionRef.current = recognition;
+    wantListeningRef.current = true;
     setErrorMessage(null);
     recognition.start();
     setStatus("listening");
   }, [isSupported]);
 
   const stopListening = useCallback(() => {
+    wantListeningRef.current = false;
     if (recognitionRef.current) {
-      setStatus("stopping");
       try {
-        // stop() waits for the final result before ending
         recognitionRef.current.stop();
-      } catch {
-        setStatus("idle");
-        recognitionRef.current = null;
-      }
+      } catch {}
     }
+    setStatus("idle");
+    recognitionRef.current = null;
   }, []);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
+      wantListeningRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
