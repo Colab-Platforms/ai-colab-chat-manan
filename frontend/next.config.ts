@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // transpilePackages ensures react-speech-recognition is bundled correctly
+  // (ssr:false in dynamic import is the primary guard)
+  transpilePackages: ["react-speech-recognition"],
   async headers() {
     return [
       {
@@ -8,12 +11,17 @@ const nextConfig: NextConfig = {
         source: "/sw.js",
         headers: [
           { key: "Service-Worker-Allowed", value: "/" },
-          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
         ],
       },
       {
         source: "/manifest.webmanifest",
-        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
       },
     ];
   },

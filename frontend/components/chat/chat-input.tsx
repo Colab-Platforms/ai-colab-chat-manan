@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, Loader2, Mic, Square, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
+  Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -16,7 +17,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { getModelIcon } from "@/lib/model-icons";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+
+// Dynamically imported so react-speech-recognition never runs on the server
+const MicButton = dynamic(
+  () => import("@/components/chat/mic-button").then((m) => ({ default: m.MicButton })),
+  { ssr: false, loading: () => null }
+);
 
 interface Model {
   id: number;
@@ -60,23 +66,21 @@ export function ChatInput({
   const preExistingTextRef = useRef("");
 
   const handleSpeechResult = useCallback((transcript: string) => {
+    // transcript is the cumulative session text from MicButton
+    // Combine with any text that was in the box before recording started
     const prefix = preExistingTextRef.current;
     const separator = prefix && !prefix.endsWith(" ") ? " " : "";
     setContent(prefix + separator + transcript);
   }, []);
 
-  const { status: micStatus, isSupported: isMicSupported, errorMessage: micError, startListening, stopListening } =
-    useSpeechRecognition({ onResult: handleSpeechResult });
+  const handleMicStart = useCallback(() => {
+    // Save what's in the box right now so speech appends after it
+    preExistingTextRef.current = content;
+  }, [content]);
 
-  const handleMicToggle = useCallback(() => {
-    if (micStatus === "idle") {
-      // Save existing text so speech appends after it
-      preExistingTextRef.current = content;
-      startListening();
-    } else {
-      stopListening();
-    }
-  }, [micStatus, content, startListening, stopListening]);
+  const handleMicStop = useCallback(() => {
+    // Nothing needed — content is already set by handleSpeechResult
+  }, []);
   
   // Hydrate chat type from local storage
   useEffect(() => {
@@ -192,15 +196,6 @@ export function ChatInput({
     <div className="pt-2 pb-6 px-4 w-full">
       <div className="max-w-3xl mx-auto">
         <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-2 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-          
-          {/* Mic error message */}
-          {micError && (
-            <div className="flex items-center gap-2 mx-2 mb-1 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-xs">
-              <Mic className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="flex-1">{micError}</span>
-              <button onClick={() => startListening()} className="underline hover:no-underline flex-shrink-0">Retry</button>
-            </div>
-          )}
 
           {/* Top Row: Chat Type Pill */}
           {chatType !== "STANDARD" && (
@@ -266,26 +261,13 @@ export function ChatInput({
 
             <div className="flex items-center gap-2 flex-shrink-0 mb-0.5 mr-1">
               <div className="h-6 w-px bg-border/60 mr-1 hidden sm:block" />
-              {/* Mic button: Mic icon when idle, Square (stop) when listening */}
-              {isMicSupported && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className={`h-10 w-10 rounded-full transition-all duration-200 ${
-                    micStatus === "listening"
-                      ? "inline-flex text-white bg-destructive hover:bg-destructive/90 shadow-md animate-pulse"
-                      : content.trim() ? "hidden sm:inline-flex text-muted-foreground hover:bg-muted" : "inline-flex text-muted-foreground hover:bg-muted"
-                  }`}
-                  onClick={handleMicToggle}
-                  title={micStatus === "idle" ? "Start voice input" : "Stop listening"}
-                >
-                  {micStatus === "listening" ? (
-                    <Square className="w-4 h-4 fill-current" />
-                  ) : (
-                    <Mic className="w-5 h-5" />
-                  )}
-                </Button>
-              )}
+              {/* MicButton is dynamically imported with ssr:false — handles all speech logic */}
+              <MicButton
+                onResult={handleSpeechResult}
+                onStart={handleMicStart}
+                onStop={handleMicStop}
+                hasText={!!content.trim()}
+              />
 
               <Button
                 size="icon"
