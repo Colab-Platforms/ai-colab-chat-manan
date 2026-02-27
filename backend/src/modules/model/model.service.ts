@@ -76,11 +76,13 @@ class ModelService {
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.modelProviderId !== undefined)
-      updateData.modelProviderId = data.modelProviderId;
+      updateData.modelProvider = { connect: { id: data.modelProviderId } };
     if (data.externalId !== undefined) updateData.externalId = data.externalId;
     if (data.description !== undefined)
       updateData.description = data.description;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.defaultForCapabilities !== undefined)
+      updateData.defaultForCapabilities = data.defaultForCapabilities;
     if (data.capabilities !== undefined)
       updateData.capabilities = data.capabilities;
 

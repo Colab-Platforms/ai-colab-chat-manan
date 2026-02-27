@@ -7,6 +7,7 @@ export interface CreateModelBody {
   capabilities: ModelCapability[];
   description?: string;
   isActive?: boolean;
+  defaultForCapabilities?: ModelCapability[];
 }
 
 export interface UpdateModelBody {
@@ -16,4 +17,5 @@ export interface UpdateModelBody {
   capabilities?: ModelCapability[];
   description?: string;
   isActive?: boolean;
+  defaultForCapabilities?: ModelCapability[];
 }

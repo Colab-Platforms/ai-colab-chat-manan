@@ -11,6 +11,9 @@ interface Model {
   id: number;
   name: string;
   description: string | null;
+  externalId?: string;
+  isDefault?: boolean;
+  defaultForCapabilities?: string[];
 }
 
 interface Message {
@@ -63,7 +66,7 @@ export default function ChatPage() {
 
   const fetchModels = useCallback(async () => {
     try {
-      const res = await modelService.list();
+      const res = await modelService.list({ pageSize: "100" });
       const allModels = res.data.data?.data || [];
       const activeModels = allModels.filter((m: any) => m.isActive);
       setModels(activeModels);
@@ -75,9 +78,13 @@ export default function ChatPage() {
         if (parsedId && activeModels.find((m: any) => m.id === parsedId)) {
           setSelectedModels([parsedId]);
         } else {
-          // Fallback to "GPT 4.1" or any GPT-4 equivalent, otherwise the first active
-          const fallbackModel = activeModels.find((m: any) => m.name.toLowerCase().includes("4.1") || m.name.toLowerCase().includes("gpt-4")) || activeModels[0];
-          setSelectedModels([fallbackModel.id]);
+          // Fallback: use defaultForCapabilities STANDARD models, otherwise first active
+          const defaultModels = activeModels.filter((m: any) => m.defaultForCapabilities?.includes("STANDARD"));
+          if (defaultModels.length > 0) {
+            setSelectedModels(defaultModels.map((m: any) => m.id));
+          } else {
+            setSelectedModels([activeModels[0].id]);
+          }
         }
       }
     } catch { /* ignore */ }

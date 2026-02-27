@@ -17,6 +17,16 @@ const createModelSchema = Joi.object({
     .required(),
   description: Joi.string().trim().allow(null, "").optional(),
   isActive: Joi.boolean().optional(),
+  defaultForCapabilities: Joi.array()
+    .items(
+      Joi.string().valid(
+        "STANDARD",
+        "DEEP_RESEARCH",
+        "IMAGE_GENERATION",
+        "WEB_SEARCH",
+      ),
+    )
+    .optional(),
 });
 
 const updateModelSchema = Joi.object({
@@ -36,6 +46,16 @@ const updateModelSchema = Joi.object({
     .optional(),
   description: Joi.string().trim().allow(null, "").optional(),
   isActive: Joi.boolean().optional(),
+  defaultForCapabilities: Joi.array()
+    .items(
+      Joi.string().valid(
+        "STANDARD",
+        "DEEP_RESEARCH",
+        "IMAGE_GENERATION",
+        "WEB_SEARCH",
+      ),
+    )
+    .optional(),
 })
   .min(1)
   .unknown(false);

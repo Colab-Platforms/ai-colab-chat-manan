@@ -11,6 +11,9 @@ interface Model {
   id: number;
   name: string;
   description: string | null;
+  externalId?: string;
+  isDefault?: boolean;
+  defaultForCapabilities?: string[];
 }
 
 export default function NewChatPage() {
@@ -28,18 +31,21 @@ export default function NewChatPage() {
 
   const fetchModels = useCallback(async () => {
     try {
-      const res = await modelService.list();
+      const res = await modelService.list({ pageSize: "100" });
       const allModels = res.data.data?.data || [];
       const activeModels = allModels.filter((m: any) => m.isActive);
       setModels(activeModels);
       
       if (activeModels.length > 0) {
-        // Hard reset on New Chat: always ignore cache and fallback to 4.1/gpt-4
-        const fallbackModel = activeModels.find((m: any) => m.name.toLowerCase().includes("4.1") || m.name.toLowerCase().includes("gpt-4")) || activeModels[0];
-        setSelectedModels([fallbackModel.id]);
-        
-        // Immediately overwrite the global storage with this reset
-        localStorage.setItem("preferredModelId", String(fallbackModel.id));
+        // New chat: select models that are default for STANDARD capability
+        const defaultModels = activeModels.filter((m: any) => m.defaultForCapabilities?.includes("STANDARD"));
+        if (defaultModels.length > 0) {
+          setSelectedModels(defaultModels.map((m: any) => m.id));
+          localStorage.setItem("preferredModelId", String(defaultModels[0].id));
+        } else {
+          setSelectedModels([activeModels[0].id]);
+          localStorage.setItem("preferredModelId", String(activeModels[0].id));
+        }
       }
     } catch { /* ignore */ }
   }, []);

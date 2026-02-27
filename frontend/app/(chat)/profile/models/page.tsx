@@ -8,15 +8,64 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { modelService, modelProviderService } from "@/lib/services";
-import { Loader2, Eye, Pencil, Trash2, Save, Plus } from "lucide-react";
+import { Loader2, Eye, Pencil, Trash2, Save, Plus, MessageSquare, Globe, Sparkles, Image as ImageIcon } from "lucide-react";
 import { toast } from "react-toastify";
 
 const CAPABILITY_OPTIONS = [
-  { value: "STANDARD", label: "Standard" },
-  { value: "DEEP_RESEARCH", label: "Deep Research" },
-  { value: "IMAGE_GENERATION", label: "Image Generation" },
-  { value: "WEB_SEARCH", label: "Web Search" },
+  { value: "STANDARD", label: "Standard", icon: MessageSquare, color: "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800" },
+  { value: "DEEP_RESEARCH", label: "Deep Research", icon: Sparkles, color: "bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800" },
+  { value: "IMAGE_GENERATION", label: "Image Gen", icon: ImageIcon, color: "bg-pink-500/10 text-pink-600 border-pink-200 dark:border-pink-800" },
+  { value: "WEB_SEARCH", label: "Web Search", icon: Globe, color: "bg-green-500/10 text-green-600 border-green-200 dark:border-green-800" },
 ];
+
+function CapabilityToggle({
+  options,
+  selected,
+  onChange,
+  label,
+  sublabel,
+}: {
+  options: typeof CAPABILITY_OPTIONS;
+  selected: string[];
+  onChange: (val: string[]) => void;
+  label: string;
+  sublabel?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="text-sm font-medium">{label}</label>
+        {sublabel && <p className="text-xs text-muted-foreground mt-0.5">{sublabel}</p>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => {
+          const Icon = opt.icon;
+          const active = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                const next = active
+                  ? selected.filter((v) => v !== opt.value)
+                  : [...selected, opt.value];
+                onChange(next);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                active
+                  ? opt.color + " border-current"
+                  : "border-border text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+              }`}
+            >
+              <Icon className="w-3 h-3" />
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function ModelsAdminPage() {
   const [models, setModels] = useState<any[]>([]);
@@ -33,7 +82,7 @@ export default function ModelsAdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const defaultForm = { name: "", externalId: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true };
+  const defaultForm = { name: "", externalId: "", description: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true, defaultForCapabilities: [] as string[] };
   const [form, setForm] = useState(defaultForm);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const handleFilterChange = (key: string, value: string) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
@@ -56,7 +105,18 @@ export default function ModelsAdminPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openEdit = (m: any) => { setForm({ name: m.name, externalId: m.externalId, modelProviderId: m.modelProviderId, capabilities: m.capabilities || ["STANDARD"], isActive: m.isActive }); setEditModel(m); };
+  const openEdit = (m: any) => {
+    setForm({
+      name: m.name,
+      externalId: m.externalId,
+      description: m.description || "",
+      modelProviderId: m.modelProviderId,
+      capabilities: m.capabilities || ["STANDARD"],
+      isActive: m.isActive,
+      defaultForCapabilities: m.defaultForCapabilities || [],
+    });
+    setEditModel(m);
+  };
   const handleOpenCreate = () => { setForm(defaultForm); setEditModel({ id: "new" }); };
 
   const handleSave = async () => {
@@ -87,7 +147,7 @@ export default function ModelsAdminPage() {
     { key: "name", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "externalId", label: "External ID", render: (r) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.externalId}</code> },
     { key: "provider", label: "Provider", render: (r) => r.modelProvider?.name },
-    { key: "capabilities", label: "Capabilities", render: (r) => <div className="flex flex-wrap gap-1">{r.capabilities?.map((c: string) => <Badge key={c} variant="outline" className="text-[10px]">{c.replace("_", " ")}</Badge>)}</div> },
+    { key: "capabilities", label: "Capabilities", render: (r) => <div className="flex flex-wrap gap-1">{r.capabilities?.map((c: string) => <Badge key={c} variant="outline" className="text-[10px]">{c.replace(/_/g, " ")}</Badge>)}</div> },
     { key: "isActive", label: "Status", sortable: true, render: (r) => <Badge variant={r.isActive ? "default" : "secondary"} className="cursor-pointer" onClick={() => handleToggleActive(r)}>{r.isActive ? "Active" : "Disabled"}</Badge> },
     {
       key: "actions", label: "Actions", className: "text-right",
@@ -120,14 +180,21 @@ export default function ModelsAdminPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Model Details</DialogTitle></DialogHeader>
           {viewModel && (
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{viewModel.name}</span></div>
               <div><span className="text-muted-foreground">External ID:</span> <code className="text-xs bg-muted px-1 rounded">{viewModel.externalId}</code></div>
+              <div><span className="text-muted-foreground">Description:</span> <span className="text-muted-foreground whitespace-pre-wrap">{viewModel.description || "N/A"}</span></div>
               <div><span className="text-muted-foreground">Provider:</span> {viewModel.modelProvider?.name}</div>
               <div>
-                <span className="text-muted-foreground block mb-1">Capabilities:</span> 
-                <div className="flex flex-wrap gap-1">{viewModel.capabilities?.map((c: string) => <Badge key={c} variant="outline">{c.replace("_", " ")}</Badge>)}</div>
+                <span className="text-muted-foreground block mb-1">Capabilities:</span>
+                <div className="flex flex-wrap gap-1">{viewModel.capabilities?.map((c: string) => <Badge key={c} variant="outline">{c.replace(/_/g, " ")}</Badge>)}</div>
               </div>
+              {viewModel.defaultForCapabilities?.length > 0 && (
+                <div>
+                  <span className="text-muted-foreground block mb-1">Default for:</span>
+                  <div className="flex flex-wrap gap-1">{viewModel.defaultForCapabilities?.map((c: string) => <Badge key={c} variant="outline" className="border-primary text-primary">{c.replace(/_/g, " ")}</Badge>)}</div>
+                </div>
+              )}
               <div><span className="text-muted-foreground">Status:</span> <Badge variant={viewModel.isActive ? "default" : "secondary"}>{viewModel.isActive ? "Active" : "Disabled"}</Badge></div>
             </div>
           )}
@@ -136,46 +203,82 @@ export default function ModelsAdminPage() {
 
       {/* Create/Edit */}
       <Dialog open={!!editModel} onOpenChange={() => setEditModel(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Edit Model</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1"><label className="text-sm font-medium">Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="space-y-1"><label className="text-sm font-medium">External ID</label><Input value={form.externalId} onChange={(e) => setForm({ ...form, externalId: e.target.value })} placeholder="e.g. openai/gpt-4.1" /></div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Provider</label>
-              <select className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background" value={form.modelProviderId} onChange={(e) => setForm({ ...form, modelProviderId: parseInt(e.target.value) })}>
-                <option value={0} disabled>Select Provider</option>
-                {providers.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Capabilities</label>
-              <div className="grid grid-cols-2 gap-2">
-                {CAPABILITY_OPTIONS.map(opt => (
-                  <div key={opt.value} className="flex items-center gap-2">
-                    <input 
-                      type="checkbox" 
-                      id={`cap-${opt.value}`}
-                      checked={form.capabilities.includes(opt.value)} 
-                      onChange={(e) => {
-                        const newCaps = e.target.checked 
-                          ? [...form.capabilities, opt.value]
-                          : form.capabilities.filter(c => c !== opt.value);
-                        setForm({ ...form, capabilities: newCaps });
-                      }} 
-                      className="rounded" 
-                    />
-                    <label htmlFor={`cap-${opt.value}`} className="text-xs">{opt.label}</label>
-                  </div>
-                ))}
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editModel?.id === "new" ? "Add Model" : "Edit Model"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Basic fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <label className="text-sm font-medium">Name</label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. GPT-4.1" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-sm font-medium">External ID</label>
+                <Input value={form.externalId} onChange={(e) => setForm({ ...form, externalId: e.target.value })} placeholder="e.g. openai/gpt-4.1" className="font-mono text-xs" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-sm font-medium">Description</label>
+                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description..." />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-sm font-medium">Provider</label>
+                <select className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background" value={form.modelProviderId} onChange={(e) => setForm({ ...form, modelProviderId: parseInt(e.target.value) })}>
+                  <option value={0} disabled>Select Provider</option>
+                  {providers.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} id="isActive" className="rounded" />
-              <label htmlFor="isActive" className="text-sm">Active</label>
-            </div>
+
+            <div className="h-px bg-border" />
+
+            {/* Capabilities (chip toggles) */}
+            <CapabilityToggle
+              label="Capabilities"
+              sublabel="What this model can do"
+              options={CAPABILITY_OPTIONS}
+              selected={form.capabilities}
+              onChange={(val) => {
+                // Must have at least 1
+                if (val.length === 0) return;
+                // Remove defaultForCapabilities that are no longer in capabilities
+                const newDefaults = form.defaultForCapabilities.filter((d) => val.includes(d));
+                setForm({ ...form, capabilities: val, defaultForCapabilities: newDefaults });
+              }}
+            />
+
+            {/* Default For (chip toggles — only show capabilities this model supports) */}
+            <CapabilityToggle
+              label="Default for"
+              sublabel="Pre-selected when user switches to this mode"
+              options={CAPABILITY_OPTIONS.filter((o) => form.capabilities.includes(o.value))}
+              selected={form.defaultForCapabilities}
+              onChange={(val) => setForm({ ...form, defaultForCapabilities: val })}
+            />
+
+            <div className="h-px bg-border" />
+
+            {/* Active toggle */}
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isActive: !form.isActive })}
+              className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                form.isActive
+                  ? "bg-primary/5 border-primary/30 text-primary"
+                  : "border-border text-muted-foreground hover:border-muted-foreground/40"
+              }`}
+            >
+              <div className={`w-4 h-4 rounded-full border-2 transition-colors ${form.isActive ? "bg-primary border-primary" : "border-muted-foreground/40"}`} />
+              {form.isActive ? "Active" : "Inactive"} — {form.isActive ? "Visible to users" : "Hidden from users"}
+            </button>
           </div>
-          <DialogFooter><Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditModel(null)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving} className="gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

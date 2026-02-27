@@ -15,12 +15,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { getModelIcon } from "@/lib/model-icons";
 
 interface Model {
   id: number;
   name: string;
   description: string | null;
   capabilities?: string[];
+  externalId?: string;
+  defaultForCapabilities?: string[];
 }
 
 interface ChatInputProps {
@@ -71,15 +74,21 @@ export function ChatInput({
     setChatType(type);
     localStorage.setItem("preferredChatType", type);
 
-    // Filter selected models to only keep those that support the new chat type
-    const validModelsForNewType = models.filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(type));
-    const newSelectedModels = selectedModels.filter(id => validModelsForNewType.some(m => m.id === id));
+    // Only keep models that support the new type
+    const validModels = models.filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(type));
     
-    // If none of the previously selected models support the new type, fallback to the first valid one
-    if (newSelectedModels.length === 0 && validModelsForNewType.length > 0) {
-      onModelChange([validModelsForNewType[0].id]);
+    // Try to auto-switch to the default model for this capability
+    const defaultForType = validModels.filter(m => m.defaultForCapabilities?.includes(type));
+    if (defaultForType.length > 0) {
+      onModelChange(defaultForType.map(m => m.id));
+      return;
+    }
+    
+    // Otherwise keep valid selections, or fall back to first valid
+    const newSelectedModels = selectedModels.filter(id => validModels.some(m => m.id === id));
+    if (newSelectedModels.length === 0 && validModels.length > 0) {
+      onModelChange([validModels[0].id]);
     } else if (newSelectedModels.length !== selectedModels.length) {
-      // If some were removed, update the selection
       onModelChange(newSelectedModels);
     }
   };
@@ -267,7 +276,15 @@ export function ChatInput({
           <div className="flex items-center mt-2 px-2">
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted/60 outline-none">
-                <Globe className="w-4 h-4 opacity-70" />
+                {(() => {
+                  const singleModel = selectedModels.length === 1
+                    ? models.find(m => m.id === selectedModels[0])
+                    : null;
+                  const icon = singleModel?.externalId ? getModelIcon(singleModel.externalId) : null;
+                  return icon
+                    ? <img src={icon} alt="" className="w-4 h-4 rounded-sm object-contain opacity-80" />
+                    : <Globe className="w-4 h-4 opacity-70" />;
+                })()}
                 <span className="truncate max-w-[200px] sm:max-w-[300px]">
                   {chatType !== "STANDARD" ? `${typeLabels[chatType]} only` : "Standard chat"} 
                   {" • "} 
@@ -326,9 +343,14 @@ export function ChatInput({
                       }}
                     >
                       <div className="w-4 flex justify-center mt-0.5">{selectedModels.includes(model.id) && <Check className="w-3 h-3 text-primary" />}</div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-[13px] leading-tight">{model.name}</span>
-                        {model.description && <span className="text-[11px] text-muted-foreground leading-tight line-clamp-2">{model.description}</span>}
+                      <div className="flex items-center gap-2 flex-1">
+                        {model.externalId && getModelIcon(model.externalId)
+                          ? <img src={getModelIcon(model.externalId)!} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" />
+                          : <div className="w-4 h-4" />}
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium text-[13px] leading-tight">{model.name}</span>
+                          {model.description && <span className="text-[11px] text-muted-foreground leading-tight line-clamp-2">{model.description}</span>}
+                        </div>
                       </div>
                     </DropdownMenuItem>
                   ))}
