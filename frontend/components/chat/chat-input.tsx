@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, Loader2, Mic, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
+  Plus, Loader2, Mic, MicOff, AudioLines, Square, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { getModelIcon } from "@/lib/model-icons";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 interface Model {
   id: number;
@@ -54,7 +55,28 @@ export function ChatInput({
   const [content, setContent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [chatType, setChatType] = useState<ChatType>("STANDARD");
-  const [isListening, setIsListening] = useState(false);
+
+  // Speech-to-text: track the text that existed before mic was started
+  const preExistingTextRef = useRef("");
+
+  const handleSpeechResult = useCallback((transcript: string) => {
+    const prefix = preExistingTextRef.current;
+    const separator = prefix && !prefix.endsWith(" ") ? " " : "";
+    setContent(prefix + separator + transcript);
+  }, []);
+
+  const { status: micStatus, isSupported: isMicSupported, errorMessage: micError, startListening, stopListening } =
+    useSpeechRecognition({ onResult: handleSpeechResult });
+
+  const handleMicToggle = useCallback(() => {
+    if (micStatus === "idle") {
+      // Save existing text so speech appends after it
+      preExistingTextRef.current = content;
+      startListening();
+    } else {
+      stopListening();
+    }
+  }, [micStatus, content, startListening, stopListening]);
   
   // Hydrate chat type from local storage
   useEffect(() => {
@@ -171,6 +193,15 @@ export function ChatInput({
       <div className="max-w-3xl mx-auto">
         <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-2 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           
+          {/* Mic error message */}
+          {micError && (
+            <div className="flex items-center gap-2 mx-2 mb-1 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-xs">
+              <MicOff className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="flex-1">{micError}</span>
+              <button onClick={() => startListening()} className="underline hover:no-underline flex-shrink-0">Retry</button>
+            </div>
+          )}
+
           {/* Top Row: Chat Type Pill */}
           {chatType !== "STANDARD" && (
             <div className="flex items-center mb-1 px-2">
@@ -235,22 +266,34 @@ export function ChatInput({
 
             <div className="flex items-center gap-2 flex-shrink-0 mb-0.5 mr-1">
               <div className="h-6 w-px bg-border/60 mr-1 hidden sm:block" />
-              {/* Hide mic on mobile when user is typing to save space */}
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className={`h-10 w-10 rounded-full transition-colors ${
-                  content.trim() ? "hidden sm:inline-flex" : "inline-flex"
-                } ${
-                  isListening 
-                    ? "text-destructive bg-destructive/10 hover:bg-destructive/20" 
-                    : "text-muted-foreground hover:bg-muted"
-                }`}
-                onClick={() => setIsListening(!isListening)}
-                title="Voice input"
-              >
-                <Mic className="w-5 h-5" />
-              </Button>
+              {/* Mic button: always visible while listening, hidden on mobile when typing & idle */}
+              {isMicSupported && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={`h-10 w-10 rounded-full transition-all duration-200 ${
+                    micStatus !== "idle"
+                      ? "inline-flex" // Always visible while listening/stopping
+                      : content.trim() ? "hidden sm:inline-flex" : "inline-flex"
+                  } ${
+                    micStatus === "listening"
+                      ? "text-primary bg-primary/10 hover:bg-primary/20 ring-2 ring-primary/30 animate-pulse"
+                      : micStatus === "stopping"
+                        ? "text-destructive bg-destructive/10 hover:bg-destructive/20"
+                        : "text-muted-foreground hover:bg-muted"
+                  }`}
+                  onClick={handleMicToggle}
+                  title={micStatus === "idle" ? "Start voice input" : micStatus === "listening" ? "Stop listening" : "Stopping..."}
+                >
+                  {micStatus === "listening" ? (
+                    <AudioLines className="w-5 h-5" />
+                  ) : micStatus === "stopping" ? (
+                    <Square className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
+                </Button>
+              )}
 
               <Button
                 size="icon"
