@@ -28,13 +28,13 @@ export function AdminPanel() {
         <TabsTrigger value="users" className="gap-1.5 text-xs"><Users className="w-3 h-3" /> Users</TabsTrigger>
         <TabsTrigger value="plans" className="gap-1.5 text-xs"><CreditCard className="w-3 h-3" /> Plans</TabsTrigger>
         <TabsTrigger value="models" className="gap-1.5 text-xs"><Bot className="w-3 h-3" /> Models</TabsTrigger>
-        {isSuperAdmin && <TabsTrigger value="providers" className="gap-1.5 text-xs"><Building className="w-3 h-3" /> Providers</TabsTrigger>}
+        <TabsTrigger value="providers" className="gap-1.5 text-xs"><Building className="w-3 h-3" /> Providers</TabsTrigger>
       </TabsList>
 
       <TabsContent value="users"><UsersTable /></TabsContent>
       <TabsContent value="plans"><PlansTable /></TabsContent>
       <TabsContent value="models"><ModelsTable /></TabsContent>
-      {isSuperAdmin && <TabsContent value="providers"><ProvidersTable /></TabsContent>}
+      <TabsContent value="providers"><ProvidersTable /></TabsContent>
     </Tabs>
   );
 }

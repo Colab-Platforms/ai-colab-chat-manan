@@ -65,6 +65,7 @@ class ModelResponseService {
           userId,
           modelId: data.modelId,
           chatId: data.chatId,
+          messageId: data.messageId,
           promptTokens: data.promptTokens,
           completionTokens: data.completionTokens,
           totalTokens,

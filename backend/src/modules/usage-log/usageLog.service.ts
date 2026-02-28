@@ -1,50 +1,68 @@
 import prisma from "@root/prisma.js";
-import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils.js";
+import {
+  getPaginationOptions,
+  formatPaginationResponse,
+} from "@/utils/paginationUtils.js";
 import { buildPrismaQuery } from "prisma-qb";
 
 class UsageLogService {
-    async list(query: any) {
-        const { take, skip, page, pageSize } = getPaginationOptions(query, 10);
+  async list(query: any, callerRole: string = "USER") {
+    const { take, skip, page, pageSize } = getPaginationOptions(query, 10);
 
-        const { where, orderBy } = buildPrismaQuery({
-            query,
-            searchFields: [
-                { field: "firstName", model: "user" },
-                { field: "lastName", model: "user" },
-                { field: "email", model: "user" },
-            ],
-            filterFields: [
-                { key: "userId", field: "userId", type: "number" },
-                { key: "modelId", field: "modelId", type: "number" },
-                { key: "chatId", field: "chatId", type: "number" },
-                { key: "createdAt", field: "createdAt", type: "date" },
-            ],
-            sortFields: [
-                { key: "createdAt", field: "createdAt" },
-                { key: "totalTokens", field: "totalTokens" },
-                { key: "promptTokens", field: "promptTokens" },
-                { key: "completionTokens", field: "completionTokens" },
-            ],
-            defaultSort: { key: "createdAt", order: "desc" },
-            allowedQueryKeys: ["page", "pageSize"],
-        });
+    const { where: qbWhere, orderBy } = buildPrismaQuery({
+      query,
+      searchFields: [
+        { field: "firstName", model: "user" },
+        { field: "lastName", model: "user" },
+        { field: "email", model: "user" },
+      ],
+      filterFields: [
+        { key: "userId", field: "userId", type: "number" },
+        { key: "modelId", field: "modelId", type: "number" },
+        { key: "chatId", field: "chatId", type: "number" },
+        { key: "createdAt", field: "createdAt", type: "date" },
+      ],
+      sortFields: [
+        { key: "createdAt", field: "createdAt" },
+        { key: "totalTokens", field: "totalTokens" },
+        { key: "promptTokens", field: "promptTokens" },
+        { key: "completionTokens", field: "completionTokens" },
+      ],
+      defaultSort: { key: "createdAt", order: "desc" },
+      allowedQueryKeys: ["page", "pageSize"],
+    });
 
-        const [logs, totalRecords] = await Promise.all([
-            prisma.usageLog.findMany({
-                where,
-                skip,
-                take,
-                orderBy,
-                include: {
-                    user: { select: { id: true, firstName: true, lastName: true, email: true } },
-                    model: { select: { id: true, name: true } },
-                },
-            }),
-            prisma.usageLog.count({ where }),
-        ]);
+    const where: any = { ...qbWhere };
 
-        return formatPaginationResponse(logs, totalRecords, page, pageSize);
+    // Hide SuperAdmin logs from standard Admins and Users
+    if (callerRole !== "SUPERADMIN" && callerRole !== "SUPER_ADMIN") {
+      where.user = {
+        userRoles: {
+          none: {
+            role: { name: { in: ["SUPERADMIN", "SUPER_ADMIN"] } },
+          },
+        },
+      };
     }
+
+    const [logs, totalRecords] = await Promise.all([
+      prisma.usageLog.findMany({
+        where,
+        skip,
+        take,
+        orderBy,
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+          model: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.usageLog.count({ where }),
+    ]);
+
+    return formatPaginationResponse(logs, totalRecords, page, pageSize);
+  }
 }
 
 export default UsageLogService;

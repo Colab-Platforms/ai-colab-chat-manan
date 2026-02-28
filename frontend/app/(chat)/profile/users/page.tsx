@@ -12,6 +12,22 @@ import { userService } from "@/lib/services";
 import { Loader2, Eye, Pencil, Trash2, Save, BarChart3, Coins, TrendingUp, Hash, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "react-toastify";
 
+interface GroupedLog {
+  id: string; // generated id
+  user: any;
+  messageId: number | null;
+  capability: string;
+  createdAt: string;
+  models: any[];
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  billablePromptTokens: number;
+  billableCompletionTokens: number;
+  billableTotalTokens: number;
+  subLogs: any[];
+}
+
 export default function UsersAdminPage() {
   const { hasRole } = useAuth();
   const isSuperAdmin = hasRole("SUPERADMIN");
@@ -42,8 +58,10 @@ export default function UsersAdminPage() {
   // Usage modal
   const [usageUser, setUsageUser] = useState<any>(null);
   const [usageData, setUsageData] = useState<any>(null);
+  const [usageLogs, setUsageLogs] = useState<GroupedLog[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usagePage, setUsagePage] = useState(1);
+  const [selectedGroup, setSelectedGroup] = useState<GroupedLog | null>(null);
 
   const handleFilterChange = (key: string, value: string) => {
     setActiveFilters((prev) => ({ ...prev, [key]: value }));
@@ -143,7 +161,44 @@ export default function UsersAdminPage() {
     setUsagePage(pg);
     try {
       const res = await userService.getUserUsage(u.id, { page: String(pg), pageSize: "10" });
-      setUsageData(res.data.data);
+      const rawData = res.data.data;
+      setUsageData(rawData);
+
+      // Group logs by messageId (if present), fallback to grouping by id if no messageId
+      const grouped = new Map<string, GroupedLog>();
+      
+      (rawData.usage?.data || []).forEach((log: any) => {
+        const key = log.messageId ? `msg_${log.messageId}` : `log_${log.id}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            id: key,
+            user: u,
+            messageId: log.messageId,
+            capability: log.capability,
+            createdAt: log.createdAt,
+            models: [],
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            billablePromptTokens: 0,
+            billableCompletionTokens: 0,
+            billableTotalTokens: 0,
+            subLogs: [],
+          });
+        }
+        
+        const group = grouped.get(key)!;
+        group.models.push(log.model);
+        group.promptTokens += (log.promptTokens || 0);
+        group.completionTokens += (log.completionTokens || 0);
+        group.totalTokens += (log.totalTokens || 0);
+        group.billablePromptTokens += (log.billablePromptTokens || 0);
+        group.billableCompletionTokens += (log.billableCompletionTokens || 0);
+        group.billableTotalTokens += (log.billableTotalTokens || 0);
+        group.subLogs.push(log);
+      });
+
+      setUsageLogs(Array.from(grouped.values()));
     } catch {
       toast.error("Failed to load usage");
     } finally {
@@ -314,20 +369,27 @@ export default function UsersAdminPage() {
       </Dialog>
 
       {/* ─── Usage Modal ─── */}
-      <Dialog open={!!usageUser} onOpenChange={() => { setUsageUser(null); setUsageData(null); }}>
-        <DialogContent className="max-w-4xl">
+      <Dialog open={!!usageUser} onOpenChange={(open) => { 
+        if (!open) {
+          setUsageUser(null); 
+          setUsageData(null); 
+          setUsageLogs([]);
+        }
+      }}>
+        <DialogContent className="max-w-[95vw] lg:max-w-6xl w-full p-4 md:p-6 overflow-hidden max-h-[90vh] flex flex-col">
           <DialogHeader><DialogTitle>Usage — {usageUser?.firstName} {usageUser?.lastName}</DialogTitle></DialogHeader>
           {usageLoading ? (
             <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : usageData ? (
-            <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
+            <div className="flex flex-col gap-5 overflow-y-auto pr-1">
               {/* Summary cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 {[
-                  { label: "Total Tokens", value: usageData.summary?.totalTokens?.toLocaleString() || "0", icon: Coins, color: "text-emerald-500 bg-emerald-500/10" },
-                  { label: "Prompt Tokens", value: usageData.summary?.totalPromptTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-blue-500 bg-blue-500/10" },
-                  { label: "Completion Tokens", value: usageData.summary?.totalCompletionTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-purple-500 bg-purple-500/10" },
                   { label: "Total Prompts", value: usageData.summary?.totalPrompts?.toLocaleString() || "0", icon: Hash, color: "text-amber-500 bg-amber-500/10" },
+                  { label: "Actual Tokens", value: usageData.summary?.totalTokens?.toLocaleString() || "0", icon: Coins, color: "text-emerald-500 bg-emerald-500/10" },
+                  { label: "Billable Tokens", value: usageData.summary?.billableTotalTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-primary bg-primary/10" },
+                  { label: "Billable Prompt", value: usageData.summary?.billablePromptTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-blue-500 bg-blue-500/10" },
+                  { label: "Billable Completion", value: usageData.summary?.billableCompletionTokens?.toLocaleString() || "0", icon: TrendingUp, color: "text-purple-500 bg-purple-500/10" },
                 ].map((card) => (
                   <div key={card.label} className="bg-card border border-border/30 rounded-xl p-3">
                     <div className="flex items-center gap-2 mb-1">
@@ -346,23 +408,55 @@ export default function UsersAdminPage() {
                     <thead>
                       <tr className="bg-muted/30 border-b border-border/30">
                         <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Model</th>
-                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Prompt</th>
-                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Completion</th>
-                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Total</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Model(s)</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Capability</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Actual</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Billable</th>
+                        <th className="px-4 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {usageData.usage?.data?.length === 0 ? (
-                        <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No usage data</td></tr>
+                      {usageLogs.length === 0 ? (
+                        <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No usage data</td></tr>
                       ) : (
-                        usageData.usage?.data?.map((log: any) => (
+                        usageLogs.map((log) => (
                           <tr key={log.id} className="border-b border-border/20 last:border-0 hover:bg-muted/20 transition-colors">
                             <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</td>
-                            <td className="px-4 py-2.5 whitespace-nowrap font-medium">{log.model?.name || "—"}</td>
-                            <td className="px-4 py-2.5 text-right whitespace-nowrap">{log.promptTokens?.toLocaleString()}</td>
-                            <td className="px-4 py-2.5 text-right whitespace-nowrap">{log.completionTokens?.toLocaleString()}</td>
-                            <td className="px-4 py-2.5 text-right whitespace-nowrap font-semibold">{log.totalTokens?.toLocaleString()}</td>
+                            <td className="px-4 py-2.5">
+                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                {log.models.map((m, i) => (
+                                  <span key={i} className="text-xs border border-border bg-card px-2 py-0.5 rounded-full whitespace-nowrap">
+                                    {m?.name || "Unknown"}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 whitespace-nowrap">
+                              <span className="text-xs uppercase text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">{log.capability?.replace(/_/g, " ") || "STANDARD"}</span>
+                            </td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="font-mono text-[10px] text-muted-foreground">{log.promptTokens?.toLocaleString() || 0} p / {log.completionTokens?.toLocaleString() || 0} c</span>
+                                <span className="font-mono text-xs font-medium">{log.totalTokens?.toLocaleString() || 0} tot</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="font-mono text-[10px] text-muted-foreground">{log.billablePromptTokens?.toLocaleString() || 0} p / {log.billableCompletionTokens?.toLocaleString() || 0} c</span>
+                                <span className="font-mono text-xs font-medium text-primary">{log.billableTotalTokens?.toLocaleString() || 0} tot</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                              {log.subLogs.length > 1 ? (
+                                <button 
+                                  onClick={() => setSelectedGroup(log)}
+                                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors cursor-pointer"
+                                  title="View Breakdown"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                              ) : null}
+                            </td>
                           </tr>
                         ))
                       )}
@@ -386,6 +480,45 @@ export default function UsersAdminPage() {
               </div>
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* nested dialog for detailed log breakdown */}
+      <Dialog open={!!selectedGroup} onOpenChange={(open) => !open && setSelectedGroup(null)}>
+        <DialogContent className="max-w-[95vw] lg:max-w-3xl w-full p-4 md:p-6">
+          <DialogHeader>
+            <DialogTitle>Usage Breakdown</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 border border-border rounded-lg overflow-hidden bg-card/50">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground text-xs uppercase">Model</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs uppercase">Actual Tokens</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs uppercase">Billable Tokens</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {selectedGroup?.subLogs.map((log: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium">{log.model?.name || "Unknown"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-mono text-[10px] text-muted-foreground">{log.promptTokens?.toLocaleString() || 0} p / {log.completionTokens?.toLocaleString() || 0} c</span>
+                        <span className="font-mono text-xs font-medium">{log.totalTokens?.toLocaleString() || 0} tot</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-mono text-[10px] text-muted-foreground">{log.billablePromptTokens?.toLocaleString() || 0} p / {log.billableCompletionTokens?.toLocaleString() || 0} c</span>
+                        <span className="font-mono text-xs font-medium text-primary">{log.billableTotalTokens?.toLocaleString() || 0} tot</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </DialogContent>
       </Dialog>
 

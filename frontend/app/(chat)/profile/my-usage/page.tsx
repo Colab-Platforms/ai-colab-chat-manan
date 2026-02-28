@@ -4,6 +4,24 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/auth-context";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { usageLogService } from "@/lib/services";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Eye } from "lucide-react";
+
+interface GroupedLog {
+  id: string; // generated id
+  user: any;
+  messageId: number | null;
+  capability: string;
+  createdAt: string;
+  models: any[];
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  billablePromptTokens: number;
+  billableCompletionTokens: number;
+  billableTotalTokens: number;
+  subLogs: any[];
+}
 
 export default function UsagePage() {
   const { user } = useAuth();
@@ -13,6 +31,7 @@ export default function UsagePage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState<any>({});
+  const [selectedGroup, setSelectedGroup] = useState<GroupedLog | null>(null);
 
   const fetchLogs = useCallback(async () => {
     if (!user?.id) return;
@@ -26,7 +45,41 @@ export default function UsagePage() {
       if (sort) params.sort = sort;
       const res = await usageLogService.list(params);
       const result = res.data.data;
-      setLogs(result?.data || []);
+      
+      const grouped = new Map<string, GroupedLog>();
+      
+      (result?.data || []).forEach((log: any) => {
+        const key = log.messageId ? `msg_${log.messageId}` : `log_${log.id}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            id: key,
+            user: log.user,
+            messageId: log.messageId,
+            capability: log.capability,
+            createdAt: log.createdAt,
+            models: [],
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            billablePromptTokens: 0,
+            billableCompletionTokens: 0,
+            billableTotalTokens: 0,
+            subLogs: [],
+          });
+        }
+        
+        const group = grouped.get(key)!;
+        group.models.push(log.model);
+        group.promptTokens += (log.promptTokens || 0);
+        group.completionTokens += (log.completionTokens || 0);
+        group.totalTokens += (log.totalTokens || 0);
+        group.billablePromptTokens += (log.billablePromptTokens || 0);
+        group.billableCompletionTokens += (log.billableCompletionTokens || 0);
+        group.billableTotalTokens += (log.billableTotalTokens || 0);
+        group.subLogs.push(log);
+      });
+
+      setLogs(Array.from(grouped.values()));
       setPagination(result || {});
     } catch { /* ignore */ } finally { setLoading(false); }
   }, [sort, page, pageSize, user?.id]);
@@ -35,12 +88,31 @@ export default function UsagePage() {
   useEffect(() => { setPage(1); }, [sort, pageSize]);
 
   const columns: Column[] = [
-    { key: "model", label: "Model", render: (r) => r.model?.name || "Unknown" },
-    { key: "capability", label: "Capability", render: (r) => <span className="text-xs uppercase text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">{r.capability?.replace(/_/g, " ") || "STANDARD"}</span> },
-    { key: "promptTokens", label: "Prompt", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.billablePromptTokens?.toLocaleString() || 0}</span> },
-    { key: "completionTokens", label: "Completion", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.billableCompletionTokens?.toLocaleString() || 0}</span> },
-    { key: "totalTokens", label: "Total", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs font-medium">{r.billableTotalTokens?.toLocaleString() || 0}</span> },
-    { key: "createdAt", label: "Date", sortable: true, render: (r) => <span className="text-muted-foreground text-sm">{new Date(r.createdAt).toLocaleString()}</span> },
+    { key: "models", label: "Model(s)", render: (r: GroupedLog) => (
+      <div className="flex flex-wrap gap-1 max-w-[250px]">
+        {r.models.map((m, i) => (
+          <span key={i} className="text-xs border border-border bg-card px-2 py-0.5 rounded-full whitespace-nowrap">
+            {m?.name || "Unknown"}
+          </span>
+        ))}
+      </div>
+    )},
+    { key: "capability", label: "Capability", render: (r: GroupedLog) => <span className="text-xs uppercase text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">{r.capability?.replace(/_/g, " ") || "STANDARD"}</span> },
+    { key: "promptTokens", label: "Prompt", sortable: true, className: "text-right", render: (r: GroupedLog) => <span className="font-mono text-xs text-muted-foreground">{r.billablePromptTokens?.toLocaleString() || 0}</span> },
+    { key: "completionTokens", label: "Completion", sortable: true, className: "text-right", render: (r: GroupedLog) => <span className="font-mono text-xs text-muted-foreground">{r.billableCompletionTokens?.toLocaleString() || 0}</span> },
+    { key: "totalTokens", label: "Total", sortable: true, className: "text-right", render: (r: GroupedLog) => <span className="font-mono text-xs font-medium text-primary">{r.billableTotalTokens?.toLocaleString() || 0}</span> },
+    { key: "createdAt", label: "Date", sortable: true, render: (r: GroupedLog) => <span className="text-muted-foreground text-sm">{new Date(r.createdAt).toLocaleString()}</span> },
+    { key: "actions", label: "", className: "w-10", render: (r: GroupedLog) => (
+      r.subLogs.length > 1 ? (
+        <button 
+          onClick={() => setSelectedGroup(r)}
+          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors cursor-pointer"
+          title="View Breakdown"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+      ) : null
+    )},
   ];
 
   return (
@@ -62,6 +134,36 @@ export default function UsagePage() {
         onPageSizeChange={setPageSize}
         loading={loading}
       />
+
+      <Dialog open={!!selectedGroup} onOpenChange={(open) => !open && setSelectedGroup(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Usage Breakdown</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 border border-border rounded-lg overflow-hidden bg-card/50">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground text-xs uppercase">Model</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs uppercase">Prompt</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs uppercase">Completion</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs uppercase">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {selectedGroup?.subLogs.map((log: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium">{log.model?.name || "Unknown"}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">{log.billablePromptTokens?.toLocaleString() || 0}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">{log.billableCompletionTokens?.toLocaleString() || 0}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs font-medium text-primary">{log.billableTotalTokens?.toLocaleString() || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

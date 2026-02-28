@@ -131,6 +131,7 @@ model Message {
   updatedAt      DateTime        @updatedAt
   deletedAt      DateTime?
   modelResponses ModelResponse[]
+  usageLogs      UsageLog[]
 
   @@index([chatId])
   @@index([createdAt])
@@ -229,6 +230,7 @@ model UsageLog {
   userId                   Int
   modelId                  Int
   chatId                   Int?
+  messageId                Int?
   capability               ModelCapability @default(STANDARD)
   promptTokens             Int
   completionTokens         Int
@@ -239,11 +241,13 @@ model UsageLog {
   user                     User            @relation(fields: [userId], references: [id])
   model                    Model           @relation(fields: [modelId], references: [id])
   chat                     Chat?           @relation(fields: [chatId], references: [id])
+  message                  Message?        @relation(fields: [messageId], references: [id])
   createdAt                DateTime        @default(now())
 
   @@index([userId])
   @@index([modelId])
   @@index([createdAt])
+  @@index([messageId])
 }
 
 model Plan {
