@@ -138,15 +138,15 @@ export function DataTable<T extends Record<string, any>>({
             {title && <h1 className="text-2xl font-bold">{title}</h1>}
             {description && <p className="text-muted-foreground text-sm mt-1">{description}</p>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center w-full sm:w-auto gap-2">
             {onSearchChange && (
-              <div className="relative w-48 md:w-64">
+              <div className="relative flex-1 sm:flex-none sm:w-48 md:w-64">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder={searchPlaceholder}
                   value={localSearch}
                   onChange={(e) => setLocalSearch(e.target.value)}
-                  className="pl-9 h-9 bg-card/90"
+                  className="pl-9 h-9 bg-card/90 min-w-0"
                 />
               </div>
             )}
