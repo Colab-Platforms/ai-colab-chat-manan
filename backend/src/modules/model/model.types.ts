@@ -8,6 +8,7 @@ export interface CreateModelBody {
   description?: string;
   isActive?: boolean;
   defaultForCapabilities?: ModelCapability[];
+  tokenMultiplier?: number;
 }
 
 export interface UpdateModelBody {
@@ -18,4 +19,5 @@ export interface UpdateModelBody {
   description?: string;
   isActive?: boolean;
   defaultForCapabilities?: ModelCapability[];
+  tokenMultiplier?: number;
 }

@@ -69,9 +69,18 @@ export default function AdminUsagePage() {
     { key: "user", label: "User", render: (r: any) => <span className="font-medium">{r.user?.firstName} {r.user?.lastName}<br/><span className="text-xs text-muted-foreground font-normal">{r.user?.email}</span></span> },
     { key: "model", label: "Model", render: (r) => r.model?.name || "Unknown" },
     { key: "capability", label: "Capability", render: (r) => <span className="text-xs uppercase text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">{r.capability?.replace(/_/g, " ") || "STANDARD"}</span> },
-    { key: "promptTokens", label: "Prompt", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.promptTokens?.toLocaleString() || 0}</span> },
-    { key: "completionTokens", label: "Completion", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.completionTokens?.toLocaleString() || 0}</span> },
-    { key: "totalTokens", label: "Total", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs font-medium">{r.totalTokens?.toLocaleString() || 0}</span> },
+    { key: "actualTokens", label: "Actual", className: "text-right", render: (r) => (
+      <div className="flex flex-col items-end gap-0.5">
+        <span className="font-mono text-[10px] text-muted-foreground">{r.promptTokens?.toLocaleString() || 0} p / {r.completionTokens?.toLocaleString() || 0} c</span>
+        <span className="font-mono text-xs font-medium">{r.totalTokens?.toLocaleString() || 0} tot</span>
+      </div>
+    )},
+    { key: "billableTokens", label: "Billable", className: "text-right", render: (r) => (
+      <div className="flex flex-col items-end gap-0.5">
+        <span className="font-mono text-[10px] text-muted-foreground">{r.billablePromptTokens?.toLocaleString() || 0} p / {r.billableCompletionTokens?.toLocaleString() || 0} c</span>
+        <span className="font-mono text-xs font-medium text-primary">{r.billableTotalTokens?.toLocaleString() || 0} tot</span>
+      </div>
+    )},
     { key: "createdAt", label: "Date", sortable: true, render: (r) => <span className="text-muted-foreground text-sm">{new Date(r.createdAt).toLocaleString()}</span> },
   ];
 

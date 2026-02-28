@@ -85,6 +85,8 @@ class ModelService {
       updateData.defaultForCapabilities = data.defaultForCapabilities;
     if (data.capabilities !== undefined)
       updateData.capabilities = data.capabilities;
+    if (data.tokenMultiplier !== undefined)
+      updateData.tokenMultiplier = data.tokenMultiplier;
 
     const updated = await prisma.model.update({
       where: { id: modelId },

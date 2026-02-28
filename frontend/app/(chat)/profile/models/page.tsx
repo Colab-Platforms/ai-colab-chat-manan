@@ -82,7 +82,7 @@ export default function ModelsAdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const defaultForm = { name: "", externalId: "", description: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true, defaultForCapabilities: [] as string[] };
+  const defaultForm = { name: "", externalId: "", description: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true, defaultForCapabilities: [] as string[], tokenMultiplier: 1.0 };
   const [form, setForm] = useState(defaultForm);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const handleFilterChange = (key: string, value: string) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
@@ -114,6 +114,7 @@ export default function ModelsAdminPage() {
       capabilities: m.capabilities || ["STANDARD"],
       isActive: m.isActive,
       defaultForCapabilities: m.defaultForCapabilities || [],
+      tokenMultiplier: m.tokenMultiplier || 1.0,
     });
     setEditModel(m);
   };
@@ -147,6 +148,7 @@ export default function ModelsAdminPage() {
     { key: "name", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "externalId", label: "External ID", render: (r) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.externalId}</code> },
     { key: "provider", label: "Provider", render: (r) => r.modelProvider?.name },
+    { key: "tokenMultiplier", label: "Multiplier", sortable: true, render: (r) => <Badge variant="secondary" className="font-mono">{r.tokenMultiplier || 1.0}x</Badge> },
     { key: "capabilities", label: "Capabilities", render: (r) => <div className="flex flex-wrap gap-1">{r.capabilities?.map((c: string) => <Badge key={c} variant="outline" className="text-[10px]">{c.replace(/_/g, " ")}</Badge>)}</div> },
     { key: "isActive", label: "Status", sortable: true, render: (r) => <Badge variant={r.isActive ? "default" : "secondary"} className="cursor-pointer" onClick={() => handleToggleActive(r)}>{r.isActive ? "Active" : "Disabled"}</Badge> },
     {
@@ -185,6 +187,7 @@ export default function ModelsAdminPage() {
               <div><span className="text-muted-foreground">External ID:</span> <code className="text-xs bg-muted px-1 rounded">{viewModel.externalId}</code></div>
               <div><span className="text-muted-foreground">Description:</span> <span className="text-muted-foreground whitespace-pre-wrap">{viewModel.description || "N/A"}</span></div>
               <div><span className="text-muted-foreground">Provider:</span> {viewModel.modelProvider?.name}</div>
+              <div><span className="text-muted-foreground">Token Multiplier:</span> {viewModel.tokenMultiplier || 1.0}x</div>
               <div>
                 <span className="text-muted-foreground block mb-1">Capabilities:</span>
                 <div className="flex flex-wrap gap-1">{viewModel.capabilities?.map((c: string) => <Badge key={c} variant="outline">{c.replace(/_/g, " ")}</Badge>)}</div>
@@ -228,6 +231,10 @@ export default function ModelsAdminPage() {
                   <option value={0} disabled>Select Provider</option>
                   {providers.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-sm font-medium">Token Multiplier</label>
+                <Input type="number" step="0.1" value={form.tokenMultiplier} onChange={(e) => setForm({ ...form, tokenMultiplier: parseFloat(e.target.value) || 1.0 })} placeholder="e.g. 1.0" />
               </div>
             </div>
 

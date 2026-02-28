@@ -16,6 +16,7 @@ const createModelSchema = Joi.object({
     .min(1)
     .required(),
   description: Joi.string().trim().allow(null, "").optional(),
+  tokenMultiplier: Joi.number().optional(),
   isActive: Joi.boolean().optional(),
   defaultForCapabilities: Joi.array()
     .items(
@@ -45,6 +46,7 @@ const updateModelSchema = Joi.object({
     .min(1)
     .optional(),
   description: Joi.string().trim().allow(null, "").optional(),
+  tokenMultiplier: Joi.number().optional(),
   isActive: Joi.boolean().optional(),
   defaultForCapabilities: Joi.array()
     .items(

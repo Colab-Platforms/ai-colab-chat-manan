@@ -37,9 +37,9 @@ export default function UsagePage() {
   const columns: Column[] = [
     { key: "model", label: "Model", render: (r) => r.model?.name || "Unknown" },
     { key: "capability", label: "Capability", render: (r) => <span className="text-xs uppercase text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">{r.capability?.replace(/_/g, " ") || "STANDARD"}</span> },
-    { key: "promptTokens", label: "Prompt", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.promptTokens?.toLocaleString() || 0}</span> },
-    { key: "completionTokens", label: "Completion", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.completionTokens?.toLocaleString() || 0}</span> },
-    { key: "totalTokens", label: "Total", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs font-medium">{r.totalTokens?.toLocaleString() || 0}</span> },
+    { key: "promptTokens", label: "Prompt", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.billablePromptTokens?.toLocaleString() || 0}</span> },
+    { key: "completionTokens", label: "Completion", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs">{r.billableCompletionTokens?.toLocaleString() || 0}</span> },
+    { key: "totalTokens", label: "Total", sortable: true, className: "text-right", render: (r) => <span className="font-mono text-xs font-medium">{r.billableTotalTokens?.toLocaleString() || 0}</span> },
     { key: "createdAt", label: "Date", sortable: true, render: (r) => <span className="text-muted-foreground text-sm">{new Date(r.createdAt).toLocaleString()}</span> },
   ];
 

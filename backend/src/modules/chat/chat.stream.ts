@@ -251,6 +251,12 @@ export async function streamChat(req: Request, res: Response) {
     }
 
     const totalTokens = promptTokens + completionTokens;
+    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
+    const billableCompletionTokens = Math.ceil(
+      completionTokens * tokenMultiplier,
+    );
+    const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
 
     // Update assistant message + create model response + deduct tokens in transaction
     await prisma.$transaction(async (tx) => {
@@ -283,14 +289,17 @@ export async function streamChat(req: Request, res: Response) {
             promptTokens,
             completionTokens,
             totalTokens,
+            billablePromptTokens,
+            billableCompletionTokens,
+            billableTotalTokens,
           },
         });
 
         await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: totalTokens },
-            tokensUsed: { increment: totalTokens },
+            tokensRemaining: { decrement: billableTotalTokens },
+            tokensUsed: { increment: billableTotalTokens },
           },
         });
       }
@@ -499,6 +508,12 @@ export async function regenerateChat(req: Request, res: Response) {
     }
 
     const totalTokens = promptTokens + completionTokens;
+    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
+    const billableCompletionTokens = Math.ceil(
+      completionTokens * tokenMultiplier,
+    );
+    const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
 
     await prisma.$transaction(async (tx) => {
       await tx.modelResponse.create({
@@ -525,14 +540,17 @@ export async function regenerateChat(req: Request, res: Response) {
             promptTokens,
             completionTokens,
             totalTokens,
+            billablePromptTokens,
+            billableCompletionTokens,
+            billableTotalTokens,
           },
         });
 
         await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: totalTokens },
-            tokensUsed: { increment: totalTokens },
+            tokensRemaining: { decrement: billableTotalTokens },
+            tokensUsed: { increment: billableTotalTokens },
           },
         });
       }
