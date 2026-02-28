@@ -22,6 +22,7 @@ interface Chat {
   title: string | null;
   folderId: number | null;
   isArchived: boolean;
+  isPinned: boolean;
   updatedAt: string;
 }
 
