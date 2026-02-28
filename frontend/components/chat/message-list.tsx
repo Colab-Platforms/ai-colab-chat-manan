@@ -26,7 +26,6 @@ export function MessageList({ messages, activeModelTabs, onModelTabChange, onReg
 
   const isStreaming = messages.some(m => m.modelResponses?.some(mr => mr.status === "STREAMING"));
 
-  // Scroll when new messages are added, or when a stream finishes
   useEffect(() => {
     if (!isStreaming) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -51,3 +50,4 @@ export function MessageList({ messages, activeModelTabs, onModelTabChange, onReg
     </div>
   );
 }
+

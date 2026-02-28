@@ -216,6 +216,37 @@ export function ChatInput({
             </div>
           )}
 
+          {/* Multi-model selection chips */}
+          {selectedModels.length > 1 && (
+            <div className="flex flex-wrap gap-1.5 px-2 mb-1 mt-1">
+              {models
+                .filter((m) => selectedModels.includes(m.id))
+                .map((model) => (
+                  <div
+                    key={model.id}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 animate-in fade-in-0 slide-in-from-left-1 duration-200"
+                  >
+                    {model.externalId && getModelIcon(model.externalId) ? (
+                      <img src={getModelIcon(model.externalId)!} alt="" className="w-3.5 h-3.5 rounded-sm object-contain" />
+                    ) : null}
+                    <span className="max-w-[120px] truncate">{model.name}</span>
+                    {selectedModels.length > 1 && (
+                      <button
+                        onClick={() => onModelChange(selectedModels.filter((id) => id !== model.id))}
+                        className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                        title={`Remove ${model.name}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 h-5 rounded-full bg-muted text-muted-foreground">
+                {selectedModels.length} models
+              </Badge>
+            </div>
+          )}
+
           {/* File previews */}
           {files.length > 0 && (
             <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1">
@@ -305,7 +336,7 @@ export function ChatInput({
                 <span className="truncate max-w-[200px] sm:max-w-[300px]">
                   {chatType !== "STANDARD" ? `${typeLabels[chatType]} only` : "Standard chat"} 
                   {" • "} 
-                  {selectedModelNames || "Select a model"}
+                  {selectedModels.length > 1 ? `${selectedModels.length} models` : (selectedModelNames || "Select a model")}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-50" />
               </DropdownMenuTrigger>

@@ -7,12 +7,15 @@ interface SendMessageBody {
   content: string;
   modelId: number;
   chatType?: string;
+  userMessageId?: number;
+  assistantMessageId?: number;
 }
 
 export async function streamChat(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
-  const { content, modelId, chatType } = req.body as SendMessageBody;
+  const { content, modelId, chatType, userMessageId, assistantMessageId } =
+    req.body as SendMessageBody;
 
   try {
     // Validate inputs
@@ -49,23 +52,57 @@ export async function streamChat(req: Request, res: Response) {
       return;
     }
 
-    // Save user message
-    const userMessage = await prisma.message.create({
-      data: { chatId, role: "USER", content: content.trim() },
-    });
+    // Reuse existing user message or create a new one
+    let userMessage: { id: number };
+    if (userMessageId) {
+      const existing = await prisma.message.findFirst({
+        where: { id: userMessageId, chatId, role: "USER" },
+      });
+      if (!existing) {
+        res
+          .status(400)
+          .json({ status: false, message: "Invalid userMessageId" });
+        return;
+      }
+      userMessage = existing;
+    } else {
+      userMessage = await prisma.message.create({
+        data: { chatId, role: "USER", content: content.trim() },
+      });
 
-    // Update chat title if first message
-    const messageCount = await prisma.message.count({ where: { chatId } });
-    if (messageCount === 1) {
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: { title: content.trim().substring(0, 60) },
+      // Update chat title if first message
+      const messageCount = await prisma.message.count({ where: { chatId } });
+      if (messageCount === 1) {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { title: content.trim().substring(0, 60) },
+        });
+      }
+    }
+
+    // Reuse existing assistant message or create a new (empty) one early
+    // so its ID can be sent to the frontend immediately
+    let assistantMessage: { id: number };
+    if (assistantMessageId) {
+      const existing = await prisma.message.findFirst({
+        where: { id: assistantMessageId, chatId, role: "ASSISTANT" },
+      });
+      if (!existing) {
+        res
+          .status(400)
+          .json({ status: false, message: "Invalid assistantMessageId" });
+        return;
+      }
+      assistantMessage = existing;
+    } else {
+      assistantMessage = await prisma.message.create({
+        data: { chatId, role: "ASSISTANT", content: "" },
       });
     }
 
     // Build conversation history
     const previousMessages = await prisma.message.findMany({
-      where: { chatId, isDeleted: false },
+      where: { chatId, isDeleted: false, id: { not: assistantMessage.id } },
       orderBy: { createdAt: "asc" },
       include: {
         modelResponses: {
@@ -98,9 +135,9 @@ export async function streamChat(req: Request, res: Response) {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Send userMessage ID so frontend can track it
+    // Send IDs so frontend can track and reuse for parallel model calls
     res.write(
-      `data: ${JSON.stringify({ type: "message_id", userMessageId: userMessage.id })}\n\n`,
+      `data: ${JSON.stringify({ type: "message_id", userMessageId: userMessage.id, assistantMessageId: assistantMessage.id })}\n\n`,
     );
     if (typeof (res as any).flush === "function") {
       (res as any).flush();
@@ -166,23 +203,23 @@ export async function streamChat(req: Request, res: Response) {
       // Save whatever partial content we received so it doesn't vanish from the UI
       // Even if empty, we must create a FAILED message so the assistant bubble persists
       try {
-        await prisma.$transaction(async (tx) => {
-          const assistantMessage = await tx.message.create({
-            data: { chatId, role: "ASSISTANT", content: fullContent || "" },
-          });
-          await tx.modelResponse.create({
-            data: {
-              chatId,
-              messageId: assistantMessage.id,
-              modelId: model.id,
-              content: fullContent || "",
-              promptTokens: promptTokens || 0,
-              completionTokens: completionTokens || 0,
-              totalTokens: (promptTokens || 0) + (completionTokens || 0),
-              status: "FAILED",
-              completedAt: new Date(),
-            },
-          });
+        await prisma.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: fullContent || "",
+            promptTokens: promptTokens || 0,
+            completionTokens: completionTokens || 0,
+            totalTokens: (promptTokens || 0) + (completionTokens || 0),
+            status: "FAILED",
+            completedAt: new Date(),
+          },
+        });
+        // Update assistant message content with whatever we got
+        await prisma.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: fullContent || "" },
         });
       } catch (dbErr) {
         console.error("Failed to save partial AI response to DB", dbErr);
@@ -215,10 +252,11 @@ export async function streamChat(req: Request, res: Response) {
 
     const totalTokens = promptTokens + completionTokens;
 
-    // Save assistant message + model response + deduct tokens in transaction
+    // Update assistant message + create model response + deduct tokens in transaction
     await prisma.$transaction(async (tx) => {
-      const assistantMessage = await tx.message.create({
-        data: { chatId, role: "ASSISTANT", content: fullContent },
+      await tx.message.update({
+        where: { id: assistantMessage.id },
+        data: { content: fullContent },
       });
 
       await tx.modelResponse.create({
@@ -519,5 +557,59 @@ export async function regenerateChat(req: Request, res: Response) {
       res.write("data: [DONE]\n\n");
       res.end();
     }
+  }
+}
+
+export async function prepareMulti(req: Request, res: Response) {
+  const userId = req.user!.id;
+  const chatId = Number(req.params.chatId);
+  const { content } = req.body as { content: string };
+
+  try {
+    if (!content?.trim()) {
+      res.status(400).json({ status: false, message: "Content is required" });
+      return;
+    }
+
+    const chat = await prisma.chat.findFirst({
+      where: { id: chatId, userId, isDeleted: false },
+    });
+    if (!chat) {
+      res.status(404).json({ status: false, message: "Chat not found" });
+      return;
+    }
+
+    // Create user message
+    const userMessage = await prisma.message.create({
+      data: { chatId, role: "USER", content: content.trim() },
+    });
+
+    // Update chat title if first message
+    const messageCount = await prisma.message.count({ where: { chatId } });
+    if (messageCount === 1) {
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: { title: content.trim().substring(0, 60) },
+      });
+    }
+
+    // Create empty assistant message
+    const assistantMessage = await prisma.message.create({
+      data: { chatId, role: "ASSISTANT", content: "" },
+    });
+
+    res.json({
+      status: true,
+      data: {
+        userMessageId: userMessage.id,
+        assistantMessageId: assistantMessage.id,
+      },
+    });
+  } catch (error: any) {
+    console.error("Prepare multi error:", error);
+    res.status(500).json({
+      status: false,
+      message: error.message || "Internal server error",
+    });
   }
 }

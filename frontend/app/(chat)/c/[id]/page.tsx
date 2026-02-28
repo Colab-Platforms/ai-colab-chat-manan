@@ -39,6 +39,7 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
+  const modelsRestoredRef = useRef(false);
 
   const fetchChat = useCallback(async () => {
     try {
@@ -61,6 +62,30 @@ export default function ChatPage() {
         if (isStreamingRef.current) return prev;
         return tabs;
       });
+
+      // Restore selected models from chat history (only on first load)
+      if (!modelsRestoredRef.current && !isStreamingRef.current) {
+        modelsRestoredRef.current = true;
+        const stored = localStorage.getItem(`chat_${chatId}_models`);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setSelectedModels(parsed);
+              return;
+            }
+          } catch { /* ignore */ }
+        }
+        const lastAssistantMsg = (chat.messages || [])
+          .filter((m: Message) => m.role === "ASSISTANT")
+          .pop();
+        if (lastAssistantMsg?.modelResponses?.length > 0) {
+          const usedModelIds = [...new Set(lastAssistantMsg.modelResponses.map((mr: any) => mr.model.id))] as number[];
+          if (usedModelIds.length > 0) {
+            setSelectedModels(usedModelIds);
+          }
+        }
+      }
     } catch { /* ignore */ }
   }, [chatId]);
 
@@ -78,7 +103,6 @@ export default function ChatPage() {
         if (parsedId && activeModels.find((m: any) => m.id === parsedId)) {
           setSelectedModels([parsedId]);
         } else {
-          // Fallback: use defaultForCapabilities STANDARD models, otherwise first active
           const defaultModels = activeModels.filter((m: any) => m.defaultForCapabilities?.includes("STANDARD"));
           if (defaultModels.length > 0) {
             setSelectedModels(defaultModels.map((m: any) => m.id));
@@ -92,6 +116,7 @@ export default function ChatPage() {
 
   const handleModelChange = (ids: number[]) => {
     setSelectedModels(ids);
+    localStorage.setItem(`chat_${chatId}_models`, JSON.stringify(ids));
     if (ids.length > 0) {
       localStorage.setItem("preferredModelId", String(ids[0]));
     }
@@ -113,67 +138,37 @@ export default function ChatPage() {
     const modelIdList = modelIds?.split(",").map(Number).filter(Boolean) || selectedModels;
     if (modelIdList.length > 0) setSelectedModels(modelIdList);
 
-    sendMessage(firstMessage, modelIdList[0] || selectedModels[0], initChatType || "STANDARD");
+    sendMessage(firstMessage, modelIdList, initChatType || "STANDARD");
     window.history.replaceState({}, "", `/c/${chatId}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [models, searchParams]);
 
-  const sendMessage = async (content: string, modelId?: number, chatType?: string) => {
-    if (isSending) return;
-    setIsSending(true);
-    setIsStreaming(true);
-    isStreamingRef.current = true;
-    setStreamingContent("");
-
-    const targetModelId = modelId || selectedModels[0];
-    if (!targetModelId) {
-      toast.error("Please select a model");
-      setIsSending(false);
-      setIsStreaming(false);
-      return;
-    }
-
-    // Optimistically add user message
-    const tempUserMsg: Message = {
-      id: Date.now(),
-      role: "USER",
-      content,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, tempUserMsg]);
-
-    // Add streaming placeholder
-    const streamingMsgId = Date.now() + 1;
-    const streamingMsg: Message = {
-      id: streamingMsgId,
-      role: "ASSISTANT",
-      content: "",
-      createdAt: new Date().toISOString(),
-      modelResponses: [{
-        id: 0,
-        model: { id: targetModelId, name: models.find((m) => m.id === targetModelId)?.name || "AI" },
-        content: "",
-        status: "STREAMING",
-        tokensUsed: null,
-      }],
-    };
-    setMessages((prev) => [...prev, streamingMsg]);
-    setActiveModelTabs((prev) => ({ ...prev, [streamingMsgId]: targetModelId }));
-
-    try {
-      const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-
-      const response = await fetch(`${apiUrl}/chats/${chatId}/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content, modelId: targetModelId, chatType }),
-      });
-
+  // Stream a single model's response
+  const streamSingleModel = (
+    mid: number,
+    streamingMsgId: number,
+    token: string,
+    apiUrl: string,
+    content: string,
+    chatType: string | undefined,
+    userMessageId: number,
+    assistantMessageId: number,
+  ) => {
+    return fetch(`${apiUrl}/chats/${chatId}/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        content,
+        modelId: mid,
+        chatType,
+        userMessageId,
+        assistantMessageId,
+      }),
+    }).then(async (response) => {
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.message || "Failed to send message");
@@ -191,8 +186,6 @@ export default function ChatPage() {
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
-          
-          // Keep the last incomplete chunk in the buffer
           buffer = lines.pop() || "";
 
           for (const chunkStr of lines) {
@@ -206,37 +199,33 @@ export default function ChatPage() {
 
               if (parsed.type === "token") {
                 accumulated += parsed.content;
-                // Update streaming message content in real-time
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === streamingMsgId
                       ? {
                           ...msg,
-                          content: accumulated,
-                          modelResponses: msg.modelResponses?.map((mr) => ({
-                            ...mr,
-                            content: accumulated,
-                            status: "STREAMING",
-                          })),
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
+                            mr.model.id === mid
+                              ? { ...mr, content: accumulated, status: "STREAMING" }
+                              : mr
+                          ),
                         }
                       : msg
                   )
                 );
               } else if (parsed.type === "error") {
-                toast.error(parsed.message);
+                toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${parsed.message}`);
               } else if (parsed.type === "done") {
-                // Mark as completed
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === streamingMsgId
                       ? {
                           ...msg,
-                          content: accumulated,
-                          modelResponses: msg.modelResponses?.map((mr) => ({
-                            ...mr,
-                            content: accumulated,
-                            status: "COMPLETED",
-                          })),
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
+                            mr.model.id === mid
+                              ? { ...mr, content: accumulated, status: "COMPLETED" }
+                              : mr
+                          ),
                         }
                       : msg
                   )
@@ -246,14 +235,92 @@ export default function ChatPage() {
           }
         }
       }
+    });
+  };
 
-      // Refresh to get real IDs from DB
+  const sendMessage = async (content: string, modelIds?: number[], chatType?: string) => {
+    if (isSending) return;
+    setIsSending(true);
+    setIsStreaming(true);
+    isStreamingRef.current = true;
+    setStreamingContent("");
+
+    const targetModelIds = modelIds && modelIds.length > 0 ? modelIds : [...selectedModels];
+    if (targetModelIds.length === 0) {
+      toast.error("Please select a model");
+      setIsSending(false);
+      setIsStreaming(false);
+      return;
+    }
+
+    // Persist selected models
+    localStorage.setItem(`chat_${chatId}_models`, JSON.stringify(targetModelIds));
+
+    // Optimistically add user message
+    const tempUserMsgId = Date.now();
+    setMessages((prev) => [...prev, {
+      id: tempUserMsgId,
+      role: "USER",
+      content,
+      createdAt: new Date().toISOString(),
+    }]);
+
+    // Add streaming placeholder with one response per model
+    const streamingMsgId = Date.now() + 1;
+    setMessages((prev) => [...prev, {
+      id: streamingMsgId,
+      role: "ASSISTANT",
+      content: "",
+      createdAt: new Date().toISOString(),
+      modelResponses: targetModelIds.map((mid) => ({
+        id: mid,
+        model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" },
+        content: "",
+        status: "STREAMING",
+        tokensUsed: null,
+      })),
+    }]);
+    setActiveModelTabs((prev) => ({ ...prev, [streamingMsgId]: targetModelIds[0] }));
+
+    const token = localStorage.getItem("token") || "";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+    try {
+      if (targetModelIds.length === 1) {
+        // Single model: use existing /send endpoint directly (creates user+assistant msg)
+        await streamSingleModel(
+          targetModelIds[0], streamingMsgId, token, apiUrl,
+          content, chatType, 0, 0 // 0 means the endpoint creates them
+        );
+      } else {
+        // Multi model: call /prepare-multi FIRST to get IDs, then fire ALL streams at once
+        const prepRes = await fetch(`${apiUrl}/chats/${chatId}/prepare-multi`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ content }),
+        });
+
+        if (!prepRes.ok) {
+          const errData = await prepRes.json().catch(() => ({}));
+          throw new Error(errData.message || "Failed to prepare messages");
+        }
+
+        const prepData = await prepRes.json();
+        const { userMessageId, assistantMessageId } = prepData.data;
+
+        // Fire ALL models simultaneously — no waiting between them!
+        await Promise.allSettled(
+          targetModelIds.map((mid) =>
+            streamSingleModel(mid, streamingMsgId, token, apiUrl, content, chatType, userMessageId, assistantMessageId)
+          )
+        );
+      }
+
       isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
       toast.error(err.message || "Failed to send message");
-      // Remove placeholder messages
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id && m.id !== streamingMsgId));
+      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsgId && m.id !== streamingMsgId));
     } finally {
       isStreamingRef.current = false;
       setIsSending(false);
@@ -269,7 +336,6 @@ export default function ChatPage() {
     isStreamingRef.current = true;
     setStreamingContent("");
 
-    // Find the target assistant message
     const targetMsg = messages.find(m => m.id === messageId);
     if (!targetMsg || targetMsg.role !== "ASSISTANT") {
       toast.error("Can only regenerate assistant messages");
@@ -278,7 +344,6 @@ export default function ChatPage() {
       return;
     }
 
-    // Add streaming placeholder under the same message
     const streamingRespId = Date.now();
     setMessages((prev) => prev.map(msg => {
       if (msg.id === messageId) {
@@ -331,7 +396,6 @@ export default function ChatPage() {
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
-          
           buffer = lines.pop() || "";
 
           for (const chunkStr of lines) {
@@ -350,7 +414,7 @@ export default function ChatPage() {
                     msg.id === messageId
                       ? {
                           ...msg,
-                          modelResponses: msg.modelResponses?.map((mr) =>
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
                             mr.id === streamingRespId
                               ? { ...mr, content: accumulated, status: "STREAMING" }
                               : mr
@@ -367,7 +431,7 @@ export default function ChatPage() {
                     msg.id === messageId
                       ? {
                           ...msg,
-                          modelResponses: msg.modelResponses?.map((mr) =>
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
                             mr.id === streamingRespId
                               ? { ...mr, content: accumulated, status: "COMPLETED" }
                               : mr
@@ -386,12 +450,11 @@ export default function ChatPage() {
       await fetchChat();
     } catch (err: any) {
       toast.error(err.message || "Failed to regenerate message");
-      // Remove placeholder response
       setMessages((prev) => prev.map(msg => {
         if (msg.id === messageId) {
           return {
             ...msg,
-            modelResponses: msg.modelResponses?.filter(mr => mr.id !== streamingRespId)
+            modelResponses: msg.modelResponses?.filter((mr: any) => mr.id !== streamingRespId)
           };
         }
         return msg;
@@ -406,17 +469,16 @@ export default function ChatPage() {
 
   const handleFeedback = async (responseId: number, isLiked: boolean | null) => {
     try {
-      // Optimistic update
       setMessages((prev) => prev.map(msg => ({
         ...msg,
-        modelResponses: msg.modelResponses?.map(mr => 
+        modelResponses: msg.modelResponses?.map((mr: any) => 
           mr.id === responseId ? { ...mr, isLiked } : mr
         )
       })));
       await chatService.feedback(chatId, responseId, isLiked);
-    } catch (err: any) {
+    } catch {
       toast.error("Failed to submit feedback");
-      fetchChat(); // Revert on failure
+      fetchChat();
     }
   };
 
