@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode } from "react";
+import { useState, ReactNode, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -59,6 +59,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
 import { toast } from "react-toastify";
@@ -72,6 +74,7 @@ interface Chat {
   title: string | null;
   folderId: number | null;
   isArchived: boolean;
+  isPinned: boolean;
   updatedAt: string;
 }
 
@@ -283,7 +286,6 @@ export function AppSidebar({
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sidebar – Chat sidebar (wraps AppSidebar with chat-specific children)
-// Call site in (chat)/layout.tsx stays unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
@@ -309,15 +311,40 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [renameFolderTarget, setRenameFolderTarget] = useState<{ id: number; name: string } | null>(null);
+
+  // Folder deletion – needs choice of what to do with contained chats
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<number | null>(null);
 
-  const handleCreateFolder = async () => {
+  // Folder created from move dialog – holds the new folder id to pre-select
+  const [pendingMoveForChat, setPendingMoveForChat] = useState<number | null>(null);
+  const [pendingMoveNewFolderId, setPendingMoveNewFolderId] = useState<number | null>(null);
+
+  // ─── Local folder list maintained after creation from move dialog ──────────
+  const [localFolders, setLocalFolders] = useState<FolderItem[]>(folders);
+  // Keep localFolders in sync when parent refreshes (but not during an active move flow)
+  useEffect(() => {
+    if (!pendingMoveForChat) {
+      setLocalFolders(folders);
+    }
+  }, [folders, pendingMoveForChat]);
+
+  const handleCreateFolder = async (
+    opts?: { forChatId?: number }
+  ) => {
     if (!newFolderName.trim()) return;
     try {
-      await folderService.create({ name: newFolderName.trim() });
+      const res = await folderService.create({ name: newFolderName.trim() });
+      const created: FolderItem = { id: res.data.data.id, name: newFolderName.trim() };
       toast.success("Folder created");
       setNewFolderName("");
       setCreateFolderOpen(false);
+
+      if (opts?.forChatId !== undefined) {
+        // Came from move dialog — update local folder list and pre-select
+        setLocalFolders(prev => [created, ...prev]);
+        setPendingMoveNewFolderId(created.id);
+        setPendingMoveForChat(opts.forChatId);
+      }
       onRefresh();
     } catch {
       toast.error("Failed to create folder");
@@ -359,6 +386,15 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
     } catch { /* ignore */ }
   };
 
+  const handlePinChat = async (chatId: number) => {
+    try {
+      await chatService.pin(chatId);
+      onRefresh();
+    } catch {
+      toast.error("Failed to update pin");
+    }
+  };
+
   const handleRenameChat = async (chatId: number, newTitle: string) => {
     try {
       await chatService.update(chatId, { title: newTitle });
@@ -380,12 +416,12 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
     }
   };
 
-  const handleDeleteFolder = async () => {
+  const handleDeleteFolder = async (deleteChats: boolean) => {
     if (!deleteFolderTarget) return;
     setDeleting(true);
     try {
-      await folderService.delete(deleteFolderTarget);
-      toast.success("Folder deleted");
+      await folderService.delete(deleteFolderTarget, deleteChats);
+      toast.success(deleteChats ? "Folder and chats deleted" : "Folder deleted, chats moved out");
       onRefresh();
       setDeleteFolderTarget(null);
     } catch {
@@ -425,11 +461,20 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
     });
   };
 
+  // Opens create-folder dialog and remembers which chat we're doing a "move" for
+  const handleOpenCreateFolderForMove = (chatId: number) => {
+    setPendingMoveForChat(chatId);
+    setPendingMoveNewFolderId(null);
+    setCreateFolderOpen(true);
+  };
+
   const filteredChats = chats.filter((c) =>
     !c.isArchived && (c.title?.toLowerCase().includes(search.toLowerCase()) || !search)
   );
 
-  const unfoldered = filteredChats.filter((c) => !c.folderId);
+  // Pinned chats float to the top of their respective group
+  const sortByPin = (a: Chat, b: Chat) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0);
+  const unfoldered = filteredChats.filter((c) => !c.folderId).sort(sortByPin);
 
   // ─── Collapsed icon-only icons for chat variant ───
   const collapsedIcons = (
@@ -498,7 +543,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
             className="pl-9 h-9 bg-sidebar-accent/50 border-none text-sm"
           />
         </div>
-        <Button variant="ghost" size="icon" className="flex-shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground cursor-pointer shrink-0" onClick={() => setCreateFolderOpen(true)} title="New Folder">
+        <Button variant="ghost" size="icon" className="flex-shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground cursor-pointer shrink-0" onClick={() => { setPendingMoveForChat(null); setCreateFolderOpen(true); }} title="New Folder">
           <FolderPlus className="w-5 h-5" />
         </Button>
       </div>
@@ -508,10 +553,11 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
       {/* Chat List */}
       <ScrollArea className="flex-1 px-2 min-h-0">
         <div className="py-2 space-y-0.5">
-          {/* Folders */}
+
+
           {folders.length > 0 && <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-1 uppercase tracking-wider">Projects</div>}
           {folders.map((folder) => {
-            const folderChats = filteredChats.filter((c) => c.folderId === folder.id);
+            const folderChats = filteredChats.filter((c) => c.folderId === folder.id).sort(sortByPin);
             const isExpanded = expandedFolders.has(folder.id);
 
             return (
@@ -548,14 +594,18 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
                   <ChatItem
                     key={chat.id}
                     chat={chat}
-                    folders={folders}
+                    folders={localFolders}
                     isActive={pathname === `/c/${chat.id}`}
                     onDelete={(e, id) => { e.stopPropagation(); e.preventDefault(); setDeleteTarget(id); }}
                     onArchive={handleArchiveChat}
+                    onPin={handlePinChat}
                     onNavigate={onMobileClose}
                     onRename={handleRenameChat}
                     onMove={handleMoveChat}
                     onShare={handleShareChat}
+                    onCreateFolderForMove={handleOpenCreateFolderForMove}
+                    pendingMoveNewFolderId={pendingMoveForChat === chat.id ? pendingMoveNewFolderId : null}
+                    onPendingMoveConsumed={() => { setPendingMoveForChat(null); setPendingMoveNewFolderId(null); }}
                     indent
                   />
                 ))}
@@ -569,14 +619,18 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
             <ChatItem
               key={chat.id}
               chat={chat}
-              folders={folders}
+              folders={localFolders}
               isActive={pathname === `/c/${chat.id}`}
               onDelete={(e, id) => { e.stopPropagation(); e.preventDefault(); setDeleteTarget(id); }}
               onArchive={handleArchiveChat}
+              onPin={handlePinChat}
               onNavigate={onMobileClose}
               onRename={handleRenameChat}
               onMove={handleMoveChat}
               onShare={handleShareChat}
+              onCreateFolderForMove={handleOpenCreateFolderForMove}
+              pendingMoveNewFolderId={pendingMoveForChat === chat.id ? pendingMoveNewFolderId : null}
+              onPendingMoveConsumed={() => { setPendingMoveForChat(null); setPendingMoveNewFolderId(null); }}
             />
           ))}
 
@@ -592,7 +646,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
         </div>
       </ScrollArea>
 
-      {/* Delete confirmation */}
+      {/* Delete chat confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={() => setDeleteTarget(null)}
@@ -602,8 +656,8 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
         loading={deleting}
       />
 
-      {/* Create Folder Modal */}
-      <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
+      {/* ── Create Folder Modal ────────────────────────────────────────── */}
+      <Dialog open={createFolderOpen} onOpenChange={(open) => { setCreateFolderOpen(open); if (!open && !pendingMoveNewFolderId) setPendingMoveForChat(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Project Folder</DialogTitle>
@@ -614,17 +668,22 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleCreateFolder(); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreateFolder(pendingMoveForChat !== null ? { forChatId: pendingMoveForChat } : undefined); }}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateFolderOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create</Button>
+            <Button variant="outline" onClick={() => { setCreateFolderOpen(false); setPendingMoveForChat(null); }}>Cancel</Button>
+            <Button
+              onClick={() => handleCreateFolder(pendingMoveForChat !== null ? { forChatId: pendingMoveForChat } : undefined)}
+              disabled={!newFolderName.trim()}
+            >
+              Create
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Rename Folder Modal */}
+      {/* ── Rename Folder Modal ───────────────────────────────────────── */}
       <Dialog open={!!renameFolderTarget} onOpenChange={(open) => !open && setRenameFolderTarget(null)}>
         <DialogContent>
           <DialogHeader>
@@ -645,19 +704,33 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
         </DialogContent>
       </Dialog>
 
-      {/* Delete Folder Confirm */}
+      {/* ── Delete Folder – Choice Dialog ────────────────────────────── */}
       <Dialog open={!!deleteFolderTarget} onOpenChange={(open) => !open && setDeleteFolderTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Project</DialogTitle>
           </DialogHeader>
-          <div className="py-4 text-sm text-muted-foreground">
-            Are you sure you want to delete this project folder? The chats inside will not be deleted, they will simply be moved out of the folder.
+          <div className="py-3 text-sm text-muted-foreground">
+            What would you like to do with the chats inside this project?
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteFolderTarget(null)} disabled={deleting}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteFolder} disabled={deleting}>
-              {deleting ? "Deleting..." : "Delete Project"}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setDeleteFolderTarget(null)} disabled={deleting} className="sm:mr-auto">
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleDeleteFolder(false)}
+              disabled={deleting}
+              className="border-primary/40 text-primary hover:bg-primary/5"
+            >
+              {deleting ? "Moving..." : "Move chats out"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleDeleteFolder(true)}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting..." : "Delete chats too"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -667,7 +740,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ChatItem – unchanged
+// ChatItem
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ChatItem({
@@ -676,10 +749,14 @@ function ChatItem({
   isActive,
   onDelete,
   onArchive,
+  onPin,
   onNavigate,
   onRename,
   onMove,
   onShare,
+  onCreateFolderForMove,
+  pendingMoveNewFolderId,
+  onPendingMoveConsumed,
   indent,
 }: {
   chat: Chat;
@@ -687,16 +764,42 @@ function ChatItem({
   isActive: boolean;
   onDelete: (e: React.MouseEvent, id: number) => void;
   onArchive: (e: React.MouseEvent, id: number) => void;
+  onPin: (id: number) => void;
   onNavigate: () => void;
   onRename: (chatId: number, title: string) => void;
   onMove: (chatId: number, folderId: number | null) => void;
   onShare: (chatId: number) => void;
+  onCreateFolderForMove: (chatId: number) => void;
+  pendingMoveNewFolderId: number | null;
+  onPendingMoveConsumed: () => void;
   indent?: boolean;
 }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(chat.title || "");
   const [moveOpen, setMoveOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>(chat.folderId?.toString() || "none");
+
+  // When Sidebar creates a folder specifically for this chat's move,
+  // open the move dialog with the new folder pre-selected.
+  useEffect(() => {
+    if (pendingMoveNewFolderId !== null) {
+      setSelectedFolder(pendingMoveNewFolderId.toString());
+      setMoveOpen(true);
+      onPendingMoveConsumed();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMoveNewFolderId]);
+
+  const handleMoveClick = () => {
+    if (folders.length === 0) {
+      // No folders — open create folder dialog directly
+      onCreateFolderForMove(chat.id);
+    } else {
+      setSelectedFolder(chat.folderId?.toString() || "none");
+      setMoveOpen(true);
+    }
+  };
 
   return (
     <div className="group relative">
@@ -717,32 +820,52 @@ function ChatItem({
         </span>
       </Link>
       <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-7 w-7 p-0 rounded text-muted-foreground transition-opacity hover:text-foreground hover:bg-sidebar-accent md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100">
-              <MoreHorizontal className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem onClick={() => onShare(chat.id)} className="gap-2 cursor-pointer">
-              <Share className="w-3.5 h-3.5" /> Share
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setNewTitle(chat.title || ""); setRenameOpen(true); }} className="gap-2 cursor-pointer">
-              <Edit2 className="w-3.5 h-3.5" /> Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setSelectedFolder(chat.folderId?.toString() || "none"); setMoveOpen(true); }} className="gap-2 cursor-pointer">
-              <CornerUpRight className="w-3.5 h-3.5" /> Move to project
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={(e) => { e.preventDefault(); onArchive(e as any, chat.id); }} className="gap-2 cursor-pointer">
-              <Archive className="w-3.5 h-3.5" /> Archive
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={(e) => { e.preventDefault(); onDelete(e as any, chat.id); }} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
-              <Trash2 className="w-3.5 h-3.5" /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Pin button: always visible when pinned, grey, sits at far-right at rest.
+            On hover the ⋯ wrapper expands (w-0→w-7) and pin slides left. */}
+        {chat.isPinned && (
+          <Button
+            variant="ghost"
+            className="h-7 w-7 p-0 rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-sidebar-accent"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPin(chat.id); }}
+            title="Unpin"
+          >
+            <Pin className="w-3 h-3" />
+          </Button>
+        )}
+        {/* ⋯ wrapper – zero width at rest, expands on hover OR when menu is open */}
+        <div className={chat.isPinned ? `overflow-hidden transition-[width] duration-150 ${menuOpen ? "w-7" : "w-7 md:w-0 md:group-hover:w-7"}` : ""}>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-7 w-7 p-0 rounded text-muted-foreground transition-opacity hover:text-foreground hover:bg-sidebar-accent md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={() => onShare(chat.id)} className="gap-2 cursor-pointer">
+                <Share className="w-3.5 h-3.5" /> Share
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPin(chat.id)} className="gap-2 cursor-pointer">
+                {chat.isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                {chat.isPinned ? "Unpin" : "Pin"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setNewTitle(chat.title || ""); setRenameOpen(true); }} className="gap-2 cursor-pointer">
+                <Edit2 className="w-3.5 h-3.5" /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleMoveClick} className="gap-2 cursor-pointer">
+                <CornerUpRight className="w-3.5 h-3.5" /> Move to project
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); onArchive(e as any, chat.id); }} className="gap-2 cursor-pointer">
+                <Archive className="w-3.5 h-3.5" /> Archive
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); onDelete(e as any, chat.id); }} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
+      {/* Rename dialog */}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
@@ -758,12 +881,13 @@ function ChatItem({
         </DialogContent>
       </Dialog>
 
+      {/* Move to project dialog */}
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
             <DialogTitle>Move to Project</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-4 space-y-3">
             <Select value={selectedFolder} onValueChange={setSelectedFolder}>
               <SelectTrigger>
                 <SelectValue placeholder="Select project" />
@@ -775,6 +899,14 @@ function ChatItem({
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-muted-foreground hover:text-foreground gap-1.5 h-8 border border-dashed border-border/50"
+              onClick={() => { setMoveOpen(false); onCreateFolderForMove(chat.id); }}
+            >
+              <FolderPlus className="w-3.5 h-3.5" /> Create new folder
+            </Button>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveOpen(false)}>Cancel</Button>

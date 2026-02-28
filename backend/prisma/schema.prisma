@@ -101,6 +101,7 @@ model Chat {
   folderId   Int?
   messages   Message[]
   responses  ModelResponse[]
+  isPinned   Boolean         @default(false)
   isArchived Boolean         @default(false)
   isShared   Boolean         @default(false)
   isDeleted  Boolean         @default(false)

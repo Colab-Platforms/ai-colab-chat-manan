@@ -1,19 +1,24 @@
 import api from "@/lib/api";
 
 export const chatService = {
-  create: (data: { title?: string; folderId?: number }) => api.post("/chats", data),
+  create: (data: { title?: string; folderId?: number }) =>
+    api.post("/chats", data),
   list: (params?: Record<string, string>) => api.get("/chats", { params }),
   getById: (id: number) => api.get(`/chats/${id}`),
   archive: (id: number) => api.patch(`/chats/${id}/archive`),
+  pin: (id: number) => api.patch(`/chats/${id}/pin`),
   share: (id: number) => api.patch(`/chats/${id}/share`),
   getShared: (shareId: string) => api.get(`/chats/shared/${shareId}`),
   delete: (id: number) => api.delete(`/chats/${id}`),
-  update: (id: number, data: { title?: string; folderId?: number | null }) => api.put(`/chats/${id}`, data),
-  feedback: (chatId: number, responseId: number, isLiked: boolean | null) => api.post(`/chats/${chatId}/responses/${responseId}/feedback`, { isLiked }),
+  update: (id: number, data: { title?: string; folderId?: number | null }) =>
+    api.put(`/chats/${id}`, data),
+  feedback: (chatId: number, responseId: number, isLiked: boolean | null) =>
+    api.post(`/chats/${chatId}/responses/${responseId}/feedback`, { isLiked }),
 };
 
 export const messageService = {
-  create: (data: { chatId: number; content: string; editedFromId?: number }) => api.post("/messages", data),
+  create: (data: { chatId: number; content: string; editedFromId?: number }) =>
+    api.post("/messages", data),
 };
 
 export const modelService = {
@@ -31,19 +36,25 @@ export const modelResponseService = {
 export const folderService = {
   create: (data: { name: string }) => api.post("/folders", data),
   list: (params?: Record<string, string>) => api.get("/folders", { params }),
-  update: (id: number, data: { name: string }) => api.put(`/folders/${id}`, data),
-  delete: (id: number) => api.delete(`/folders/${id}`),
+  update: (id: number, data: { name: string }) =>
+    api.put(`/folders/${id}`, data),
+  delete: (id: number, deleteChats: boolean) =>
+    api.delete(`/folders/${id}`, {
+      params: { deleteChats: deleteChats ? "true" : "false" },
+    }),
 };
 
 export const userService = {
   getProfile: () => api.get("/users/profile"),
-  updateProfile: (data: FormData) => api.put("/users/profile", data, {
-    headers: { "Content-Type": "multipart/form-data" },
-  }),
+  updateProfile: (data: FormData) =>
+    api.put("/users/profile", data, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
   list: (params?: Record<string, string>) => api.get("/users", { params }),
   update: (id: number, data: any) => api.put(`/users/${id}`, data),
   delete: (id: number) => api.delete(`/users/${id}`),
-  getUserUsage: (id: number, params?: Record<string, string>) => api.get(`/users/${id}/usage`, { params }),
+  getUserUsage: (id: number, params?: Record<string, string>) =>
+    api.get(`/users/${id}/usage`, { params }),
   getUserSubscription: (id: number) => api.get(`/users/${id}/subscription`),
 };
 
@@ -52,7 +63,8 @@ export const walletService = {
 };
 
 export const subscriptionService = {
-  create: (data: { planId: number; billingCycle: string }) => api.post("/subscriptions", data),
+  create: (data: { planId: number; billingCycle: string }) =>
+    api.post("/subscriptions", data),
   getCurrent: () => api.get("/subscriptions/current"),
   cancel: () => api.patch("/subscriptions/cancel"),
 };
@@ -70,7 +82,8 @@ export const usageLogService = {
 };
 
 export const modelProviderService = {
-  list: (params?: Record<string, string>) => api.get("/model-providers", { params }),
+  list: (params?: Record<string, string>) =>
+    api.get("/model-providers", { params }),
   getById: (id: number) => api.get(`/model-providers/${id}`),
   create: (data: any) => api.post("/model-providers", data),
   update: (id: number, data: any) => api.put(`/model-providers/${id}`, data),
