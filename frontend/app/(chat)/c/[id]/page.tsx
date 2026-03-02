@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { notFound, useParams, useSearchParams } from "next/navigation";
 import { chatService, modelService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
@@ -39,6 +39,7 @@ export default function ChatPage() {
   const [streamingContent, setStreamingContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [editVersionIndices, setEditVersionIndices] = useState<Record<number, number>>({});
+  const [isNotFound, setIsNotFound] = useState(false);
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
   const modelsRestoredRef = useRef(false);
@@ -88,7 +89,11 @@ export default function ChatPage() {
           }
         }
       }
-    } catch { /* ignore */ }
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        setIsNotFound(true);
+      }
+    }
   }, [chatId]);
 
   const fetchModels = useCallback(async () => {
@@ -632,6 +637,11 @@ export default function ChatPage() {
       setStreamingContent("");
     }
   };
+
+  if (isNotFound) {
+    notFound();
+    return null;
+  }
 
   return (
     <div className="flex flex-col h-full">
