@@ -4,6 +4,7 @@ export interface OpenRouterStreamOptions {
   model: string;
   messages: any[];
   chatType?: string;
+  max_tokens?: number;
 }
 
 export const createOpenRouterStream = async (
@@ -24,6 +25,7 @@ export const createOpenRouterStream = async (
   const stream = (await client.chat.completions.create({
     model,
     messages: messages as any,
+    max_tokens: options.max_tokens,
     stream: true,
     stream_options: { include_usage: true },
     modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,

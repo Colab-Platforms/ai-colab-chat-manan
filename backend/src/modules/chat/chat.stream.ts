@@ -2,6 +2,94 @@ import { Request, Response } from "express";
 import prisma from "@root/prisma.js";
 import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { createOpenRouterStream } from "@/utils/openrouter.js";
+import { estimateMessageTokens } from "@/utils/tokenCounter.js";
+
+async function checkTokenLimitsAndSetupStream(
+  res: Response,
+  wallet: any,
+  model: any,
+  conversationHistory: any[],
+  chatId: number,
+  assistantMessageId: number,
+  messageIdPayload: Record<string, any>,
+): Promise<{ maxCompletionTokens: number; trimmedHistory: any[] } | null> {
+  const tokenMultiplier = model.tokenMultiplier || 1.0;
+  const maxAffordableTokens = Math.floor(
+    wallet.tokensRemaining / tokenMultiplier,
+  );
+
+  res.setHeader("Content-Type", "text-event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  res.write(
+    `data: ${JSON.stringify({ type: "message_id", ...messageIdPayload })}\n\n`,
+  );
+  if (typeof (res as any).flush === "function") {
+    (res as any).flush();
+  }
+
+  // Extract the very latest message (the new user prompt)
+  const latestPrompt = conversationHistory.pop();
+  if (!latestPrompt) {
+    return { maxCompletionTokens: maxAffordableTokens, trimmedHistory: [] };
+  }
+
+  // Check if just the newest prompt itself is too large (including a 100 token buffer for the response)
+  const MIN_RESPONSE_TOKENS = 100;
+  let currentHistoryTokens = estimateMessageTokens([latestPrompt]);
+
+  if (currentHistoryTokens + MIN_RESPONSE_TOKENS >= maxAffordableTokens) {
+    res.write(
+      `data: ${JSON.stringify({ type: "error", message: "Insufficient tokens for this prompt length." })}\n\n`,
+    );
+    res.write("data: [DONE]\n\n");
+    res.end();
+
+    await prisma.modelResponse.create({
+      data: {
+        chatId,
+        messageId: assistantMessageId,
+        modelId: model.id,
+        content: "System: Insufficient tokens for this prompt.",
+        promptTokens: currentHistoryTokens,
+        completionTokens: 0,
+        totalTokens: currentHistoryTokens,
+        status: "FAILED",
+        completedAt: new Date(),
+      },
+    });
+    return null;
+  }
+
+  // Start adding older messages back in from newest to oldest
+  const reversedHistory = conversationHistory.reverse();
+  const trimmedHistoryData: any[] = [];
+
+  for (const msg of reversedHistory) {
+    const msgTokens = estimateMessageTokens([msg]) - 3; // subtracting base overhead per message loop
+    if (
+      currentHistoryTokens + msgTokens + MIN_RESPONSE_TOKENS <
+      maxAffordableTokens
+    ) {
+      currentHistoryTokens += msgTokens;
+      trimmedHistoryData.unshift(msg);
+    } else {
+      // Reached the token limit, drop the rest of the older messages
+      break;
+    }
+  }
+
+  trimmedHistoryData.push(latestPrompt);
+  const maxCompletionTokens = Math.max(
+    1,
+    maxAffordableTokens - currentHistoryTokens,
+  );
+
+  return { maxCompletionTokens, trimmedHistory: trimmedHistoryData };
+}
 
 interface SendMessageBody {
   content: string;
@@ -128,20 +216,20 @@ export async function streamChat(req: Request, res: Response) {
       }
     }
 
-    // Set SSE headers
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
-
-    // Send IDs so frontend can track and reuse for parallel model calls
-    res.write(
-      `data: ${JSON.stringify({ type: "message_id", userMessageId: userMessage.id, assistantMessageId: assistantMessage.id })}\n\n`,
+    const tokenLimits = await checkTokenLimitsAndSetupStream(
+      res,
+      wallet,
+      model,
+      conversationHistory,
+      chatId,
+      assistantMessage.id,
+      {
+        userMessageId: userMessage.id,
+        assistantMessageId: assistantMessage.id,
+      },
     );
-    if (typeof (res as any).flush === "function") {
-      (res as any).flush();
-    }
+    if (tokenLimits === null) return;
+    const { maxCompletionTokens, trimmedHistory } = tokenLimits;
 
     // Call OpenRouter with streaming
     let fullContent = "";
@@ -152,8 +240,9 @@ export async function streamChat(req: Request, res: Response) {
     try {
       const stream = await createOpenRouterStream({
         model: model.externalId,
-        messages: conversationHistory,
+        messages: trimmedHistory,
         chatType,
+        max_tokens: maxCompletionTokens,
       });
 
       for await (const chunk of stream) {
@@ -405,18 +494,19 @@ export async function regenerateChat(req: Request, res: Response) {
       }
     }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
-
-    res.write(
-      `data: ${JSON.stringify({ type: "message_id", userMessageId: previousMessages[previousMessages.length - 1]?.id || 0 })}\n\n`,
+    const prevMessageId =
+      previousMessages[previousMessages.length - 1]?.id || 0;
+    const tokenLimits = await checkTokenLimitsAndSetupStream(
+      res,
+      wallet,
+      model,
+      conversationHistory,
+      chatId,
+      messageId,
+      { userMessageId: prevMessageId },
     );
-    if (typeof (res as any).flush === "function") {
-      (res as any).flush();
-    }
+    if (tokenLimits === null) return;
+    const { maxCompletionTokens, trimmedHistory } = tokenLimits;
 
     let fullContent = "";
     let promptTokens = 0;
@@ -426,8 +516,9 @@ export async function regenerateChat(req: Request, res: Response) {
     try {
       const stream = await createOpenRouterStream({
         model: model.externalId,
-        messages: conversationHistory,
+        messages: trimmedHistory,
         chatType,
+        max_tokens: maxCompletionTokens,
       });
 
       for await (const chunk of stream) {
@@ -771,24 +862,20 @@ export async function editAndResend(req: Request, res: Response) {
     // Add the new edited user message
     conversationHistory.push({ role: "user", content: content.trim() });
 
-    // Set SSE headers
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
-
-    // Send IDs so frontend can track
-    res.write(
-      `data: ${JSON.stringify({
-        type: "message_id",
+    const tokenLimits = await checkTokenLimitsAndSetupStream(
+      res,
+      wallet,
+      model,
+      conversationHistory,
+      chatId,
+      assistantMessage.id,
+      {
         userMessageId: newUserMessage.id,
         assistantMessageId: assistantMessage.id,
-      })}\n\n`,
+      },
     );
-    if (typeof (res as any).flush === "function") {
-      (res as any).flush();
-    }
+    if (tokenLimits === null) return;
+    const { maxCompletionTokens, trimmedHistory } = tokenLimits;
 
     // Stream AI response
     let fullContent = "";
@@ -799,8 +886,9 @@ export async function editAndResend(req: Request, res: Response) {
     try {
       const stream = await createOpenRouterStream({
         model: model.externalId,
-        messages: conversationHistory,
+        messages: trimmedHistory,
         chatType,
+        max_tokens: maxCompletionTokens,
       });
 
       for await (const chunk of stream) {
