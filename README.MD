@@ -35,13 +35,17 @@
 
 - Multi-model AI chat with configurable model providers (OpenAI-compatible)
 - Real-time streaming responses via **Server-Sent Events (SSE)**
+- Parallel multi-model chatting (compare responses simultaneously)
+- Diverse **Chat Capabilities**: Default (Text), Web Search, and Image Generation modes
+- Voice Input via integrated microphone speech-to-text
 - Markdown rendering with syntax-highlighted code blocks
 - File/image attachment support per message
-- Edit messages and branch conversation history
+- Comprehensive message controls: Edit messages, regenerate, branch conversation history (version control), and Like/Dislike responses
 
 ### Organisation
 
 - Folder-based chat management (create, rename, delete folders)
+- Pin favourite chats to the top of the sidebar
 - Archive and soft-delete chats
 - Public chat sharing via unique share links
 
@@ -49,12 +53,15 @@
 
 - Tiered subscription **Plans** (Monthly / Quarterly / Yearly billing cycles)
 - Per-user **Token Wallet** tracking prompt & completion token usage
+  - **Model Multipliers**: High-tier models (e.g., Claude 3 Opus) can apply configurable token multipliers (e.g., 3x) to accurately deduct equivalent usage from the user's unified wallet.
+  - **Rolling Context Window**: Conversations dynamically drop older messages when approaching token affordability limits, ensuring users never hit hard token walls while preserving the newest context.
 - Automated subscription expiry and token-reset **cron jobs**
 - Usage logs per model, per user
 
 ### Auth & RBAC
 
 - JWT-based authentication (register, login, refresh)
+- Cloudinary integration with automatic stale-thumbnail deletion on profile updates
 - Role-based access control: **User**, **Admin**, **Super Admin**
 - Super Admin manages model providers and API keys
 
