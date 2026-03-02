@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Bot, Copy, ThumbsUp, ThumbsDown, Share2, RefreshCw,
-  ChevronLeft, ChevronRight, Check, Loader2
+  ChevronLeft, ChevronRight, Check, Loader2, Pencil, X
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ interface Message {
   role: string;
   content: string;
   createdAt: string;
+  editedFromId?: number | null;
   attachments?: { id: number; fileName: string; fileUrl: string; mimeType: string }[];
   modelResponses?: ModelResponse[];
 }
@@ -34,10 +35,16 @@ interface MessageBubbleProps {
   onModelTabChange?: (modelId: number) => void;
   onRegenerate?: (messageId: number, modelId: number) => void;
   onFeedback?: (responseId: number, isLiked: boolean | null) => void;
+  onEditMessage?: (messageId: number, newContent: string) => void;
+  // Version navigation props
+  editVersions?: Message[];
+  editVersionIndex?: number;
+  onEditVersionChange?: (rootMessageId: number, versionIndex: number) => void;
 }
 
 export function MessageBubble({
-  message, activeModelTab, onModelTabChange, onRegenerate, onFeedback
+  message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
+  onEditMessage, editVersions, editVersionIndex, onEditVersionChange
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
@@ -60,6 +67,59 @@ export function MessageBubble({
     setVersionIndices(prev => ({ ...prev, [modelId]: Math.max(0, Math.min(list.length - 1, cur + dir)) }));
   };
 
+  // Edit state — two-phase for smooth open/close
+  const [showEdit, setShowEdit] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const startEditing = () => {
+    setEditText(message.content);
+    setIsClosing(false);
+    setShowEdit(true);
+  };
+
+  const cancelEditing = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setShowEdit(false);
+      setIsClosing(false);
+      setEditText("");
+    }, 200);
+  };
+
+  const saveEdit = () => {
+    const trimmed = editText.trim();
+    if (!trimmed || trimmed === message.content) {
+      cancelEditing();
+      return;
+    }
+    onEditMessage?.(message.id, trimmed);
+    setShowEdit(false);
+    setIsClosing(false);
+    setEditText("");
+  };
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (showEdit && !isClosing && textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+      textareaRef.current.focus();
+    }
+  }, [showEdit, isClosing, editText]);
+
+  // Handle Ctrl+Enter to save
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      saveEdit();
+    }
+    if (e.key === "Escape") {
+      cancelEditing();
+    }
+  };
+
   // Embla setup
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: "start",
@@ -76,12 +136,7 @@ export function MessageBubble({
     setCanScrollPrev(emblaApi.canScrollPrev());
     setCanScrollNext(emblaApi.canScrollNext());
     
-    // Find the most visible slide
     const selectedSnap = emblaApi.selectedScrollSnap();
-    
-    // We compute uniqueModels directly here or use the outer scope 
-    // without putting it in the dependency array to prevent infinite loops
-    // since uniqueModels is recreated every render
     const responsesByModel = responses.reduce((acc, resp) => {
       if (!acc[resp.model.id]) acc[resp.model.id] = [];
       acc[resp.model.id].push(resp);
@@ -112,7 +167,6 @@ export function MessageBubble({
 
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // Scroll active tab chip into view in the top tab bar
   useEffect(() => {
     if (!tabsRef.current) return;
     const activeEl = tabsRef.current.querySelector(`[data-model="${activeTab}"]`) as HTMLElement | null;
@@ -124,14 +178,104 @@ export function MessageBubble({
   const singleVerIdx = !isMultiModel && uniqueModels[0] ? (versionIndices[uniqueModels[0].id] ?? (singleResps.length - 1)) : 0;
   const singleResp = singleResps[singleVerIdx] || singleResps[0];
 
+  // Version info
+  const hasVersions = editVersions && editVersions.length > 1;
+  const versionCount = editVersions?.length || 1;
+  const currentVersionIdx = editVersionIndex ?? 0;
+
   // ── User message ─────────────────────────────────────────────────────────
   if (isUser) {
     return (
-      <div className="px-4 py-3 flex justify-end animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
-        <div className="max-w-[95%] sm:max-w-[85%]">
-          <div className="bg-primary dark:bg-muted dark:border dark:border-border/50 text-primary-foreground dark:text-foreground rounded-2xl rounded-br-md px-4 py-2.5 break-words">
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-          </div>
+      <div className={`px-4 py-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 sm:-mb-3 ${showEdit ? "flex" : "flex justify-end"}`}>
+        <div className={showEdit ? "w-full" : "max-w-[95%] sm:max-w-[85%]"}>
+          {showEdit ? (
+            // Edit mode
+            <div className={`bg-muted dark:bg-muted rounded-2xl rounded-br-md px-4 py-3 border border-border/50 space-y-2 transition-all duration-200 ${
+              isClosing
+                ? "opacity-0 scale-95 translate-x-2"
+                : "opacity-100 scale-100 translate-x-0 animate-in fade-in-0 zoom-in-95 slide-in-from-right-2 duration-200"
+            }`}>
+              <textarea
+                ref={textareaRef}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full bg-transparent text-sm text-foreground resize-none outline-none min-h-[60px] max-h-[300px] transition-all duration-200"
+                rows={1}
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={cancelEditing}
+                  className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={saveEdit}
+                  disabled={!editText.trim() || editText.trim() === message.content}
+                  className="h-7 px-3 text-xs"
+                >
+                  Send
+                </Button>
+              </div>
+            </div>
+          ) : (
+            // Display mode
+            <div className="group/user relative">
+              <div className="bg-primary dark:bg-muted dark:border dark:border-border/50 text-primary-foreground dark:text-foreground rounded-2xl rounded-br-md px-4 py-2.5 break-words">
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              </div>
+              
+              {/* Action buttons below the message - left aligned */}
+              <div className="flex items-center gap-1 mt-1 justify-end">
+                {/* Version navigation */}
+                {hasVersions && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full mr-1 opacity-100 sm:opacity-0 group-hover/user:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onEditVersionChange?.(editVersions![0].editedFromId || editVersions![0].id, currentVersionIdx - 1)}
+                      disabled={currentVersionIdx === 0}
+                      className="hover:text-foreground disabled:opacity-30 p-0.5"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[11px] font-medium tabular-nums">{currentVersionIdx + 1}/{versionCount}</span>
+                    <button
+                      onClick={() => onEditVersionChange?.(editVersions![0].editedFromId || editVersions![0].id, currentVersionIdx + 1)}
+                      disabled={currentVersionIdx === versionCount - 1}
+                      className="hover:text-foreground disabled:opacity-30 p-0.5"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Copy button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted/80 opacity-100 sm:opacity-0 group-hover/user:opacity-100 transition-opacity"
+                  onClick={() => { navigator.clipboard.writeText(message.content); toast.success("Copied"); }}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+
+                {/* Edit button */}
+                {onEditMessage && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted/80 opacity-100 sm:opacity-0 group-hover/user:opacity-100 transition-opacity"
+                    onClick={startEditing}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

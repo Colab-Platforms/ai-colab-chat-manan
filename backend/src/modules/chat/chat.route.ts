@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { auth } from "@/middlewares/authMiddleware.js";
 import * as chatController from "./chat.controller.js";
-import { streamChat, regenerateChat, prepareMulti } from "./chat.stream.js";
+import {
+  streamChat,
+  regenerateChat,
+  prepareMulti,
+  prepareEditMulti,
+  editAndResend,
+} from "./chat.stream.js";
 
 const router = Router();
 
@@ -49,6 +55,11 @@ router.post(
   prepareMulti,
 );
 router.post(
+  "/:chatId/messages/:messageId/edit-prepare-multi",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  prepareEditMulti,
+);
+router.post(
   "/:chatId/messages/:messageId/regenerate",
   auth("USER", "ADMIN", "SUPERADMIN"),
   regenerateChat,
@@ -57,6 +68,11 @@ router.post(
   "/:chatId/responses/:responseId/feedback",
   auth("USER", "ADMIN", "SUPERADMIN"),
   chatController.feedback,
+);
+router.post(
+  "/:chatId/messages/:messageId/edit",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  editAndResend,
 );
 
 export default router;

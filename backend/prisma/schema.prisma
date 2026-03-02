@@ -126,6 +126,8 @@ model Message {
   chat           Chat            @relation(fields: [chatId], references: [id])
   attachments    Attachment[]
   editedFromId   Int?
+  editedFrom     Message?        @relation("MessageEdits", fields: [editedFromId], references: [id])
+  editedVersions Message[]       @relation("MessageEdits")
   isDeleted      Boolean         @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt

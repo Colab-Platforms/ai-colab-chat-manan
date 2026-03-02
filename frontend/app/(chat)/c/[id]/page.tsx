@@ -21,6 +21,7 @@ interface Message {
   role: string;
   content: string;
   createdAt: string;
+  editedFromId?: number | null;
   attachments?: any[];
   modelResponses?: any[];
 }
@@ -37,6 +38,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [editVersionIndices, setEditVersionIndices] = useState<Record<number, number>>({});
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
   const modelsRestoredRef = useRef(false);
@@ -486,6 +488,151 @@ export default function ChatPage() {
     setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
   };
 
+  const handleEditVersionChange = (rootMessageId: number, versionIndex: number) => {
+    setEditVersionIndices((prev) => ({ ...prev, [rootMessageId]: versionIndex }));
+  };
+
+  const handleEditMessage = async (messageId: number, newContent: string) => {
+    if (isSending) return;
+    setIsSending(true);
+    setIsStreaming(true);
+    isStreamingRef.current = true;
+    setStreamingContent("");
+
+    // --- Identify Original Models ---
+    const originalIdx = messages.findIndex(m => m.id === messageId);
+    let pairedAssistantMsg = null;
+    if (originalIdx !== -1 && originalIdx + 1 < messages.length && messages[originalIdx + 1].role === "ASSISTANT") {
+      pairedAssistantMsg = messages[originalIdx + 1];
+    }
+    const targetModelIds = pairedAssistantMsg?.modelResponses?.map((mr: any) => mr.model.id) || [...selectedModels];
+
+    if (targetModelIds.length === 0) {
+      toast.error("No models found to edit with.");
+      setIsSending(false);
+      setIsStreaming(false);
+      return;
+    }
+
+    const token = localStorage.getItem("token") || "";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+    const chatType = localStorage.getItem("preferredChatType") || "STANDARD";
+
+    // --- Optimistic UI Update ---
+    // Find original message's root for version tracking
+    const originalMsg = messages[originalIdx];
+    const rootId = originalMsg?.editedFromId || messageId;
+    
+    const tempUserMsgId = Date.now();
+    const tempAssistantMsgId = Date.now() + 1;
+
+    setEditVersionIndices((prev) => ({ ...prev, [rootId]: 999 }));
+
+    setMessages((prev) => {
+      const keptMessages = prev.filter((m, idx) => {
+        if (idx <= originalIdx) return true;
+        if (m.role === "USER" && (m.editedFromId === rootId || m.id === rootId)) return true;
+        if (m.role === "ASSISTANT") {
+          const prevUserIdx = prev.findIndex((pm, pi) => pi < idx && pm.role === "USER" && (pm.editedFromId === rootId || pm.id === rootId) && pi > originalIdx);
+          if (prevUserIdx !== -1) return true;
+        }
+        return false;
+      });
+
+      return [
+        ...keptMessages,
+        {
+          id: tempUserMsgId,
+          role: "USER",
+          content: newContent,
+          createdAt: new Date().toISOString(),
+          editedFromId: rootId,
+        },
+        {
+          id: tempAssistantMsgId,
+          role: "ASSISTANT",
+          content: "",
+          createdAt: new Date().toISOString(),
+          modelResponses: targetModelIds.map((mid) => ({
+            id: mid,
+            model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" },
+            content: "",
+            status: "STREAMING",
+            tokensUsed: null,
+          })),
+        },
+      ];
+    });
+    // ----------------------------
+
+    try {
+      // 1. Prepare multi-model edit (soft-delete old, create new msg DB entries)
+      const prepRes = await fetch(`${apiUrl}/chats/${chatId}/messages/${messageId}/edit-prepare-multi`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: newContent }),
+      });
+
+      if (!prepRes.ok) {
+        const errData = await prepRes.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to prepare edit");
+      }
+
+      const prepData = await prepRes.json();
+      const userMsgId = prepData.data.userMessageId;
+      const assistantMsgId = prepData.data.assistantMessageId;
+
+      // 2. Sync temp UI IDs with real DB IDs before streaming
+      setMessages((prev) => prev.map(msg => {
+        if (msg.id === tempUserMsgId) return { ...msg, id: userMsgId };
+        if (msg.id === tempAssistantMsgId) return { ...msg, id: assistantMsgId };
+        return msg;
+      }));
+
+      // 3. Fire concurrent stream requests for all original models
+      const responses = await Promise.allSettled(
+        targetModelIds.map((mid) =>
+          streamSingleModel(mid, assistantMsgId, token, apiUrl, newContent, chatType, userMsgId, assistantMsgId)
+        )
+      );
+
+      // 4. Handle any instant stream initiation failures
+      responses.forEach((res, idx) => {
+        if (res.status === "rejected") {
+          const mid = targetModelIds[idx];
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    modelResponses: msg.modelResponses?.map((mr: any) =>
+                      mr.model.id === mid
+                        ? { ...mr, content: res.reason.message || "Failed", status: "FAILED" }
+                        : mr
+                    ),
+                  }
+                : msg
+            )
+          );
+          toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${res.reason.message}`);
+        }
+      });
+
+      isStreamingRef.current = false;
+      await fetchChat();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to edit message");
+    } finally {
+      isStreamingRef.current = false;
+      setIsSending(false);
+      setIsStreaming(false);
+      setStreamingContent("");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <MessageList
@@ -494,6 +641,9 @@ export default function ChatPage() {
         onModelTabChange={handleModelTabChange}
         onRegenerate={handleRegenerate}
         onFeedback={handleFeedback}
+        onEditMessage={handleEditMessage}
+        editVersionIndices={editVersionIndices}
+        onEditVersionChange={handleEditVersionChange}
       />
       <ChatInput
         models={models}

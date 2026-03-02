@@ -633,3 +633,425 @@ export async function prepareMulti(req: Request, res: Response) {
     });
   }
 }
+
+export async function editAndResend(req: Request, res: Response) {
+  const userId = req.user!.id;
+  const chatId = Number(req.params.chatId);
+  const originalMessageId = Number(req.params.messageId);
+  const { content, modelId, chatType } = req.body as {
+    content: string;
+    modelId: number;
+    chatType?: string;
+  };
+
+  try {
+    if (!content?.trim()) {
+      res.status(400).json({ status: false, message: "Content is required" });
+      return;
+    }
+    if (!modelId) {
+      res.status(400).json({ status: false, message: "modelId is required" });
+      return;
+    }
+
+    // Get chat
+    const chat = await prisma.chat.findFirst({
+      where: { id: chatId, userId, isDeleted: false },
+    });
+    if (!chat) {
+      res.status(404).json({ status: false, message: "Chat not found" });
+      return;
+    }
+
+    // Find original user message
+    const originalMessage = await prisma.message.findFirst({
+      where: { id: originalMessageId, chatId, role: "USER", isDeleted: false },
+    });
+    if (!originalMessage) {
+      res
+        .status(404)
+        .json({ status: false, message: "Original message not found" });
+      return;
+    }
+
+    // Get model
+    const model = await prisma.model.findFirst({
+      where: { id: modelId, isActive: true, isDeleted: false },
+      include: { modelProvider: true },
+    });
+    if (!model) {
+      res
+        .status(404)
+        .json({ status: false, message: "Model not found or inactive" });
+      return;
+    }
+
+    // Check wallet
+    const wallet = await prisma.userWallet.findUnique({ where: { userId } });
+    if (!wallet || wallet.tokensRemaining <= 0) {
+      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      return;
+    }
+
+    // Find the assistant response paired with the original user message
+    // so we can preserve it for version navigation
+    const pairedAssistant = await prisma.message.findFirst({
+      where: {
+        chatId,
+        role: "ASSISTANT",
+        isDeleted: false,
+        createdAt: { gt: originalMessage.createdAt },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // Soft-delete messages that came AFTER the paired assistant
+    // (preserves the original user→assistant pair for version switching)
+    if (pairedAssistant) {
+      await prisma.message.updateMany({
+        where: {
+          chatId,
+          isDeleted: false,
+          createdAt: { gt: pairedAssistant.createdAt },
+        },
+        data: { isDeleted: true, deletedAt: new Date() },
+      });
+    }
+
+    // Determine the root message id for editedFromId
+    // If the original was itself an edit, chain to the same root
+    const rootMessageId = originalMessage.editedFromId || originalMessage.id;
+
+    // Create new user message linked to original
+    const newUserMessage = await prisma.message.create({
+      data: {
+        chatId,
+        role: "USER",
+        content: content.trim(),
+        editedFromId: rootMessageId,
+      },
+    });
+
+    // Create empty assistant message
+    const assistantMessage = await prisma.message.create({
+      data: { chatId, role: "ASSISTANT", content: "" },
+    });
+
+    // Build conversation history from messages BEFORE the original message
+    const previousMessages = await prisma.message.findMany({
+      where: {
+        chatId,
+        isDeleted: false,
+        createdAt: { lt: originalMessage.createdAt },
+      },
+      orderBy: { createdAt: "asc" },
+      include: {
+        modelResponses: {
+          where: { status: "COMPLETED" },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    const conversationHistory: {
+      role: "user" | "assistant";
+      content: string;
+    }[] = [];
+    for (const msg of previousMessages) {
+      if (msg.role === "USER") {
+        conversationHistory.push({ role: "user", content: msg.content });
+      } else if (msg.role === "ASSISTANT" && msg.modelResponses[0]?.content) {
+        conversationHistory.push({
+          role: "assistant",
+          content: msg.modelResponses[0].content,
+        });
+      }
+    }
+    // Add the new edited user message
+    conversationHistory.push({ role: "user", content: content.trim() });
+
+    // Set SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    // Send IDs so frontend can track
+    res.write(
+      `data: ${JSON.stringify({
+        type: "message_id",
+        userMessageId: newUserMessage.id,
+        assistantMessageId: assistantMessage.id,
+      })}\n\n`,
+    );
+    if (typeof (res as any).flush === "function") {
+      (res as any).flush();
+    }
+
+    // Stream AI response
+    let fullContent = "";
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let imagesToUpload: string[] = [];
+
+    try {
+      const stream = await createOpenRouterStream({
+        model: model.externalId,
+        messages: conversationHistory,
+        chatType,
+      });
+
+      for await (const chunk of stream) {
+        let delta = chunk.choices?.[0]?.delta?.content || "";
+
+        const images =
+          chunk.choices?.[0]?.delta?.images ||
+          chunk.choices?.[0]?.message?.images;
+        if (images && Array.isArray(images)) {
+          const imageMd = images
+            .map((img: any) => {
+              const url = img.image_url?.url || img.url;
+              if (url && !imagesToUpload.includes(url))
+                imagesToUpload.push(url);
+              return `\n![Generated Image](${url})\n`;
+            })
+            .join("");
+          if (imageMd) delta += imageMd;
+        }
+
+        if (delta) {
+          fullContent += delta;
+          res.write(
+            `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
+          );
+          if (typeof (res as any).flush === "function") {
+            (res as any).flush();
+          }
+        }
+
+        if (chunk.usage) {
+          promptTokens = chunk.usage.prompt_tokens || 0;
+          completionTokens = chunk.usage.completion_tokens || 0;
+        }
+      }
+    } catch (aiError: any) {
+      console.error("❌ OpenRouter Error in editAndResend:", aiError.message);
+      try {
+        await prisma.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: fullContent || "",
+            promptTokens: promptTokens || 0,
+            completionTokens: completionTokens || 0,
+            totalTokens: (promptTokens || 0) + (completionTokens || 0),
+            status: "FAILED",
+            completedAt: new Date(),
+          },
+        });
+        await prisma.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: fullContent || "" },
+        });
+      } catch (dbErr) {
+        console.error("Failed to save partial AI response to DB", dbErr);
+      }
+
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: aiError.message || "AI request failed" })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    // Upload images to Cloudinary
+    if (imagesToUpload.length > 0) {
+      for (const origUrl of imagesToUpload) {
+        try {
+          const result = await uploadToCloudinary(origUrl, {
+            folder: "ai-colab-chat/generated",
+            format: "webp",
+            quality: "auto",
+          });
+          if (result && result.url) {
+            fullContent = fullContent.split(origUrl).join(result.url);
+          }
+        } catch (imgError) {
+          console.error("  ❌ Failed to upload image to Cloudinary:", imgError);
+        }
+      }
+    }
+
+    const totalTokens = promptTokens + completionTokens;
+    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
+    const billableCompletionTokens = Math.ceil(
+      completionTokens * tokenMultiplier,
+    );
+    const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
+
+    // Save response + deduct tokens
+    await prisma.$transaction(async (tx) => {
+      await tx.message.update({
+        where: { id: assistantMessage.id },
+        data: { content: fullContent },
+      });
+
+      await tx.modelResponse.create({
+        data: {
+          chatId,
+          messageId: assistantMessage.id,
+          modelId: model.id,
+          content: fullContent,
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+
+      if (totalTokens > 0) {
+        await tx.usageLog.create({
+          data: {
+            userId,
+            modelId: model.id,
+            chatId,
+            messageId: assistantMessage.id,
+            capability: (chatType || "STANDARD") as any,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+            billablePromptTokens,
+            billableCompletionTokens,
+            billableTotalTokens,
+          },
+        });
+
+        await tx.userWallet.update({
+          where: { userId },
+          data: {
+            tokensRemaining: { decrement: billableTotalTokens },
+            tokensUsed: { increment: billableTotalTokens },
+          },
+        });
+      }
+    });
+
+    res.write(
+      `data: ${JSON.stringify({ type: "done", promptTokens, completionTokens, totalTokens })}\n\n`,
+    );
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (error: any) {
+    console.error("Edit and resend error:", error);
+    if (!res.headersSent) {
+      res.status(error.statusCode || 500).json({
+        status: false,
+        message: error.message || "Internal server error",
+      });
+    } else {
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+    }
+  }
+}
+
+// --- Multi-Model Edit Preparation ---
+export async function prepareEditMulti(req: Request, res: Response) {
+  const userId = req.user!.id;
+  const chatId = Number(req.params.chatId);
+  const messageId = Number(req.params.messageId);
+  const { content } = req.body as { content: string };
+
+  try {
+    if (!content?.trim()) {
+      res.status(400).json({ status: false, message: "Content is required" });
+      return;
+    }
+
+    const chat = await prisma.chat.findFirst({
+      where: { id: chatId, userId, isDeleted: false },
+    });
+    if (!chat) {
+      res.status(404).json({ status: false, message: "Chat not found" });
+      return;
+    }
+
+    const originalMessage = await prisma.message.findFirst({
+      where: { id: messageId, chatId, isDeleted: false },
+    });
+    if (!originalMessage || originalMessage.role !== "USER") {
+      res
+        .status(404)
+        .json({ status: false, message: "Original user message not found" });
+      return;
+    }
+
+    // Check user tokens mapping
+    const wallet = await prisma.userWallet.findUnique({ where: { userId } });
+    if (!wallet || wallet.tokensRemaining <= 0) {
+      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      return;
+    }
+
+    const pairedAssistant = await prisma.message.findFirst({
+      where: {
+        chatId,
+        role: "ASSISTANT",
+        isDeleted: false,
+        createdAt: { gt: originalMessage.createdAt },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (pairedAssistant) {
+      await prisma.message.updateMany({
+        where: {
+          chatId,
+          isDeleted: false,
+          createdAt: { gt: pairedAssistant.createdAt },
+        },
+        data: { isDeleted: true, deletedAt: new Date() },
+      });
+    }
+
+    const rootMessageId = originalMessage.editedFromId || originalMessage.id;
+
+    // Create user message
+    const newUserMessage = await prisma.message.create({
+      data: {
+        chatId,
+        role: "USER",
+        content: content.trim(),
+        editedFromId: rootMessageId,
+      },
+    });
+
+    // Create empty assistant message
+    const assistantMessage = await prisma.message.create({
+      data: { chatId, role: "ASSISTANT", content: "" },
+    });
+
+    res.json({
+      status: true,
+      data: {
+        userMessageId: newUserMessage.id,
+        assistantMessageId: assistantMessage.id,
+      },
+    });
+  } catch (error: any) {
+    console.error("prepareEditMulti error:", error);
+    res.status(500).json({
+      status: false,
+      message: error.message || "Internal server error",
+    });
+  }
+}

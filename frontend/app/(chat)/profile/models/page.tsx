@@ -51,11 +51,10 @@ function CapabilityToggle({
                   : [...selected, opt.value];
                 onChange(next);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                active
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${active
                   ? opt.color + " border-current"
                   : "border-border text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
-              }`}
+                }`}
             >
               <Icon className="w-3 h-3" />
               {opt.label}
@@ -270,11 +269,10 @@ export default function ModelsAdminPage() {
             <button
               type="button"
               onClick={() => setForm({ ...form, isActive: !form.isActive })}
-              className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                form.isActive
+              className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-sm font-medium transition-all ${form.isActive
                   ? "bg-primary/5 border-primary/30 text-primary"
                   : "border-border text-muted-foreground hover:border-muted-foreground/40"
-              }`}
+                }`}
             >
               <div className={`w-4 h-4 rounded-full border-2 transition-colors ${form.isActive ? "bg-primary border-primary" : "border-muted-foreground/40"}`} />
               {form.isActive ? "Active" : "Inactive"} — {form.isActive ? "Visible to users" : "Hidden from users"}
