@@ -126,9 +126,8 @@ export function MessageList({
   const isStreaming = messages.some(m => m.modelResponses?.some(mr => mr.status === "STREAMING"));
 
   useEffect(() => {
-    if (!isStreaming) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
+    // Scroll to bottom when a new message is sent OR when streaming finishes
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isStreaming]);
 
   const processed = processMessagesWithVersions(messages, editVersionIndices);

@@ -142,6 +142,17 @@ export function ChatInput({
     }
   }, [initialPrompt, onPromptClear]);
 
+  const wasSendingRef = useRef(isSending);
+  useEffect(() => {
+    if (wasSendingRef.current && !isSending) {
+      // Focus input after streaming/sending finishes
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
+    }
+    wasSendingRef.current = isSending;
+  }, [isSending]);
+
   const handleSubmit = () => {
     if (!content.trim() || isSending) return;
     onSend(content.trim(), files.length > 0 ? files : undefined, chatType);
