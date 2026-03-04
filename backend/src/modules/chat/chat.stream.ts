@@ -82,6 +82,9 @@ async function checkTokenLimitsAndSetupStream(
     }
   }
 
+  // Always append the latest prompt at the end so the AI responds to the current message
+  trimmedHistoryData.push(latestPrompt);
+
   // Set a hard absolute upper limit of 10,000 raw tokens for generating tokens in a single response
   // Note: For models with multipliers, this could incur up to 30k billable tokens (e.g. 3x Opus)
   const ABSOLUTE_MAX_COMPLETION = 10000;
