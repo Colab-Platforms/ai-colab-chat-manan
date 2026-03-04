@@ -36,9 +36,15 @@ export function MicButton({ onResult, onStart, onStop, hasText }: MicButtonProps
   // Fire onResult whenever transcript changes — combine final + interim
   const prevRef = useRef("");
   useEffect(() => {
-    const combined = (
-      transcript + (interimTranscript ? " " + interimTranscript : "")
-    ).trim();
+    let combined = transcript;
+    if (interimTranscript) {
+      if (combined && !combined.endsWith(" ") && !interimTranscript.startsWith(" ")) {
+        combined += " ";
+      }
+      combined += interimTranscript;
+    }
+    combined = combined.trim();
+
     if (combined && combined !== prevRef.current) {
       prevRef.current = combined;
       onResultRef.current?.(combined);

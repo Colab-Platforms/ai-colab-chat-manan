@@ -13,6 +13,8 @@ export function useSpeechRecognition() {
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
 
+  const finalTranscriptRef = useRef("");
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -25,26 +27,40 @@ export function useSpeechRecognition() {
       return;
     }
 
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    // Android Chrome has a known bug where continuous=true causes it to append
+    // the accumulated transcript from the beginning of the session into every new result.
+    // Setting continuous=false and manually accumulating the transcript across auto-restarts fixes it.
+    recognition.continuous = !isAndroid;
     recognition.interimResults = true;
     recognition.lang = "en-IN";
 
     recognition.onresult = (event: any) => {
-      let final = "";
-      let interim = "";
+      let currentInterim = "";
 
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
+        let text = result[0].transcript;
+
         if (result.isFinal) {
-          final += result[0].transcript;
+          if (
+            finalTranscriptRef.current &&
+            !finalTranscriptRef.current.endsWith(" ") &&
+            text &&
+            !text.startsWith(" ")
+          ) {
+            finalTranscriptRef.current += " ";
+          }
+          finalTranscriptRef.current += text;
         } else {
-          interim += result[0].transcript;
+          currentInterim += text;
         }
       }
 
-      setTranscript(final);
-      setInterimTranscript(interim);
+      setTranscript(finalTranscriptRef.current);
+      setInterimTranscript(currentInterim);
     };
 
     recognition.onerror = (event: any) => {
@@ -77,6 +93,7 @@ export function useSpeechRecognition() {
   const startListening = useCallback(() => {
     if (!recognitionRef.current) return;
     try {
+      finalTranscriptRef.current = "";
       setTranscript("");
       setInterimTranscript("");
       isListeningRef.current = true;
@@ -95,6 +112,7 @@ export function useSpeechRecognition() {
   }, []);
 
   const resetTranscript = useCallback(() => {
+    finalTranscriptRef.current = "";
     setTranscript("");
     setInterimTranscript("");
   }, []);
