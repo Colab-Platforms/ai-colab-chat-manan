@@ -22,6 +22,7 @@ interface MessageListProps {
   onEditMessage?: (messageId: number, newContent: string) => void;
   editVersionIndices?: Record<number, number>;
   onEditVersionChange?: (rootMessageId: number, versionIndex: number) => void;
+  onFollowUpClick?: (question: string) => void;
 }
 
 /**
@@ -118,7 +119,7 @@ function processMessagesWithVersions(
 
 export function MessageList({
   messages, activeModelTabs, onModelTabChange, onRegenerate, onFeedback,
-  onEditMessage, editVersionIndices = {}, onEditVersionChange
+  onEditMessage, editVersionIndices = {}, onEditVersionChange, onFollowUpClick
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -135,7 +136,7 @@ export function MessageList({
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto py-4">
-        {processed.map((item) => (
+        {processed.map((item, idx) => (
           <MessageBubble
             key={item.message.id}
             message={item.message}
@@ -147,6 +148,8 @@ export function MessageList({
             editVersions={item.editVersions}
             editVersionIndex={item.editVersionIndex}
             onEditVersionChange={onEditVersionChange}
+            isLastMessage={idx === processed.length - 1}
+            onFollowUpClick={onFollowUpClick}
           />
         ))}
         <div ref={bottomRef} />

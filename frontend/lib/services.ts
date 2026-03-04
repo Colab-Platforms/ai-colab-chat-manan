@@ -90,7 +90,6 @@ export const modelProviderService = {
     api.get("/model-providers", { params }),
   getById: (id: number) => api.get(`/model-providers/${id}`),
   create: (data: any) => api.post("/model-providers", data),
-  update: (id: number, data: any) => api.put(`/model-providers/${id}`, data),
   delete: (id: number) => api.delete(`/model-providers/${id}`),
 };
 
@@ -103,4 +102,10 @@ export const attachmentService = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+};
+
+export const userPreferenceService = {
+  getPreferences: () => api.get("/preferences"),
+  updatePreferences: (data: { enableFollowUpQuestions: boolean }) =>
+    api.put("/preferences", data),
 };

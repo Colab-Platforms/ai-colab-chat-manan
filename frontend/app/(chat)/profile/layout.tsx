@@ -7,7 +7,7 @@ import { useAuth } from "@/context/auth-context";
 import {
   LayoutDashboard, Wallet, CreditCard, BarChart3,
   UserCircle, Users, Bot, Building, CreditCard as PlansIcon,
-  ArrowLeft, Menu, X, Archive,
+  ArrowLeft, Menu, X, Archive, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ const userNav = [
   { label: "My Usage", href: "/profile/my-usage", icon: BarChart3 },
   { label: "My Account", href: "/profile/account", icon: UserCircle },
   { label: "Archived Chats", href: "/profile/archived", icon: Archive },
+  { label: "Preferences", href: "/profile/preferences", icon: Settings },
 ];
 
 const adminNav = [

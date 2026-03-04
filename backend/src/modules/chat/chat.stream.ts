@@ -13,6 +13,7 @@ async function checkTokenLimitsAndSetupStream(
   chatId: number,
   assistantMessageId: number,
   messageIdPayload: Record<string, any>,
+  enableFollowUpQuestions: boolean,
 ): Promise<{ maxCompletionTokens: number; trimmedHistory: any[] } | null> {
   const tokenMultiplier = model.tokenMultiplier || 1.0;
   const maxAffordableTokens = Math.floor(
@@ -84,7 +85,15 @@ async function checkTokenLimitsAndSetupStream(
   }
 
   // Always append the latest prompt at the end so the AI responds to the current message
-  trimmedHistoryData.push(latestPrompt);
+  if (enableFollowUpQuestions) {
+    const promptWithInstructions = {
+      ...latestPrompt,
+      content: `${latestPrompt.content}\n\n---\nBased on your response, suggest 4 concise follow-up questions the user could ask next. Format them as a JSON array of strings inside a \`\`\`json block at the very end of your response.`,
+    };
+    trimmedHistoryData.push(promptWithInstructions);
+  } else {
+    trimmedHistoryData.push(latestPrompt);
+  }
 
   // Set a hard absolute upper limit of 10,000 raw tokens for generating tokens in a single response
   // Note: For models with multipliers, this could incur up to 30k billable tokens (e.g. 3x Opus)
@@ -223,6 +232,12 @@ export async function streamChat(req: Request, res: Response) {
       }
     }
 
+    const userPreference = await prisma.userPreference.findUnique({
+      where: { userId },
+    });
+    const enableFollowUpQuestions =
+      userPreference?.enableFollowUpQuestions !== false;
+
     const tokenLimits = await checkTokenLimitsAndSetupStream(
       res,
       wallet,
@@ -234,6 +249,7 @@ export async function streamChat(req: Request, res: Response) {
         userMessageId: userMessage.id,
         assistantMessageId: assistantMessage.id,
       },
+      enableFollowUpQuestions,
     );
     if (tokenLimits === null) return;
     const { maxCompletionTokens, trimmedHistory } = tokenLimits;
@@ -578,6 +594,12 @@ export async function regenerateChat(req: Request, res: Response) {
       }
     }
 
+    const userPreference = await prisma.userPreference.findUnique({
+      where: { userId },
+    });
+    const enableFollowUpQuestions =
+      userPreference?.enableFollowUpQuestions !== false;
+
     const prevMessageId =
       previousMessages[previousMessages.length - 1]?.id || 0;
     const tokenLimits = await checkTokenLimitsAndSetupStream(
@@ -588,6 +610,7 @@ export async function regenerateChat(req: Request, res: Response) {
       chatId,
       messageId,
       { userMessageId: prevMessageId },
+      enableFollowUpQuestions,
     );
     if (tokenLimits === null) return;
     const { maxCompletionTokens, trimmedHistory } = tokenLimits;
@@ -1022,6 +1045,12 @@ export async function editAndResend(req: Request, res: Response) {
     // Add the new edited user message
     conversationHistory.push({ role: "user", content: content.trim() });
 
+    const userPreference = await prisma.userPreference.findUnique({
+      where: { userId },
+    });
+    const enableFollowUpQuestions =
+      userPreference?.enableFollowUpQuestions !== false;
+
     const tokenLimits = await checkTokenLimitsAndSetupStream(
       res,
       wallet,
@@ -1033,6 +1062,7 @@ export async function editAndResend(req: Request, res: Response) {
         userMessageId: newUserMessage.id,
         assistantMessageId: assistantMessage.id,
       },
+      enableFollowUpQuestions,
     );
     if (tokenLimits === null) return;
     const { maxCompletionTokens, trimmedHistory } = tokenLimits;

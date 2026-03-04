@@ -19,6 +19,47 @@ interface ModelResponse {
   isLiked?: boolean | null;
 }
 
+function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
+  if (!text) return { cleanText: "", questions: [] };
+  const jsonBlockRegex = /```json\s*(\[\s*[\s\S]*?\s*\])\s*```[\s]*$/i;
+  const match = text.match(jsonBlockRegex);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        return {
+          cleanText: text.replace(match[0], "").trimEnd(),
+          questions: parsed.filter(q => typeof q === "string").slice(0, 3)
+        };
+      }
+    } catch (e) {}
+  }
+  return { cleanText: text, questions: [] };
+}
+
+function FollowUpTabs({ questions, onClick }: { questions: string[], onClick: (q: string) => void }) {
+  if (!questions || questions.length === 0) return null;
+  return (
+    <>
+      <p className="text-xs text-muted-foreground px-2 pt-2">Suggested follow-up questions:</p>
+      <div className="flex flex-wrap gap-2 mt-4 mb-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        {questions.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => onClick(q)}
+          className="group relative flex items-center gap-2 text-xs px-4 py-2 rounded-2xl border border-border/90 bg-muted/30 text-foreground/70 hover:text-foreground transition-colors duration-200 text-left cursor-pointer"
+        >
+          <span className="flex-1 truncate max-w-[280px] sm:max-w-[400px]">
+            {q}
+          </span>
+          <ChevronRight className="w-3.5 h-3.5 opacity-0 -ml-1 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200 flex-shrink-0" />
+        </button>
+      ))}
+    </div>
+    </>
+  );
+}
+
 interface Message {
   id: number;
   role: string;
@@ -40,11 +81,14 @@ interface MessageBubbleProps {
   editVersions?: Message[];
   editVersionIndex?: number;
   onEditVersionChange?: (rootMessageId: number, versionIndex: number) => void;
+  isLastMessage?: boolean;
+  onFollowUpClick?: (question: string) => void;
 }
 
 export function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
-  onEditMessage, editVersions, editVersionIndex, onEditVersionChange
+  onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
+  isLastMessage, onFollowUpClick
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
@@ -177,6 +221,7 @@ export function MessageBubble({
   const singleResps = !isMultiModel && uniqueModels[0] ? responsesByModel[uniqueModels[0].id] || [] : [];
   const singleVerIdx = !isMultiModel && uniqueModels[0] ? (versionIndices[uniqueModels[0].id] ?? (singleResps.length - 1)) : 0;
   const singleResp = singleResps[singleVerIdx] || singleResps[0];
+  const parsedSingle = parseFollowUpQuestions(singleResp?.content || "");
 
   // Version info
   const hasVersions = editVersions && editVersions.length > 1;
@@ -292,11 +337,11 @@ export function MessageBubble({
           </div>
 
           {/* break-words and overflow-hidden prevent horizontal scrolling on long continuous strings */}
-          <div className="bg-muted/40 rounded-2xl rounded-tl-md px-4 py-2.5 break-words overflow-hidden w-full">
+          <div className="bg-muted/50 rounded-2xl rounded-tl-md px-4 py-2.5 break-words overflow-hidden w-full">
             {singleResp ? (
-              singleResp.content ? (
+              parsedSingle.cleanText ? (
                 <div className="text-sm w-full max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
-                  <MarkdownRenderer content={singleResp.content} />
+                  <MarkdownRenderer content={parsedSingle.cleanText} />
                   {singleResp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                 </div>
               ) : singleResp.status === "FAILED" ? (
@@ -305,9 +350,13 @@ export function MessageBubble({
                 <TypingIndicator isImageMode={typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION"} />
               )
             ) : (
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <p className="text-sm whitespace-pre-wrap">{parsedSingle.cleanText || message.content}</p>
             )}
           </div>
+
+          {isLastMessage && singleResp?.status === "COMPLETED" && parsedSingle.questions.length > 0 && onFollowUpClick && (
+            <FollowUpTabs questions={parsedSingle.questions} onClick={onFollowUpClick} />
+          )}
 
           {singleResp?.status === "COMPLETED" && singleResp.content && (
             <CardActions
@@ -392,6 +441,7 @@ export function MessageBubble({
                 const mResps = responsesByModel[model.id] || [];
                 const verIdx = versionIndices[model.id] ?? (mResps.length - 1);
                 const resp = mResps[verIdx] || mResps[0];
+                const parsedMulti = parseFollowUpQuestions(resp?.content || "");
 
                 return (
                   <div
@@ -408,15 +458,21 @@ export function MessageBubble({
 
                       {/* Card content */}
                       <div className="flex-1 px-3 py-2.5 text-sm overflow-y-auto max-h-[360px] scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20 w-full min-w-0 max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
-                        {resp?.content ? (
+                        {parsedMulti.cleanText ? (
                           <>
-                            <MarkdownRenderer content={resp.content} />
+                            <MarkdownRenderer content={parsedMulti.cleanText} />
                             {resp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                           </>
                         ) : resp ? (
                           <TypingIndicator />
                         ) : null}
                       </div>
+
+                      {isLastMessage && resp?.status === "COMPLETED" && parsedMulti.questions.length > 0 && onFollowUpClick && (
+                        <div className="px-3 pb-2 pt-1">
+                          <FollowUpTabs questions={parsedMulti.questions} onClick={onFollowUpClick} />
+                        </div>
+                      )}
 
                       {/* Card actions */}
                       {resp?.status === "COMPLETED" && resp.content && (

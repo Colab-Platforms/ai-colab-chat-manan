@@ -40,6 +40,7 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [editVersionIndices, setEditVersionIndices] = useState<Record<number, number>>({});
   const [isNotFound, setIsNotFound] = useState(false);
+  const [initialPrompt, setInitialPrompt] = useState("");
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
   const modelsRestoredRef = useRef(false);
@@ -654,6 +655,7 @@ export default function ChatPage() {
         onEditMessage={handleEditMessage}
         editVersionIndices={editVersionIndices}
         onEditVersionChange={handleEditVersionChange}
+        onFollowUpClick={setInitialPrompt}
       />
       <ChatInput
         models={models}
@@ -662,6 +664,8 @@ export default function ChatPage() {
         maxModels={-1}
         onSend={(content, files, chatType) => sendMessage(content, undefined, chatType)}
         isSending={isSending}
+        initialPrompt={initialPrompt}
+        onPromptClear={() => setInitialPrompt("")}
       />
     </div>
   );
