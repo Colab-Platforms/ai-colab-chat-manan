@@ -1,70 +1,111 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import SpeechRecognition, {
-  useSpeechRecognition as useRSR,
-} from "react-speech-recognition";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type SpeechStatus = "idle" | "listening";
 
-interface UseSpeechRecognitionOptions {
-  onResult?: (transcript: string) => void;
-}
+export function useSpeechRecognition() {
+  const [isListening, setIsListening] = useState(false);
+  const [isSupported, setIsSupported] = useState(true);
+  const [transcript, setTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
 
-export function useSpeechRecognition(
-  options: UseSpeechRecognitionOptions = {},
-) {
-  const { onResult } = options;
-  const onResultRef = useRef(onResult);
-
-  useEffect(() => {
-    onResultRef.current = onResult;
-  }, [onResult]);
-
-  const {
-    transcript,
-    interimTranscript,
-    listening,
-    browserSupportsSpeechRecognition,
-    resetTranscript,
-  } = useRSR();
-
-  // Combine final + interim for realtime display
-  const prevTranscriptRef = useRef("");
+  const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
 
   useEffect(() => {
-    if (!listening) {
-      prevTranscriptRef.current = "";
+    if (typeof window === "undefined") return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setIsSupported(false);
       return;
     }
-    const combined = (
-      transcript + (interimTranscript ? " " + interimTranscript : "")
-    ).trim();
-    if (combined && combined !== prevTranscriptRef.current) {
-      prevTranscriptRef.current = combined;
-      onResultRef.current?.(combined);
-    }
-  }, [transcript, interimTranscript, listening]);
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-IN";
+
+    recognition.onresult = (event: any) => {
+      let final = "";
+      let interim = "";
+
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          final += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+
+      setTranscript(final);
+      setInterimTranscript(interim);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if we are still meant to be listening
+      if (isListeningRef.current) {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error("Failed to restart speech recognition", e);
+          setIsListening(false);
+          isListeningRef.current = false;
+        }
+      } else {
+        setIsListening(false);
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.onend = null;
+      recognition.stop();
+    };
+  }, []);
 
   const startListening = useCallback(() => {
-    resetTranscript();
-    SpeechRecognition.startListening({
-      continuous: true,
-      language: "en-IN",
-    });
-  }, [resetTranscript]);
+    if (!recognitionRef.current) return;
+    try {
+      setTranscript("");
+      setInterimTranscript("");
+      isListeningRef.current = true;
+      setIsListening(true);
+      recognitionRef.current.start();
+    } catch (e) {
+      console.error("Speech recognition start error", e);
+    }
+  }, []);
 
   const stopListening = useCallback(() => {
-    SpeechRecognition.stopListening();
-    resetTranscript();
-  }, [resetTranscript]);
+    if (!recognitionRef.current) return;
+    isListeningRef.current = false;
+    setIsListening(false);
+    recognitionRef.current.stop();
+  }, []);
+
+  const resetTranscript = useCallback(() => {
+    setTranscript("");
+    setInterimTranscript("");
+  }, []);
 
   return {
-    status: listening
-      ? ("listening" as SpeechStatus)
-      : ("idle" as SpeechStatus),
-    isSupported: browserSupportsSpeechRecognition,
+    transcript,
+    interimTranscript,
+    listening: isListening,
+    browserSupportsSpeechRecognition: isSupported,
     startListening,
     stopListening,
+    resetTranscript,
   };
 }

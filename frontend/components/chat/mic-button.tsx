@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import SpeechRecognition, {
-  useSpeechRecognition,
-} from "react-speech-recognition";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { Button } from "@/components/ui/button";
 import { Mic, Square } from "lucide-react";
 
@@ -31,6 +29,8 @@ export function MicButton({ onResult, onStart, onStop, hasText }: MicButtonProps
     listening,
     browserSupportsSpeechRecognition,
     resetTranscript,
+    startListening,
+    stopListening,
   } = useSpeechRecognition();
 
   // Fire onResult whenever transcript changes — combine final + interim
@@ -54,18 +54,15 @@ export function MicButton({ onResult, onStart, onStop, hasText }: MicButtonProps
 
   const handleClick = useCallback(() => {
     if (listening) {
-      SpeechRecognition.stopListening();
+      stopListening();
       resetTranscript();
       onStopRef.current?.();
     } else {
       resetTranscript();
-      SpeechRecognition.startListening({
-        continuous: true,
-        language: "en-IN", // Indian English handles both English and Hinglish
-      });
+      startListening();
       onStartRef.current?.();
     }
-  }, [listening, resetTranscript]);
+  }, [listening, resetTranscript, stopListening, startListening]);
 
   if (!browserSupportsSpeechRecognition) {
     return null; // Hide button if browser doesn't support it
