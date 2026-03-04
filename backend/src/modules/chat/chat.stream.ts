@@ -3,6 +3,7 @@ import prisma from "@root/prisma.js";
 import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
+import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
 
 async function checkTokenLimitsAndSetupStream(
   res: Response,
@@ -236,6 +237,83 @@ export async function streamChat(req: Request, res: Response) {
     );
     if (tokenLimits === null) return;
     const { maxCompletionTokens, trimmedHistory } = tokenLimits;
+
+    // -----------------------------------------------------------------------
+    // Predefined response intercept – platform identity / greetings / about
+    // -----------------------------------------------------------------------
+    const predefinedText = checkPredefinedResponse(content);
+    if (predefinedText) {
+      // Stream word-by-word with a small delay (same feel as OpenRouter)
+      const words = predefinedText.split(" ");
+      let streamedContent = "";
+      for (let i = 0; i < words.length; i++) {
+        const chunk = (i === 0 ? "" : " ") + words[i];
+        streamedContent += chunk;
+        res.write(
+          `data: ${JSON.stringify({ type: "token", content: chunk })}\n\n`,
+        );
+        if (typeof (res as any).flush === "function") (res as any).flush();
+        await new Promise((r) => setTimeout(r, 15));
+      }
+
+      // Calculate tokens using 3.5 chars/token estimator + model multiplier
+      const pTokens = Math.ceil(content.length / 3.5);
+      const cTokens = Math.ceil(predefinedText.length / 3.5);
+      const tTokens = pTokens + cTokens;
+      const tokenMultiplierPre = model.tokenMultiplier || 1.0;
+      const billablePromptPre = Math.ceil(pTokens * tokenMultiplierPre);
+      const billableCompletionPre = Math.ceil(cTokens * tokenMultiplierPre);
+      const billableTotalPre = billablePromptPre + billableCompletionPre;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: streamedContent },
+        });
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: streamedContent,
+            promptTokens: pTokens,
+            completionTokens: cTokens,
+            totalTokens: tTokens,
+            status: "COMPLETED",
+            completedAt: new Date(),
+          },
+        });
+        await tx.usageLog.create({
+          data: {
+            userId,
+            modelId: model.id,
+            chatId,
+            messageId: assistantMessage.id,
+            capability: (chatType || "STANDARD") as any,
+            promptTokens: pTokens,
+            completionTokens: cTokens,
+            totalTokens: tTokens,
+            billablePromptTokens: billablePromptPre,
+            billableCompletionTokens: billableCompletionPre,
+            billableTotalTokens: billableTotalPre,
+          },
+        });
+        await tx.userWallet.update({
+          where: { userId },
+          data: {
+            tokensRemaining: { decrement: billableTotalPre },
+            tokensUsed: { increment: billableTotalPre },
+          },
+        });
+      });
+
+      res.write(
+        `data: ${JSON.stringify({ type: "done", promptTokens: pTokens, completionTokens: cTokens, totalTokens: tTokens })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
 
     // Call OpenRouter with streaming
     let fullContent = "";
@@ -513,6 +591,82 @@ export async function regenerateChat(req: Request, res: Response) {
     );
     if (tokenLimits === null) return;
     const { maxCompletionTokens, trimmedHistory } = tokenLimits;
+
+    // -----------------------------------------------------------------------
+    // Predefined response intercept (regenerate path)
+    // -----------------------------------------------------------------------
+    const prevUserMsg = previousMessages[previousMessages.length - 1];
+    const originalContent =
+      prevUserMsg?.role === "USER" ? prevUserMsg.content : "";
+    const predefinedTextRegen = originalContent
+      ? checkPredefinedResponse(originalContent)
+      : null;
+    if (predefinedTextRegen) {
+      const words = predefinedTextRegen.split(" ");
+      let streamedContent = "";
+      for (let i = 0; i < words.length; i++) {
+        const chunk = (i === 0 ? "" : " ") + words[i];
+        streamedContent += chunk;
+        res.write(
+          `data: ${JSON.stringify({ type: "token", content: chunk })}\n\n`,
+        );
+        if (typeof (res as any).flush === "function") (res as any).flush();
+        await new Promise((r) => setTimeout(r, 15));
+      }
+
+      const pTokens = Math.ceil(originalContent.length / 3.5);
+      const cTokens = Math.ceil(predefinedTextRegen.length / 3.5);
+      const tTokens = pTokens + cTokens;
+      const tokenMultiplierRegen = model.tokenMultiplier || 1.0;
+      const billablePromptRegen = Math.ceil(pTokens * tokenMultiplierRegen);
+      const billableCompletionRegen = Math.ceil(cTokens * tokenMultiplierRegen);
+      const billableTotalRegen = billablePromptRegen + billableCompletionRegen;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId,
+            modelId: model.id,
+            content: streamedContent,
+            promptTokens: pTokens,
+            completionTokens: cTokens,
+            totalTokens: tTokens,
+            status: "COMPLETED",
+            completedAt: new Date(),
+          },
+        });
+        await tx.usageLog.create({
+          data: {
+            userId,
+            modelId: model.id,
+            chatId,
+            messageId,
+            capability: (chatType || "STANDARD") as any,
+            promptTokens: pTokens,
+            completionTokens: cTokens,
+            totalTokens: tTokens,
+            billablePromptTokens: billablePromptRegen,
+            billableCompletionTokens: billableCompletionRegen,
+            billableTotalTokens: billableTotalRegen,
+          },
+        });
+        await tx.userWallet.update({
+          where: { userId },
+          data: {
+            tokensRemaining: { decrement: billableTotalRegen },
+            tokensUsed: { increment: billableTotalRegen },
+          },
+        });
+      });
+
+      res.write(
+        `data: ${JSON.stringify({ type: "done", promptTokens: pTokens, completionTokens: cTokens, totalTokens: tTokens })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
 
     let fullContent = "";
     let promptTokens = 0;
