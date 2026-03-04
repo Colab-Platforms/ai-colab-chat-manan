@@ -1,5 +1,9 @@
 import api from "@/lib/api";
 
+export const healthService = {
+  get: () => api.get("/health"),
+};
+
 export const chatService = {
   create: (data: { title?: string; folderId?: number }) =>
     api.post("/chats", data),

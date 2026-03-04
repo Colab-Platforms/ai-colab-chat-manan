@@ -15,6 +15,9 @@ import modelProviderRoutes from "@/modules/model-provider/modelProvider.route.js
 
 const router = Router();
 
+router.get("/health", (_req, res) => {
+  res.send("AI Colab Chat Backend is running!");
+});
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/folders", folderRoutes);
