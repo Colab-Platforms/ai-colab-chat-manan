@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Bot, Copy, ThumbsUp, ThumbsDown, Share2, RefreshCw,
   ChevronLeft, ChevronRight, Check, Loader2, Pencil, X,
-  FileText, Image as ImageIcon
+  FileText, File, Image as ImageIcon
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "@/components/ui/button";
@@ -598,11 +598,95 @@ function CardActions({
 
 function Attachments({ message, isUser }: { message: Message; isUser?: boolean }) {
   if (!message.attachments?.length) return null;
+
+  const getAttachmentCategory = (fileName: string, mimeType: string) => {
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    const lowerMime = mimeType.toLowerCase();
+    if (lowerMime.startsWith("image/")) return "image";
+    if (lowerMime === "application/pdf" || ext === "pdf") return "pdf";
+    if (
+      lowerMime.includes("msword") ||
+      lowerMime.includes("wordprocessingml") ||
+      ext === "doc" ||
+      ext === "docx"
+    ) {
+      return "word";
+    }
+    if (
+      lowerMime.includes("powerpoint") ||
+      lowerMime.includes("presentationml") ||
+      ext === "ppt" ||
+      ext === "pptx"
+    ) {
+      return "presentation";
+    }
+    if (lowerMime === "text/markdown" || lowerMime === "text/x-markdown" || ext === "md") {
+      return "markdown";
+    }
+    if (lowerMime.startsWith("text/") || ext === "txt") return "text";
+    return "other";
+  };
+
+  const getAttachmentVisual = (fileName: string, mimeType: string) => {
+    const category = getAttachmentCategory(fileName, mimeType);
+    switch (category) {
+      case "image":
+        return {
+          icon: <ImageIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />,
+          chipClass:
+            "bg-violet-50/90 border-violet-200/80 text-violet-900 dark:bg-violet-500/10 dark:border-violet-400/30 dark:text-violet-100",
+          iconWrapClass: "bg-violet-100/80 dark:bg-violet-500/20",
+        };
+      case "pdf":
+        return {
+          icon: <FileText className="w-4 h-4 text-pink-700 dark:text-pink-300" />,
+          chipClass:
+            "bg-pink-50/90 border-pink-200/80 text-pink-900 dark:bg-pink-500/10 dark:border-pink-400/30 dark:text-pink-100",
+          iconWrapClass: "bg-pink-100/90 dark:bg-pink-500/20",
+        };
+      case "word":
+        return {
+          icon: <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">W</span>,
+          chipClass:
+            "bg-slate-100/90 border-slate-300/80 text-slate-900 dark:bg-slate-800/50 dark:border-slate-600/50 dark:text-slate-100",
+          iconWrapClass: "bg-white border border-black/20 dark:bg-black dark:border-white/25",
+        };
+      case "presentation":
+        return {
+          icon: <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">P</span>,
+          chipClass:
+            "bg-fuchsia-50/90 border-fuchsia-200/80 text-fuchsia-900 dark:bg-fuchsia-500/10 dark:border-fuchsia-400/30 dark:text-fuchsia-100",
+          iconWrapClass: "bg-white border border-black/20 dark:bg-black dark:border-white/25",
+        };
+      case "markdown":
+        return {
+          icon: <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />,
+          chipClass:
+            "bg-emerald-50/90 border-emerald-200/80 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100",
+          iconWrapClass: "bg-emerald-100/80 dark:bg-emerald-500/20",
+        };
+      case "text":
+        return {
+          icon: <FileText className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />,
+          chipClass:
+            "bg-cyan-50/90 border-cyan-200/80 text-cyan-900 dark:bg-cyan-500/10 dark:border-cyan-400/30 dark:text-cyan-100",
+          iconWrapClass: "bg-cyan-100/80 dark:bg-cyan-500/20",
+        };
+      default:
+        return {
+          icon: <File className="w-4 h-4 text-muted-foreground" />,
+          chipClass: "bg-muted/80 border-border/50 text-foreground",
+          iconWrapClass: "bg-primary/10",
+        };
+    }
+  };
+
   return (
     <div className={`flex flex-wrap gap-2 px-0 ${isUser ? 'mb-2 justify-end' : 'mt-2 justify-start'}`}>
       <PhotoProvider>
         {message.attachments.map((att) => {
           const isImage = att.mimeType.startsWith("image/");
+          const visual = getAttachmentVisual(att.fileName, att.mimeType);
           
           if (isImage) {
             return (
@@ -634,10 +718,10 @@ function Attachments({ message, isUser }: { message: Message; isUser?: boolean }
               key={att.id}
               href={downloadUrl}
               download={att.fileName}
-              className="group relative flex items-center gap-2 px-3 py-2 bg-muted/80 hover:bg-muted border border-border/50 rounded-xl text-xs transition-all duration-200 overflow-hidden"
+              className={`group relative flex items-center gap-2 px-3 py-2 border rounded-xl text-xs transition-all duration-200 overflow-hidden ${visual.chipClass}`}
             >
-              <div className="w-8 h-8 flex-shrink-0 rounded bg-primary/10 flex items-center justify-center text-primary">
-                <FileText className="w-4 h-4" />
+              <div className={`w-8 h-8 flex-shrink-0 rounded flex items-center justify-center ${visual.iconWrapClass}`}>
+                {visual.icon}
               </div>
               <div className="flex flex-col min-w-0 pr-2">
                 <span className="font-medium text-foreground truncate max-w-[120px] sm:max-w-[180px]">

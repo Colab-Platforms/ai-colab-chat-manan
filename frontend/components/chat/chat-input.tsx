@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare,
-  FileText, File, FileType
+  FileText, File
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -64,11 +64,86 @@ type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH"
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
 const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md,.ppt,.pptx";
 
-function FileAttachmentIcon({ mimeType }: { mimeType: string }) {
-  if (IMAGE_TYPES.includes(mimeType)) return <ImageIcon className="w-4 h-4 text-primary" />;
-  if (mimeType === "application/pdf") return <FileText className="w-4 h-4 text-red-500" />;
-  if (mimeType.includes("word")) return <FileType className="w-4 h-4 text-blue-500" />;
-  return <File className="w-4 h-4 text-muted-foreground" />;
+function getAttachmentCategory(fileName: string, mimeType: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const lowerMime = mimeType.toLowerCase();
+  if (lowerMime.startsWith("image/")) return "image";
+  if (lowerMime === "application/pdf" || ext === "pdf") return "pdf";
+  if (
+    lowerMime.includes("msword") ||
+    lowerMime.includes("wordprocessingml") ||
+    ext === "doc" ||
+    ext === "docx"
+  ) {
+    return "word";
+  }
+  if (
+    lowerMime.includes("powerpoint") ||
+    lowerMime.includes("presentationml") ||
+    ext === "ppt" ||
+    ext === "pptx"
+  ) {
+    return "presentation";
+  }
+  if (lowerMime === "text/markdown" || lowerMime === "text/x-markdown" || ext === "md") {
+    return "markdown";
+  }
+  if (lowerMime.startsWith("text/") || ext === "txt") return "text";
+  return "other";
+}
+
+function getAttachmentVisual(fileName: string, mimeType: string) {
+  const category = getAttachmentCategory(fileName, mimeType);
+  switch (category) {
+    case "image":
+      return {
+        icon: <ImageIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />,
+        chipClass:
+          "bg-violet-50/90 border-violet-200/80 text-violet-900 dark:bg-violet-500/10 dark:border-violet-400/30 dark:text-violet-100",
+        iconWrapClass: "bg-violet-100/80 dark:bg-violet-500/20",
+      };
+    case "pdf":
+      return {
+        icon: <FileText className="w-4 h-4 text-pink-700 dark:text-pink-300" />,
+        chipClass:
+          "bg-pink-50/90 border-pink-200/80 text-pink-900 dark:bg-pink-500/10 dark:border-pink-400/30 dark:text-pink-100",
+        iconWrapClass: "bg-pink-100/90 dark:bg-pink-500/20",
+      };
+    case "word":
+      return {
+        icon: <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">W</span>,
+        chipClass:
+          "bg-slate-100/90 border-slate-300/80 text-slate-900 dark:bg-slate-800/50 dark:border-slate-600/50 dark:text-slate-100",
+        iconWrapClass: "bg-white border border-black/20 dark:bg-black dark:border-white/25",
+      };
+    case "presentation":
+      return {
+        icon: <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">P</span>,
+        chipClass:
+          "bg-fuchsia-50/90 border-fuchsia-200/80 text-fuchsia-900 dark:bg-fuchsia-500/10 dark:border-fuchsia-400/30 dark:text-fuchsia-100",
+        iconWrapClass: "bg-white border border-black/20 dark:bg-black dark:border-white/25",
+      };
+    case "markdown":
+      return {
+        icon: <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />,
+        chipClass:
+          "bg-emerald-50/90 border-emerald-200/80 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100",
+        iconWrapClass: "bg-emerald-100/80 dark:bg-emerald-500/20",
+      };
+    case "text":
+      return {
+        icon: <FileText className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />,
+        chipClass:
+          "bg-cyan-50/90 border-cyan-200/80 text-cyan-900 dark:bg-cyan-500/10 dark:border-cyan-400/30 dark:text-cyan-100",
+        iconWrapClass: "bg-cyan-100/80 dark:bg-cyan-500/20",
+      };
+    default:
+      return {
+        icon: <File className="w-4 h-4 text-muted-foreground" />,
+        chipClass: "bg-muted border-border/50 text-foreground",
+        iconWrapClass: "bg-background/70 dark:bg-muted-foreground/10",
+      };
+  }
 }
 
 export function ChatInput({
@@ -368,10 +443,12 @@ export function ChatInput({
           {/* Attachment previews */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1">
-              {attachments.map((att) => (
+              {attachments.map((att) => {
+                const visual = getAttachmentVisual(att.fileName, att.mimeType);
+                return (
                 <div
                   key={att.id}
-                  className="relative flex items-center gap-2 px-2.5 py-1.5 bg-muted rounded-xl text-xs border border-border/50 group max-w-[200px]"
+                  className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs border group max-w-[200px] ${visual.chipClass}`}
                 >
                   {/* Image thumbnail or icon */}
                   {att.previewUrl ? (
@@ -381,8 +458,8 @@ export function ChatInput({
                       className="w-8 h-8 rounded-md object-cover flex-shrink-0"
                     />
                   ) : (
-                    <div className="flex-shrink-0">
-                      <FileAttachmentIcon mimeType={att.mimeType} />
+                    <div className={`flex-shrink-0 rounded-md p-1 ${visual.iconWrapClass}`}>
+                      {visual.icon}
                     </div>
                   )}
 
@@ -398,13 +475,13 @@ export function ChatInput({
                   {/* Remove button */}
                   <button
                     onClick={() => removeAttachment(att.id)}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    className="absolute -top-1.5 -right-1.5 z-10 h-5 w-5 rounded-full border border-white/30 bg-black text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shadow-sm dark:border-white/40 dark:bg-black dark:text-white"
                     title="Remove"
                   >
-                    <X className="w-2.5 h-2.5" />
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
