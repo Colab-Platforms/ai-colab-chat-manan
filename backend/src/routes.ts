@@ -17,7 +17,7 @@ import userPreferenceRoutes from "@/modules/user-preference/user-preference.rout
 const router = Router();
 
 router.get("/health", (_req, res) => {
-  res.send("AI Colab Chat Backend is running!");
+  res.send("Colab Platform ai Backend is running!");
 });
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);

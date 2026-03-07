@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import { chatService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
-import { Sparkles, AlertCircle } from "lucide-react";
+import { Sparkles, AlertCircle, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/context/theme-context";
+import { Button } from "@/components/ui/button";
 
 interface Message {
   id: number;
@@ -19,6 +21,7 @@ interface Message {
 export default function SharedChatPage() {
   const params = useParams();
   const shareId = params.shareId as string;
+  const { theme, toggleTheme } = useTheme();
 
   const [chat, setChat] = useState<any>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,7 +55,7 @@ export default function SharedChatPage() {
 
   if (loading) {
     return (
-      <div className="h-dvh flex items-center justify-center bg-background">
+      <div className="h-dvh flex items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -60,7 +63,7 @@ export default function SharedChatPage() {
 
   if (error || !chat) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-background text-center p-6 space-y-4">
+      <div className="h-dvh flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 text-center p-6 space-y-4">
         <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-2">
           <AlertCircle className="w-8 h-8 text-destructive" />
         </div>
@@ -71,33 +74,43 @@ export default function SharedChatPage() {
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-background selection:bg-primary/20">
-      {/* Header */}
-      <header className="h-14 border-b border-border/50 flex items-center px-6 shrink-0 justify-between bg-background/50 backdrop-blur-md sticky top-0 z-10">
-        <div className="flex flex-col">
+    <div className="h-dvh min-h-0 flex flex-col bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 selection:bg-primary/20">
+      <header className="h-14 border-b border-border/50 flex items-center px-6 shrink-0 justify-between bg-background/40 backdrop-blur-md sticky top-0 z-10">
+        <div className="flex items-center gap-5">
+          <div>
+          <Image src="/black.webp" alt="AI Colab" width={70} height={30} className="dark:hidden h-auto" />
+          <Image src="/white.webp" alt="AI Colab" width={70} height={30} className="hidden dark:block h-auto" />
+          </div>
+          <div className="flex flex-col">
           <h1 className="font-medium text-sm truncate max-w-[200px] md:max-w-md">{chat.title || "Shared Chat"}</h1>
           <span className="text-xs text-muted-foreground">Shared by {chat.user?.firstName} {chat.user?.lastName}</span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <Image src="/black.webp" alt="AI Colab" width={100} height={28} className="dark:hidden h-auto" />
-          <Image src="/white.webp" alt="AI Colab" width={100} height={28} className="hidden dark:block h-auto" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
+          
         </div>
       </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
         <MessageList 
           messages={messages} 
           activeModelTabs={activeModelTabs} 
           onModelTabChange={(msgId, modelId) => setActiveModelTabs(prev => ({ ...prev, [msgId]: modelId }))}
+          showSelectionTooltip={false}
+          sharedView={true}
         />
-        
-        {/* Faded overlay for read-only indicator */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
       </div>
       
-      {/* Read-only Footer */}
-      <div className="shrink-0 p-4 border-t border-border/50 bg-muted/30 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+      <div className="shrink-0 p-4 border-t border-border/50 bg-background/50 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 backdrop-blur-md">
         <Sparkles className="w-4 h-4 text-primary" />
         This is a read-only shared chat generated by AI Colab.
       </div>

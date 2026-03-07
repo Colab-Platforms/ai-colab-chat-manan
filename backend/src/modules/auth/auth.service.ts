@@ -9,7 +9,6 @@ import STATUS_CODES from "@/utils/statusCodes.js";
 import {
   RegisterBody,
   LoginBody,
-  AdminLoginBody,
   userSelectFields,
 } from "./auth.types.js";
 
@@ -174,63 +173,6 @@ class AuthService {
       },
       process.env.JWT_SECRET,
       { expiresIn: "90d" },
-    );
-
-    const { password: _, ...userWithoutPassword } = user;
-
-    return { user: formatUser(userWithoutPassword), token };
-  }
-
-  async loginAdmin(data: AdminLoginBody) {
-    const user = await prisma.user.findFirst({
-      where: { email: data.email, isDeleted: false },
-      include: {
-        userRoles: {
-          include: { role: true },
-        },
-      },
-    });
-
-    if (!user) {
-      throw new ApiError(
-        "Invalid email or password",
-        STATUS_CODES.UNAUTHORIZED,
-      );
-    }
-
-    const roleNames = user.userRoles.map((ur) => ur.role.name);
-    const highestRole = getHighestRole(roleNames);
-
-    if (highestRole === "USER") {
-      throw new ApiError(
-        "Access denied. You do not have admin privileges",
-        STATUS_CODES.FORBIDDEN,
-      );
-    }
-
-    const isPasswordValid = await comparePassword(data.password, user.password);
-    if (!isPasswordValid) {
-      throw new ApiError(
-        "Invalid email or password",
-        STATUS_CODES.UNAUTHORIZED,
-      );
-    }
-
-    if (!process.env.JWT_SECRET) {
-      throw new ApiError(
-        "JWT secret is not defined",
-        STATUS_CODES.SERVER_ERROR,
-      );
-    }
-
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: highestRole,
-        timezone: user.timezone,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" },
     );
 
     const { password: _, ...userWithoutPassword } = user;

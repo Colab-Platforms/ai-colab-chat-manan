@@ -6,7 +6,6 @@ import { validateCreateAttachmentSchema } from "./attachment.validators.js";
 
 const attachmentService = new AttachmentService();
 
-/** POST /attachments/presend — upload before a message exists */
 export const presendAttachment = async (
   req: Request,
   res: Response,

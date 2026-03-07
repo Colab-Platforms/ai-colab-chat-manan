@@ -33,17 +33,6 @@ const loginSchema = Joi.object({
     }),
 });
 
-const adminLoginSchema = Joi.object({
-    email: Joi.string().email().required().messages({
-        "string.email": "A valid email is required",
-        "string.empty": "Email is required",
-        "any.required": "Email is required",
-    }),
-    password: Joi.string().required().messages({
-        "string.empty": "Password is required",
-        "any.required": "Password is required",
-    }),
-});
 
 export const validateRegisterSchema = (data: unknown) => {
     return registerSchema.validate(data, { abortEarly: false });
@@ -51,8 +40,4 @@ export const validateRegisterSchema = (data: unknown) => {
 
 export const validateLoginSchema = (data: unknown) => {
     return loginSchema.validate(data, { abortEarly: false });
-};
-
-export const validateAdminLoginSchema = (data: unknown) => {
-    return adminLoginSchema.validate(data, { abortEarly: false });
 };

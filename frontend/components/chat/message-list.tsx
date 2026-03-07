@@ -24,6 +24,8 @@ interface MessageListProps {
   editVersionIndices?: Record<number, number>;
   onEditVersionChange?: (rootMessageId: number, versionIndex: number) => void;
   onFollowUpClick?: (question: string) => void;
+  showSelectionTooltip?: boolean;
+  sharedView?: boolean;
 }
 
 /**
@@ -120,7 +122,8 @@ function processMessagesWithVersions(
 
 export function MessageList({
   messages, activeModelTabs, onModelTabChange, onRegenerate, onFeedback,
-  onEditMessage, editVersionIndices = {}, onEditVersionChange, onFollowUpClick
+  onEditMessage, editVersionIndices = {}, onEditVersionChange, onFollowUpClick,
+  showSelectionTooltip = true, sharedView = false
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -136,7 +139,7 @@ export function MessageList({
 
   return (
     <>
-      <SelectionContextTooltip />
+      {showSelectionTooltip && <SelectionContextTooltip />}
       <div ref={containerRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto py-4">
           {processed.map((item, idx) => (
@@ -153,6 +156,7 @@ export function MessageList({
               onEditVersionChange={onEditVersionChange}
               isLastMessage={idx === processed.length - 1}
               onFollowUpClick={onFollowUpClick}
+              sharedView={sharedView}
             />
           ))}
           <div ref={bottomRef} />

@@ -445,6 +445,24 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
     try {
       const res = await chatService.share(chatId);
       const shareUrl = `${window.location.origin}/share/${res.data.data.shareId}`;
+      const chatTitle = chats.find((chat) => chat.id === chatId)?.title || "AI Colab Chat";
+
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          await navigator.share({
+            title: chatTitle,
+            text: "Check out this chat on AI Colab",
+            url: shareUrl,
+          });
+          toast.success("Chat shared successfully!");
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return;
+          }
+        }
+      }
+
       await navigator.clipboard.writeText(shareUrl);
       toast.success("Share link copied to clipboard!");
     } catch {

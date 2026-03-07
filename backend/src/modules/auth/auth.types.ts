@@ -12,11 +12,6 @@ export interface LoginBody {
     password: string;
 }
 
-export interface AdminLoginBody {
-    email: string;
-    password: string;
-}
-
 export interface JwtPayload {
     id: number;
     role: "USER" | "ADMIN" | "SUPERADMIN";

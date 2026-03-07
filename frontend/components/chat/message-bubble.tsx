@@ -86,12 +86,13 @@ interface MessageBubbleProps {
   onEditVersionChange?: (rootMessageId: number, versionIndex: number) => void;
   isLastMessage?: boolean;
   onFollowUpClick?: (question: string) => void;
+  sharedView?: boolean;
 }
 
 export function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
-  isLastMessage, onFollowUpClick
+  isLastMessage, onFollowUpClick, sharedView = false
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
@@ -279,7 +280,8 @@ export function MessageBubble({
               </div>
               
               {/* Action buttons below the message - left aligned */}
-              <div className="flex items-center gap-1 mt-1 justify-end">
+              {!sharedView && (
+                <div className="flex items-center gap-1 mt-1 justify-end">
                 {/* Version navigation */}
                 {hasVersions && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full mr-1 opacity-100 sm:opacity-0 group-hover/user:opacity-100 transition-opacity">
@@ -322,7 +324,8 @@ export function MessageBubble({
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
                 )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -371,6 +374,7 @@ export function MessageBubble({
               verIdx={singleVerIdx}
               onVersionChange={(d) => uniqueModels[0] && handleVersionChange(uniqueModels[0].id, d)}
               onFeedback={onFeedback}
+              sharedView={sharedView}
               onRegenerate={(msgId, mid) => {
                 setVersionIndices(prev => { const n = { ...prev }; delete n[mid]; return n; });
                 onRegenerate?.(msgId, mid);
@@ -491,6 +495,7 @@ export function MessageBubble({
                             verIdx={verIdx}
                             onVersionChange={(d) => handleVersionChange(model.id, d)}
                             onFeedback={onFeedback}
+                            sharedView={sharedView}
                             onRegenerate={(msgId, mid) => {
                               setVersionIndices(prev => { const n = { ...prev }; delete n[mid]; return n; });
                               onRegenerate?.(msgId, mid);
@@ -541,7 +546,7 @@ export function MessageBubble({
 
 // ── Shared action bar ────────────────────────────────────────────────────────
 function CardActions({
-  resp, modelId, messageId, modelResps, verIdx, onVersionChange, onFeedback, onRegenerate,
+  resp, modelId, messageId, modelResps, verIdx, onVersionChange, onFeedback, onRegenerate, sharedView = false,
 }: {
   resp: ModelResponse;
   modelId: number;
@@ -551,6 +556,7 @@ function CardActions({
   onVersionChange: (dir: 1 | -1) => void;
   onFeedback?: (responseId: number, isLiked: boolean | null) => void;
   onRegenerate?: (messageId: number, modelId: number) => void;
+  sharedView?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 flex-wrap">
@@ -569,16 +575,20 @@ function CardActions({
         onClick={() => { navigator.clipboard.writeText(resp.content!); toast.success("Copied"); }}>
         <Copy className="w-3.5 h-3.5" />
       </Button>
-      <Button variant="ghost" size="icon"
-        className={`h-7 w-7 rounded-full ${resp.isLiked === true ? "text-green-500 bg-green-500/10" : "text-muted-foreground hover:bg-muted/80"}`}
-        onClick={() => onFeedback?.(resp.id, resp.isLiked === true ? null : true)}>
-        <ThumbsUp className="w-3.5 h-3.5" />
-      </Button>
-      <Button variant="ghost" size="icon"
-        className={`h-7 w-7 rounded-full ${resp.isLiked === false ? "text-red-500 bg-red-500/10" : "text-muted-foreground hover:bg-muted/80"}`}
-        onClick={() => onFeedback?.(resp.id, resp.isLiked === false ? null : false)}>
-        <ThumbsDown className="w-3.5 h-3.5" />
-      </Button>
+      {!sharedView && (
+        <Button variant="ghost" size="icon"
+          className={`h-7 w-7 rounded-full ${resp.isLiked === true ? "text-green-500 bg-green-500/10" : "text-muted-foreground hover:bg-muted/80"}`}
+          onClick={() => onFeedback?.(resp.id, resp.isLiked === true ? null : true)}>
+          <ThumbsUp className="w-3.5 h-3.5" />
+        </Button>
+      )}
+      {!sharedView && (
+        <Button variant="ghost" size="icon"
+          className={`h-7 w-7 rounded-full ${resp.isLiked === false ? "text-red-500 bg-red-500/10" : "text-muted-foreground hover:bg-muted/80"}`}
+          onClick={() => onFeedback?.(resp.id, resp.isLiked === false ? null : false)}>
+          <ThumbsDown className="w-3.5 h-3.5" />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted/80"
         onClick={async () => {
           if (navigator.share) { try { await navigator.share({ title: "AI Colab", text: resp.content! }); } catch { /**/ } }
@@ -586,10 +596,12 @@ function CardActions({
         }}>
         <Share2 className="w-3.5 h-3.5" />
       </Button>
-      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted/80"
-        onClick={() => onRegenerate?.(messageId, modelId)}>
-        <RefreshCw className="w-3.5 h-3.5" />
-      </Button>
+      {!sharedView && (
+        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted/80"
+          onClick={() => onRegenerate?.(messageId, modelId)}>
+          <RefreshCw className="w-3.5 h-3.5" />
+        </Button>
+      )}
     </div>
   );
 }

@@ -5,9 +5,9 @@ import * as userController from "./user.controller.js";
 
 const router = Router();
 
+router.get("/", auth("ADMIN", "SUPERADMIN"), userController.listUsers);
 router.get("/profile", auth("USER", "ADMIN", "SUPERADMIN"), userController.getProfile);
 router.put("/profile", auth("USER", "ADMIN", "SUPERADMIN"), upload.single("profileImage"), userController.updateProfile);
-router.get("/", auth("ADMIN", "SUPERADMIN"), userController.listUsers);
 router.delete("/:id", auth("USER", "ADMIN", "SUPERADMIN"), userController.softDeleteUser);
 router.put("/:id", auth("ADMIN", "SUPERADMIN"), userController.adminUpdateUser);
 router.get("/:id/usage", auth("ADMIN", "SUPERADMIN"), userController.getUserUsage);
