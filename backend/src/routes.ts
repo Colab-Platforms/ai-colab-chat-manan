@@ -12,7 +12,7 @@ import planRoutes from "@/modules/plan/plan.route.js";
 import usageLogRoutes from "@/modules/usage-log/usageLog.route.js";
 import modelRoutes from "@/modules/model/model.route.js";
 import modelProviderRoutes from "@/modules/model-provider/modelProvider.route.js";
-import userPreferenceRoutes from "@/routes/user-preference.routes.js";
+import userPreferenceRoutes from "@/modules/user-preference/user-preference.route.js";
 
 const router = Router();
 

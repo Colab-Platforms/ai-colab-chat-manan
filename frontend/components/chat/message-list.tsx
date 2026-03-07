@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./message-bubble";
+import { SelectionContextTooltip } from "./selection-context-tooltip";
 
 interface Message {
   id: number;
@@ -134,26 +135,29 @@ export function MessageList({
   const processed = processMessagesWithVersions(messages, editVersionIndices);
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto py-4">
-        {processed.map((item, idx) => (
-          <MessageBubble
-            key={item.message.id}
-            message={item.message}
-            activeModelTab={activeModelTabs[item.message.id]}
-            onModelTabChange={(modelId) => onModelTabChange(item.message.id, modelId)}
-            onRegenerate={onRegenerate}
-            onFeedback={onFeedback}
-            onEditMessage={onEditMessage}
-            editVersions={item.editVersions}
-            editVersionIndex={item.editVersionIndex}
-            onEditVersionChange={onEditVersionChange}
-            isLastMessage={idx === processed.length - 1}
-            onFollowUpClick={onFollowUpClick}
-          />
-        ))}
-        <div ref={bottomRef} />
+    <>
+      <SelectionContextTooltip />
+      <div ref={containerRef} className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto py-4">
+          {processed.map((item, idx) => (
+            <MessageBubble
+              key={item.message.id}
+              message={item.message}
+              activeModelTab={activeModelTabs[item.message.id]}
+              onModelTabChange={(modelId) => onModelTabChange(item.message.id, modelId)}
+              onRegenerate={onRegenerate}
+              onFeedback={onFeedback}
+              onEditMessage={onEditMessage}
+              editVersions={item.editVersions}
+              editVersionIndex={item.editVersionIndex}
+              onEditVersionChange={onEditVersionChange}
+              isLastMessage={idx === processed.length - 1}
+              onFollowUpClick={onFollowUpClick}
+            />
+          ))}
+          <div ref={bottomRef} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

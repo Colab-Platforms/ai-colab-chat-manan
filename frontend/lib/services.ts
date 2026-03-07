@@ -107,6 +107,8 @@ export const attachmentService = {
 
 export const userPreferenceService = {
   getPreferences: () => api.get("/preferences"),
-  updatePreferences: (data: { enableFollowUpQuestions: boolean }) =>
-    api.put("/preferences", data),
+  updatePreferences: (data: {
+    enableFollowUpQuestions?: boolean;
+    contextMemory?: string[];
+  }) => api.put("/preferences", data),
 };

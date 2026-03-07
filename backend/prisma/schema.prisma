@@ -47,6 +47,7 @@ model UserPreference {
   userId                  Int      @unique
   user                    User     @relation(fields: [userId], references: [id])
   enableFollowUpQuestions Boolean  @default(true)
+  contextMemory           String[] @default([])
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { notFound, useParams, useSearchParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { chatService, modelService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
@@ -28,7 +28,6 @@ interface Message {
 
 export default function ChatPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const chatId = Number(params.id);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -108,19 +107,37 @@ export default function ChatPage() {
         const storedModelId = localStorage.getItem("preferredModelId");
         const parsedId = storedModelId ? Number(storedModelId) : null;
         
+        let resolvedModelIds: number[];
         if (parsedId && activeModels.find((m: any) => m.id === parsedId)) {
-          setSelectedModels([parsedId]);
+          resolvedModelIds = [parsedId];
         } else {
           const defaultModels = activeModels.filter((m: any) => m.defaultForCapabilities?.includes("STANDARD"));
-          if (defaultModels.length > 0) {
-            setSelectedModels(defaultModels.map((m: any) => m.id));
-          } else {
-            setSelectedModels([activeModels[0].id]);
+          resolvedModelIds = defaultModels.length > 0
+            ? defaultModels.map((m: any) => m.id)
+            : [activeModels[0].id];
+        }
+        setSelectedModels(resolvedModelIds);
+
+        // Fire pending first message from new-chat redirect (sessionStorage handoff)
+        if (!firstMessageSent.current) {
+          const raw = sessionStorage.getItem(`pending_chat_${chatId}`);
+          if (raw) {
+            firstMessageSent.current = true;
+            sessionStorage.removeItem(`pending_chat_${chatId}`);
+            try {
+              const { content, modelIds, chatType } = JSON.parse(raw);
+              // Use the model IDs from the home page if valid, otherwise fall back to resolved
+              const targetIds = Array.isArray(modelIds) && modelIds.length > 0 ? modelIds : resolvedModelIds;
+              setSelectedModels(targetIds);
+              // Use setTimeout to ensure state has settled before sending
+              setTimeout(() => sendMessage(content, targetIds, chatType), 0);
+            } catch { /* ignore */ }
           }
         }
       }
     } catch { /* ignore */ }
-  }, [selectedModels.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, selectedModels.length]);
 
   const handleModelChange = (ids: number[]) => {
     setSelectedModels(ids);
@@ -135,21 +152,6 @@ export default function ChatPage() {
     fetchChat();
   }, [fetchModels, fetchChat]);
 
-  // Handle first message from redirect
-  useEffect(() => {
-    const firstMessage = searchParams.get("firstMessage");
-    const modelIds = searchParams.get("models");
-    const initChatType = searchParams.get("chatType");
-    if (!firstMessage || firstMessageSent.current || models.length === 0) return;
-    firstMessageSent.current = true;
-
-    const modelIdList = modelIds?.split(",").map(Number).filter(Boolean) || selectedModels;
-    if (modelIdList.length > 0) setSelectedModels(modelIdList);
-
-    sendMessage(firstMessage, modelIdList, initChatType || "STANDARD");
-    window.history.replaceState({}, "", `/c/${chatId}`);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models, searchParams]);
 
   // Stream a single model's response
   const streamSingleModel = (

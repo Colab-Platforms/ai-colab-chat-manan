@@ -69,7 +69,12 @@ export default function NewChatPage() {
       const chatRes = await chatService.create({ title: content.substring(0, 50) });
       const chatId = chatRes.data.data.id;
       window.dispatchEvent(new Event('refresh-chats'));
-      router.push(`/c/${chatId}?firstMessage=${encodeURIComponent(content)}&models=${selectedModels.join(",")}&chatType=${chatType || "STANDARD"}`);
+      // Store pending first message in sessionStorage — never in URL params
+      sessionStorage.setItem(
+        `pending_chat_${chatId}`,
+        JSON.stringify({ content, modelIds: selectedModels, chatType: chatType || "STANDARD" })
+      );
+      router.push(`/c/${chatId}`);
     } catch {
       setIsSending(false);
     }

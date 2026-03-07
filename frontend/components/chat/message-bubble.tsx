@@ -271,7 +271,7 @@ export function MessageBubble({
             // Display mode
             <div className="group/user relative">
               <div className="bg-primary dark:bg-muted dark:border dark:border-border/50 text-primary-foreground dark:text-foreground rounded-2xl rounded-br-md px-4 py-2.5 break-words">
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <p data-message-text="true" className="text-sm whitespace-pre-wrap">{message.content}</p>
               </div>
               
               {/* Action buttons below the message - left aligned */}
@@ -340,7 +340,7 @@ export function MessageBubble({
           <div className="bg-muted/50 rounded-2xl rounded-tl-md px-4 py-2.5 break-words overflow-hidden w-full">
             {singleResp ? (
               parsedSingle.cleanText ? (
-                <div className="text-sm w-full max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
+                <div data-message-text="true" className="text-sm w-full max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
                   <MarkdownRenderer content={parsedSingle.cleanText} />
                   {singleResp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                 </div>
@@ -460,7 +460,9 @@ export function MessageBubble({
                       <div className="flex-1 px-3 py-2.5 text-sm overflow-y-auto max-h-[360px] scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20 w-full min-w-0 max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
                         {parsedMulti.cleanText ? (
                           <>
-                            <MarkdownRenderer content={parsedMulti.cleanText} />
+                            <div data-message-text="true">
+                              <MarkdownRenderer content={parsedMulti.cleanText} />
+                            </div>
                             {resp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                           </>
                         ) : resp ? (

@@ -218,7 +218,7 @@ export async function streamChat(req: Request, res: Response) {
     });
 
     const conversationHistory: {
-      role: "user" | "assistant";
+      role: "user" | "assistant" | "system";
       content: string;
     }[] = [];
     for (const msg of previousMessages) {
@@ -237,6 +237,13 @@ export async function streamChat(req: Request, res: Response) {
     });
     const enableFollowUpQuestions =
       userPreference?.enableFollowUpQuestions !== false;
+
+    // Prepend context memory as a system message (zero extra queries — already fetched above)
+    const contextItems = userPreference?.contextMemory || [];
+    if (contextItems.length > 0) {
+      const systemContent = `User context (personalisation — always keep in mind):\n${contextItems.map((c) => `- ${c}`).join("\n")}`;
+      conversationHistory.unshift({ role: "system", content: systemContent });
+    }
 
     const tokenLimits = await checkTokenLimitsAndSetupStream(
       res,
@@ -580,7 +587,7 @@ export async function regenerateChat(req: Request, res: Response) {
 
     const previousMessages = allMessages.slice(0, targetIndex);
     const conversationHistory: {
-      role: "user" | "assistant";
+      role: "user" | "assistant" | "system";
       content: string;
     }[] = [];
     for (const msg of previousMessages) {
@@ -599,6 +606,13 @@ export async function regenerateChat(req: Request, res: Response) {
     });
     const enableFollowUpQuestions =
       userPreference?.enableFollowUpQuestions !== false;
+
+    // Prepend context memory as a system message
+    const contextItemsRegen = userPreference?.contextMemory || [];
+    if (contextItemsRegen.length > 0) {
+      const systemContent = `User context (personalisation — always keep in mind):\n${contextItemsRegen.map((c) => `- ${c}`).join("\n")}`;
+      conversationHistory.unshift({ role: "system", content: systemContent });
+    }
 
     const prevMessageId =
       previousMessages[previousMessages.length - 1]?.id || 0;
