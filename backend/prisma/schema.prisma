@@ -184,6 +184,7 @@ enum ModelCapability {
   DEEP_RESEARCH
   IMAGE_GENERATION
   WEB_SEARCH
+  VISION
 }
 
 enum ResponseStatus {

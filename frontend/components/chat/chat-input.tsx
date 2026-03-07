@@ -142,6 +142,33 @@ export function ChatInput({
       onModelChange(newSelectedModels);
     }
   };
+
+  // Automatically enforce VISION capability if image files are attached
+  useEffect(() => {
+    const hasImageAttachment = attachments.some(a => a.mimeType.startsWith('image/'));
+
+    if (hasImageAttachment) {
+      const validSelectedModels = selectedModels.filter((id) => {
+        const m = models.find((m) => m.id === id);
+        return m?.capabilities?.includes("VISION");
+      });
+
+      if (validSelectedModels.length !== selectedModels.length) {
+        if (validSelectedModels.length > 0) {
+          onModelChange(validSelectedModels);
+        } else {
+          // Fallback to the first VISION-capable model
+          const fallback = models.find((m) => m.capabilities?.includes("VISION"));
+          if (fallback) {
+            onModelChange([fallback.id]);
+            toast.info(`Switched to ${fallback.name} because it supports reading file attachments.`);
+          } else {
+            toast.warning("No models found that explicitly support file attachments (VISION capability).");
+          }
+        }
+      }
+    }
+  }, [attachments.length, selectedModels, models, onModelChange]);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -503,6 +530,10 @@ export function ChatInput({
                 <div className="max-h-[250px] overflow-y-auto scrollbar-thin">
                   {models
                     .filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(chatType))
+                    .filter(m => {
+                      const hasImage = attachments.some(a => a.mimeType.startsWith('image/'));
+                      return !hasImage || (m.capabilities && m.capabilities.includes("VISION"));
+                    })
                     .map((model) => (
                     <DropdownMenuItem 
                       key={model.id} 

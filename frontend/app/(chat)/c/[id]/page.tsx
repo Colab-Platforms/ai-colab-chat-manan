@@ -310,7 +310,7 @@ export default function ChatPage() {
         const prepRes = await fetch(`${apiUrl}/chats/${chatId}/prepare-multi`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, attachmentIds }),
         });
 
         if (!prepRes.ok) {

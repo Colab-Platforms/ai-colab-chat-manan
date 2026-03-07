@@ -11,6 +11,7 @@ const createModelSchema = Joi.object({
         "DEEP_RESEARCH",
         "IMAGE_GENERATION",
         "WEB_SEARCH",
+        "VISION",
       ),
     )
     .min(1)
@@ -25,6 +26,7 @@ const createModelSchema = Joi.object({
         "DEEP_RESEARCH",
         "IMAGE_GENERATION",
         "WEB_SEARCH",
+        "VISION",
       ),
     )
     .optional(),
@@ -41,6 +43,7 @@ const updateModelSchema = Joi.object({
         "DEEP_RESEARCH",
         "IMAGE_GENERATION",
         "WEB_SEARCH",
+        "VISION",
       ),
     )
     .min(1)
@@ -55,6 +58,7 @@ const updateModelSchema = Joi.object({
         "DEEP_RESEARCH",
         "IMAGE_GENERATION",
         "WEB_SEARCH",
+        "VISION",
       ),
     )
     .optional(),

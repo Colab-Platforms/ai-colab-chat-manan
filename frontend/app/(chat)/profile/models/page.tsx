@@ -16,6 +16,7 @@ const CAPABILITY_OPTIONS = [
   { value: "DEEP_RESEARCH", label: "Deep Research", icon: Sparkles, color: "bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800" },
   { value: "IMAGE_GENERATION", label: "Image Gen", icon: ImageIcon, color: "bg-pink-500/10 text-pink-600 border-pink-200 dark:border-pink-800" },
   { value: "WEB_SEARCH", label: "Web Search", icon: Globe, color: "bg-green-500/10 text-green-600 border-green-200 dark:border-green-800" },
+  { value: "VISION", label: "Vision", icon: Eye, color: "bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800" },
 ];
 
 function CapabilityToggle({

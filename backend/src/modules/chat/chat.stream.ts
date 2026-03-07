@@ -250,12 +250,10 @@ export async function streamChat(req: Request, res: Response) {
     }
 
     if (attachmentIds && attachmentIds.length > 5) {
-      res
-        .status(400)
-        .json({
-          status: false,
-          message: "Maximum 5 attachments allowed per message",
-        });
+      res.status(400).json({
+        status: false,
+        message: "Maximum 5 attachments allowed per message",
+      });
       return;
     }
 
@@ -1036,7 +1034,10 @@ export async function regenerateChat(req: Request, res: Response) {
 export async function prepareMulti(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
-  const { content } = req.body as { content: string };
+  const { content, attachmentIds } = req.body as {
+    content: string;
+    attachmentIds?: number[];
+  };
 
   try {
     if (!content?.trim()) {
@@ -1056,6 +1057,10 @@ export async function prepareMulti(req: Request, res: Response) {
     const userMessage = await prisma.message.create({
       data: { chatId, role: "USER", content: content.trim() },
     });
+
+    if (attachmentIds && attachmentIds.length > 0) {
+      await attachmentService.linkToMessage(attachmentIds, userMessage.id);
+    }
 
     // Update chat title if first message
     const messageCount = await prisma.message.count({ where: { chatId } });
