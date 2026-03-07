@@ -13,7 +13,16 @@ export function SelectionContextTooltip() {
   const [pos, setPos] = useState<Pos | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 768px), (pointer: coarse)");
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   /** Recalculate tooltip position from the live selection rect */
   const updatePos = useCallback(() => {
@@ -36,17 +45,20 @@ export function SelectionContextTooltip() {
     }
 
     const rect = range.getBoundingClientRect();
-    setPos({ text, x: rect.left + rect.width / 2, y: rect.top - 10 });
+    const x = Math.min(window.innerWidth - 16, Math.max(16, rect.left + rect.width / 2));
+    const y = isMobile ? rect.bottom + 12 : rect.top - 10;
+    setPos({ text, x, y });
     setSaved(false);
-  }, []);
+  }, [isMobile]);
 
   useEffect(() => {
     document.addEventListener("mouseup", updatePos);
+    document.addEventListener("touchend", updatePos, { passive: true });
     document.addEventListener("selectionchange", updatePos);
-    // Re-anchor on any scroll so tooltip follows the selection
     window.addEventListener("scroll", updatePos, true);
     return () => {
       document.removeEventListener("mouseup", updatePos);
+      document.removeEventListener("touchend", updatePos);
       document.removeEventListener("selectionchange", updatePos);
       window.removeEventListener("scroll", updatePos, true);
     };
@@ -63,8 +75,21 @@ export function SelectionContextTooltip() {
         }
       }, 50);
     };
+    const onTouchStart = (e: TouchEvent) => {
+      if (tooltipRef.current?.contains(e.target as Node)) return;
+      setTimeout(() => {
+        if (!window.getSelection()?.toString().trim()) {
+          setPos(null);
+          setSaved(false);
+        }
+      }, 50);
+    };
     document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("touchstart", onTouchStart);
+    };
   }, []);
 
   const handleAdd = async () => {
@@ -108,7 +133,11 @@ export function SelectionContextTooltip() {
     <div
       ref={tooltipRef}
       className="fixed z-[9999] pointer-events-none"
-      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, -100%)" }}
+      style={{
+        left: pos.x,
+        top: pos.y,
+        transform: isMobile ? "translate(-50%, 0)" : "translate(-50%, -100%)",
+      }}
     >
       <button
         onClick={handleAdd}
@@ -142,14 +171,15 @@ export function SelectionContextTooltip() {
         )}
       </button>
 
-      {/* Arrow */}
-      <div
-        className={[
-          "absolute left-1/2 -translate-x-1/2 top-full w-0 h-0",
-          "border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px]",
-          saved ? "border-t-emerald-500" : overLimit ? "border-t-border/60" : "border-t-foreground",
-        ].join(" ")}
-      />
+      {!isMobile && (
+        <div
+          className={[
+            "absolute left-1/2 -translate-x-1/2 top-full w-0 h-0",
+            "border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px]",
+            saved ? "border-t-emerald-500" : overLimit ? "border-t-border/60" : "border-t-foreground",
+          ].join(" ")}
+        />
+      )}
     </div>
   );
 }
