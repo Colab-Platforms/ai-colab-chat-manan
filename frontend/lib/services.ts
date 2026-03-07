@@ -95,6 +95,13 @@ export const modelProviderService = {
 };
 
 export const attachmentService = {
+  presend: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post("/attachments/presend", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
   upload: (messageId: number, file: File) => {
     const formData = new FormData();
     formData.append("messageId", messageId.toString());
@@ -103,6 +110,7 @@ export const attachmentService = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  delete: (id: number) => api.delete(`/attachments/${id}`),
 };
 
 export const userPreferenceService = {

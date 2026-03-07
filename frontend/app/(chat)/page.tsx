@@ -61,7 +61,7 @@ export default function NewChatPage() {
     fetchModels();
   }, [fetchModels]);
 
-  const handleSend = async (content: string, files?: File[], chatType?: string) => {
+  const handleSend = async (content: string, attachmentIds?: number[], chatType?: string, attachmentObjects?: any[]) => {
     if (isSending) return;
     setIsSending(true);
 
@@ -72,7 +72,7 @@ export default function NewChatPage() {
       // Store pending first message in sessionStorage — never in URL params
       sessionStorage.setItem(
         `pending_chat_${chatId}`,
-        JSON.stringify({ content, modelIds: selectedModels, chatType: chatType || "STANDARD" })
+        JSON.stringify({ content, modelIds: selectedModels, chatType: chatType || "STANDARD", attachmentIds, attachmentObjects })
       );
       router.push(`/c/${chatId}`);
     } catch {

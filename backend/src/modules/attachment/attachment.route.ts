@@ -1,10 +1,31 @@
 import { Router } from "express";
 import { auth } from "@/middlewares/authMiddleware.js";
-import { uploadAttachment as multerUpload } from "@/middlewares/uploadMiddleware.js";
+import { upload } from "@/middlewares/upload.js";
 import * as attachmentController from "./attachment.controller.js";
 
 const router = Router();
 
-router.post("/", auth("USER", "ADMIN", "SUPERADMIN"), multerUpload.single("file"), attachmentController.uploadAttachment);
+// New presend route — upload file to Cloudinary before a message exists
+router.post(
+  "/presend",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  upload.single("file"),
+  attachmentController.presendAttachment,
+);
+
+// Legacy route — tied to an existing messageId
+router.post(
+  "/",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  upload.single("file"),
+  attachmentController.uploadAttachment,
+);
+
+// Delete presend attachment
+router.delete(
+  "/:id",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  attachmentController.deleteAttachment,
+);
 
 export default router;

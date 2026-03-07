@@ -4,6 +4,120 @@ import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
 import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
+import AttachmentService from "@/modules/attachment/attachment.service.js";
+
+const attachmentService = new AttachmentService();
+
+// ---------------------------------------------------------------------------
+// Helpers for building OpenRouter multipart message content from attachments
+// ---------------------------------------------------------------------------
+
+const IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const PDF_MIME_TYPES = ["application/pdf"];
+const WORD_MIME_TYPES = [
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+const TEXT_MIME_TYPES = ["text/plain", "text/markdown", "text/x-markdown"];
+
+interface AttachmentRecord {
+  id: number;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+}
+
+/**
+ * Fetch a URL and return a base64 data URL string.
+ */
+async function urlToBase64DataUrl(
+  url: string,
+  mimeType: string,
+): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok)
+    throw new Error(`Failed to fetch attachment: ${response.status}`);
+  const buffer = await response.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString("base64");
+  return `data:${mimeType};base64,${base64}`;
+}
+
+/**
+ * Build the OpenRouter content-parts array for a user message that has attachments.
+ * Returns:
+ *   - contentParts  : array to use as message.content
+ *   - extraPlugins  : any plugins needed (e.g. file-parser for PDFs)
+ */
+async function buildAttachmentContentParts(
+  textContent: string,
+  attachments: AttachmentRecord[],
+): Promise<{ contentParts: any[]; extraPlugins: any[] }> {
+  const parts: any[] = [];
+  const extraPlugins: any[] = [];
+  let hasPdf = false;
+  let extraText = "";
+
+  for (const att of attachments) {
+    const mime = att.mimeType;
+
+    if (IMAGE_MIME_TYPES.includes(mime)) {
+      // Fetch image from Cloudinary and send as base64 — avoids URL fetch issues on OpenRouter
+      try {
+        const dataUrl = await urlToBase64DataUrl(att.fileUrl, mime);
+        parts.push({ type: "image_url", image_url: { url: dataUrl } });
+      } catch (e) {
+        console.error("Failed to fetch image attachment", att.fileName, e);
+        // Fallback: send URL directly
+        parts.push({ type: "image_url", image_url: { url: att.fileUrl } });
+      }
+    } else if (PDF_MIME_TYPES.includes(mime)) {
+      hasPdf = true;
+      // Fetch PDF from Cloudinary and send as base64 data URL
+      // This is more reliable than relying on OpenRouter to fetch the Cloudinary URL
+      try {
+        const dataUrl = await urlToBase64DataUrl(
+          att.fileUrl,
+          "application/pdf",
+        );
+        parts.push({
+          type: "file",
+          file: { filename: att.fileName, file_data: dataUrl },
+        });
+      } catch (e) {
+        console.error("Failed to fetch PDF attachment", att.fileName, e);
+        // Fallback: send URL directly
+        parts.push({
+          type: "file",
+          file: { filename: att.fileName, file_data: att.fileUrl },
+        });
+      }
+    } else if (
+      WORD_MIME_TYPES.includes(mime) ||
+      TEXT_MIME_TYPES.includes(mime)
+    ) {
+      // Fetch the raw text from Cloudinary URL and append inline
+      try {
+        const response = await fetch(att.fileUrl);
+        if (response.ok) {
+          const text = await response.text();
+          extraText += `\n\n[Attached file: ${att.fileName}]\n${text}`;
+        }
+      } catch (e) {
+        console.error("Failed to fetch text attachment", att.fileName, e);
+      }
+    }
+  }
+
+  if (hasPdf) {
+    extraPlugins.push({ id: "file-parser", pdf: { engine: "pdf-text" } });
+  }
+
+  // Text part always comes first so the model reads the user's question before files
+  const finalText = textContent + extraText;
+  parts.unshift({ type: "text", text: finalText });
+
+  return { contentParts: parts, extraPlugins };
+}
 
 async function checkTokenLimitsAndSetupStream(
   res: Response,
@@ -113,18 +227,35 @@ interface SendMessageBody {
   chatType?: string;
   userMessageId?: number;
   assistantMessageId?: number;
+  attachmentIds?: number[];
 }
 
 export async function streamChat(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
-  const { content, modelId, chatType, userMessageId, assistantMessageId } =
-    req.body as SendMessageBody;
+  const {
+    content,
+    modelId,
+    chatType,
+    userMessageId,
+    assistantMessageId,
+    attachmentIds,
+  } = req.body as SendMessageBody;
 
   try {
     // Validate inputs
     if (!content?.trim()) {
       res.status(400).json({ status: false, message: "Content is required" });
+      return;
+    }
+
+    if (attachmentIds && attachmentIds.length > 5) {
+      res
+        .status(400)
+        .json({
+          status: false,
+          message: "Maximum 5 attachments allowed per message",
+        });
       return;
     }
 
@@ -174,6 +305,11 @@ export async function streamChat(req: Request, res: Response) {
         data: { chatId, role: "USER", content: content.trim() },
       });
 
+      // Link any presend attachments to this new message
+      if (attachmentIds && attachmentIds.length > 0) {
+        await attachmentService.linkToMessage(attachmentIds, userMessage.id);
+      }
+
       // Update chat title if first message
       const messageCount = await prisma.message.count({ where: { chatId } });
       if (messageCount === 1) {
@@ -219,7 +355,7 @@ export async function streamChat(req: Request, res: Response) {
 
     const conversationHistory: {
       role: "user" | "assistant" | "system";
-      content: string;
+      content: string | any[];
     }[] = [];
     for (const msg of previousMessages) {
       if (msg.role === "USER") {
@@ -245,6 +381,31 @@ export async function streamChat(req: Request, res: Response) {
       conversationHistory.unshift({ role: "system", content: systemContent });
     }
 
+    // Build multipart content for current message if attachments are present
+    let attachmentPlugins: any[] = [];
+    if (attachmentIds && attachmentIds.length > 0) {
+      const attachments = await attachmentService.findMany(attachmentIds);
+      if (attachments.length > 0) {
+        const { contentParts, extraPlugins } =
+          await buildAttachmentContentParts(content.trim(), attachments);
+        // Replace the last user message with the multipart version
+        // (checkTokenLimitsAndSetupStream will use the last item as latestPrompt)
+        conversationHistory.push({ role: "user", content: contentParts });
+        attachmentPlugins = extraPlugins;
+      }
+    }
+
+    // If no attachments were pushed above, push the plain text version
+    if (attachmentPlugins.length === 0 && (attachmentIds?.length ?? 0) === 0) {
+      conversationHistory.push({ role: "user", content: content.trim() });
+    } else if (
+      attachmentPlugins.length === 0 &&
+      (attachmentIds?.length ?? 0) > 0
+    ) {
+      // Attachments array was provided but all records were missing — fall back to text
+      conversationHistory.push({ role: "user", content: content.trim() });
+    }
+
     const tokenLimits = await checkTokenLimitsAndSetupStream(
       res,
       wallet,
@@ -260,6 +421,9 @@ export async function streamChat(req: Request, res: Response) {
     );
     if (tokenLimits === null) return;
     const { maxCompletionTokens, trimmedHistory } = tokenLimits;
+
+    // Merge attachment plugins (from above) into the stream call
+    const streamPlugins = attachmentPlugins;
 
     // -----------------------------------------------------------------------
     // Predefined response intercept – platform identity / greetings / about
@@ -350,6 +514,7 @@ export async function streamChat(req: Request, res: Response) {
         messages: trimmedHistory,
         chatType,
         max_tokens: maxCompletionTokens,
+        plugins: streamPlugins.length > 0 ? streamPlugins : undefined,
       });
 
       for await (const chunk of stream) {

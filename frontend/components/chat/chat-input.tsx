@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare
+  Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare,
+  FileText, File, FileType
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -17,6 +18,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { getModelIcon } from "@/lib/model-icons";
+import { attachmentService } from "@/lib/services";
+import { toast } from "react-toastify";
 
 // Dynamically imported so react-speech-recognition never runs on the server
 const MicButton = dynamic(
@@ -33,12 +36,23 @@ interface Model {
   defaultForCapabilities?: string[];
 }
 
+/** A file that has been uploaded to the backend (Cloudinary) */
+interface UploadedAttachment {
+  id: number;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  /** local object URL for image thumbnail preview (before upload completes) */
+  previewUrl?: string;
+  uploading?: boolean;
+}
+
 interface ChatInputProps {
   models: Model[];
   selectedModels: number[];
   onModelChange: (ids: number[]) => void;
   maxModels: number;
-  onSend: (content: string, files?: File[], chatType?: ChatType) => void;
+  onSend: (content: string, attachmentIds?: number[], chatType?: ChatType, attachmentObjects?: UploadedAttachment[]) => void;
   isSending: boolean;
   forceReset?: boolean;
   initialPrompt?: string;
@@ -46,6 +60,16 @@ interface ChatInputProps {
 }
 
 type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH";
+
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
+const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md";
+
+function FileAttachmentIcon({ mimeType }: { mimeType: string }) {
+  if (IMAGE_TYPES.includes(mimeType)) return <ImageIcon className="w-4 h-4 text-primary" />;
+  if (mimeType === "application/pdf") return <FileText className="w-4 h-4 text-red-500" />;
+  if (mimeType.includes("word")) return <FileType className="w-4 h-4 text-blue-500" />;
+  return <File className="w-4 h-4 text-muted-foreground" />;
+}
 
 export function ChatInput({
   models,
@@ -59,7 +83,7 @@ export function ChatInput({
   onPromptClear,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [chatType, setChatType] = useState<ChatType>("STANDARD");
 
   // Speech-to-text: track the text that existed before mic was started
@@ -155,9 +179,15 @@ export function ChatInput({
 
   const handleSubmit = () => {
     if (!content.trim() || isSending) return;
-    onSend(content.trim(), files.length > 0 ? files : undefined, chatType);
+    // Only pass IDs of fully uploaded attachments
+    const uploadedIds = attachments
+      .filter(a => !a.uploading)
+      .map(a => a.id);
+    onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, chatType, attachments.filter(a => !a.uploading));
     setContent("");
-    setFiles([]);
+    // Revoke any object URLs to avoid memory leaks
+    attachments.forEach(a => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
+    setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
@@ -168,14 +198,62 @@ export function ChatInput({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles([...files, ...Array.from(e.target.files)]);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const newFiles = Array.from(e.target.files);
+    e.target.value = "";
+
+    if (attachments.length + newFiles.length > 5) {
+      toast.error("You can only attach up to 5 files per message constraint.");
+      return;
+    }
+
+    for (const file of newFiles) {
+      const tempId = Date.now() + Math.random();
+      const previewUrl = IMAGE_TYPES.includes(file.type) ? URL.createObjectURL(file) : undefined;
+
+      const placeholder: UploadedAttachment = {
+        id: tempId as any,
+        fileName: file.name,
+        fileUrl: "",
+        mimeType: file.type,
+        previewUrl,
+        uploading: true,
+      };
+
+      setAttachments(prev => [...prev, placeholder]);
+
+      try {
+        const res = await attachmentService.presend(file);
+        const data = res.data.data;
+        setAttachments(prev =>
+          prev.map(a =>
+            a.id === (tempId as any)
+              ? { ...a, id: data.id, fileUrl: data.fileUrl, uploading: false }
+              : a
+          )
+        );
+      } catch (err: any) {
+        toast.error(`Failed to upload ${file.name}: ${err?.response?.data?.message || err.message}`);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setAttachments(prev => prev.filter(a => a.id !== (tempId as any)));
+      }
     }
   };
 
-  const removeFile = (index: number) => {
-    setFiles(files.filter((_, i) => i !== index));
+  const removeAttachment = (id: number) => {
+    const found = attachments.find(a => a.id === id);
+    if (!found) return;
+
+    if (found.previewUrl) URL.revokeObjectURL(found.previewUrl);
+
+    if (!found.uploading && typeof found.id === "number") {
+      attachmentService.delete(found.id).catch(err => {
+        console.error("Failed to delete attachment from server", err);
+      });
+    }
+
+    setAttachments(prev => prev.filter(a => a.id !== id));
   };
 
   const isSingle = maxModels === 1;
@@ -202,6 +280,8 @@ export function ChatInput({
     IMAGE_GENERATION: "Image generation",
     WEB_SEARCH: "Web search",
   };
+
+  const hasUploadingFiles = attachments.some(a => a.uploading);
 
   return (
     <div className="pt-2 pb-6 px-4 w-full">
@@ -258,14 +338,43 @@ export function ChatInput({
             </div>
           )}
 
-          {/* File previews */}
-          {files.length > 0 && (
+          {/* Attachment previews */}
+          {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1">
-              {files.map((file, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-muted rounded-lg text-xs border border-border/50">
-                  📎 <span className="max-w-[150px] truncate">{file.name}</span>
-                  <button onClick={() => removeFile(i)} className="text-muted-foreground hover:text-destructive transition-colors ml-1">
-                    <X className="w-3 h-3" />
+              {attachments.map((att) => (
+                <div
+                  key={att.id}
+                  className="relative flex items-center gap-2 px-2.5 py-1.5 bg-muted rounded-xl text-xs border border-border/50 group max-w-[200px]"
+                >
+                  {/* Image thumbnail or icon */}
+                  {att.previewUrl ? (
+                    <img
+                      src={att.previewUrl}
+                      alt={att.fileName}
+                      className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="flex-shrink-0">
+                      <FileAttachmentIcon mimeType={att.mimeType} />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col min-w-0">
+                    <span className="truncate max-w-[120px] font-medium leading-tight">{att.fileName}</span>
+                    {att.uploading && (
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading…
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Remove button */}
+                  <button
+                    onClick={() => removeAttachment(att.id)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    title="Remove"
+                  >
+                    <X className="w-2.5 h-2.5" />
                   </button>
                 </div>
               ))}
@@ -278,6 +387,7 @@ export function ChatInput({
               ref={fileInputRef}
               type="file"
               multiple
+              accept={ACCEPT_TYPES}
               className="hidden"
               onChange={handleFileChange}
             />
@@ -287,6 +397,7 @@ export function ChatInput({
               className="flex-shrink-0 h-10 w-10 text-muted-foreground hover:bg-muted hover:text-foreground rounded-full ml-1 mb-0.5"
               onClick={() => fileInputRef.current?.click()}
               title="Attach files"
+              disabled={isSending}
             >
               <Plus className="w-5 h-5" />
             </Button>
@@ -314,13 +425,13 @@ export function ChatInput({
               <Button
                 size="icon"
                 className={`h-10 w-10 rounded-full transition-all duration-200 ${
-                  content.trim() && !isSending
+                  content.trim() && !isSending && !hasUploadingFiles
                     ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md scale-100"
                     : "bg-muted text-muted-foreground scale-95"
                 }`}
                 onClick={handleSubmit}
-                disabled={!content.trim() || isSending}
-                title="Send message"
+                disabled={!content.trim() || isSending || hasUploadingFiles}
+                title={hasUploadingFiles ? "Wait for files to finish uploading" : "Send message"}
               >
                 {isSending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

@@ -5,12 +5,13 @@ export interface OpenRouterStreamOptions {
   messages: any[];
   chatType?: string;
   max_tokens?: number;
+  plugins?: any[];
 }
 
 export const createOpenRouterStream = async (
   options: OpenRouterStreamOptions,
 ): Promise<AsyncIterable<any>> => {
-  const { model, messages, chatType } = options;
+  const { model, messages, chatType, plugins } = options;
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   const client = new OpenAI({
@@ -22,6 +23,12 @@ export const createOpenRouterStream = async (
     },
   });
 
+  // Merge caller-supplied plugins with any capability-driven ones
+  const builtinPlugins: any[] = [];
+  if (chatType === "WEB_SEARCH")
+    builtinPlugins.push({ id: "web", max_results: 2 });
+  const allPlugins = [...builtinPlugins, ...(plugins ?? [])];
+
   const stream = (await client.chat.completions.create({
     model,
     messages: messages as any,
@@ -29,8 +36,7 @@ export const createOpenRouterStream = async (
     stream: true,
     stream_options: { include_usage: true },
     modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,
-    plugins:
-      chatType === "WEB_SEARCH" ? [{ id: "web", max_results: 2 }] : undefined,
+    plugins: allPlugins.length > 0 ? allPlugins : undefined,
   } as any)) as unknown as AsyncIterable<any>;
 
   return stream;

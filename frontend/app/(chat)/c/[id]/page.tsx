@@ -125,12 +125,12 @@ export default function ChatPage() {
             firstMessageSent.current = true;
             sessionStorage.removeItem(`pending_chat_${chatId}`);
             try {
-              const { content, modelIds, chatType } = JSON.parse(raw);
+              const { content, modelIds, chatType, attachmentIds, attachmentObjects } = JSON.parse(raw);
               // Use the model IDs from the home page if valid, otherwise fall back to resolved
               const targetIds = Array.isArray(modelIds) && modelIds.length > 0 ? modelIds : resolvedModelIds;
               setSelectedModels(targetIds);
               // Use setTimeout to ensure state has settled before sending
-              setTimeout(() => sendMessage(content, targetIds, chatType), 0);
+              setTimeout(() => sendMessage(content, attachmentIds, targetIds, chatType, attachmentObjects), 0);
             } catch { /* ignore */ }
           }
         }
@@ -163,6 +163,7 @@ export default function ChatPage() {
     chatType: string | undefined,
     userMessageId: number,
     assistantMessageId: number,
+    attachmentIds?: number[],
   ) => {
     return fetch(`${apiUrl}/chats/${chatId}/send`, {
       method: "POST",
@@ -177,6 +178,7 @@ export default function ChatPage() {
         chatType,
         userMessageId,
         assistantMessageId,
+        ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       }),
     }).then(async (response) => {
       if (!response.ok) {
@@ -248,7 +250,7 @@ export default function ChatPage() {
     });
   };
 
-  const sendMessage = async (content: string, modelIds?: number[], chatType?: string) => {
+  const sendMessage = async (content: string, attachmentIds?: number[], modelIds?: number[], chatType?: string, attachmentObjects?: any[]) => {
     if (isSending) return;
     setIsSending(true);
     setIsStreaming(true);
@@ -273,6 +275,7 @@ export default function ChatPage() {
       role: "USER",
       content,
       createdAt: new Date().toISOString(),
+      attachments: attachmentObjects || [],
     }]);
 
     // Add streaming placeholder with one response per model
@@ -300,7 +303,7 @@ export default function ChatPage() {
         // Single model: use existing /send endpoint directly (creates user+assistant msg)
         await streamSingleModel(
           targetModelIds[0], streamingMsgId, token, apiUrl,
-          content, chatType, 0, 0 // 0 means the endpoint creates them
+          content, chatType, 0, 0, attachmentIds // 0 means the endpoint creates them
         );
       } else {
         // Multi model: call /prepare-multi FIRST to get IDs, then fire ALL streams at once
@@ -321,7 +324,7 @@ export default function ChatPage() {
         // Fire ALL models simultaneously — no waiting between them!
         await Promise.allSettled(
           targetModelIds.map((mid) =>
-            streamSingleModel(mid, streamingMsgId, token, apiUrl, content, chatType, userMessageId, assistantMessageId)
+            streamSingleModel(mid, streamingMsgId, token, apiUrl, content, chatType, userMessageId, assistantMessageId, attachmentIds)
           )
         );
       }
@@ -664,7 +667,7 @@ export default function ChatPage() {
         selectedModels={selectedModels}
         onModelChange={handleModelChange}
         maxModels={-1}
-        onSend={(content, files, chatType) => sendMessage(content, undefined, chatType)}
+        onSend={(content, attachmentIds, chatType, attachmentObjects) => sendMessage(content, attachmentIds, undefined, chatType, attachmentObjects)}
         isSending={isSending}
         initialPrompt={initialPrompt}
         onPromptClear={() => setInitialPrompt("")}

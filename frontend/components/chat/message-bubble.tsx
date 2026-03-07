@@ -3,12 +3,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Bot, Copy, ThumbsUp, ThumbsDown, Share2, RefreshCw,
-  ChevronLeft, ChevronRight, Check, Loader2, Pencil, X
+  ChevronLeft, ChevronRight, Check, Loader2, Pencil, X,
+  FileText, Image as ImageIcon
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import useEmblaCarousel from "embla-carousel-react";
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 
 interface ModelResponse {
   id: number;
@@ -233,6 +236,7 @@ export function MessageBubble({
     return (
       <div className={`px-4 py-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 sm:-mb-3 ${showEdit ? "flex" : "flex justify-end"}`}>
         <div className={showEdit ? "w-full" : "max-w-[95%] sm:max-w-[85%]"}>
+          <Attachments message={message} isUser={true} />
           {showEdit ? (
             // Edit mode
             <div className={`bg-muted dark:bg-muted rounded-2xl rounded-br-md px-4 py-3 border border-border/50 space-y-2 transition-all duration-200 ${
@@ -591,18 +595,62 @@ function CardActions({
 }
 
 // ── Attachments ──────────────────────────────────────────────────────────────
-function Attachments({ message }: { message: Message }) {
+
+function Attachments({ message, isUser }: { message: Message; isUser?: boolean }) {
   if (!message.attachments?.length) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-2 px-0">
-      {message.attachments.map((att) => (
-        <a key={att.id}
-          href={`${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "")}${att.fileUrl}`}
-          target="_blank" rel="noopener"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-xs hover:bg-muted/80 transition-colors">
-          📎 {att.fileName}
-        </a>
-      ))}
+    <div className={`flex flex-wrap gap-2 px-0 ${isUser ? 'mb-2 justify-end' : 'mt-2 justify-start'}`}>
+      <PhotoProvider>
+        {message.attachments.map((att) => {
+          const isImage = att.mimeType.startsWith("image/");
+          
+          if (isImage) {
+            return (
+              <PhotoView key={att.id} src={att.fileUrl}>
+                <div className="group relative flex items-center gap-2 px-3 py-2 bg-muted/80 hover:bg-muted border border-border/50 rounded-xl text-xs transition-all duration-200 overflow-hidden cursor-pointer">
+                  <div className="w-8 h-8 flex-shrink-0 rounded bg-muted-foreground/10 overflow-hidden relative">
+                    <img src={att.fileUrl} alt={att.fileName} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <span className="font-medium text-foreground truncate max-w-[120px] sm:max-w-[180px]">
+                      {att.fileName}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground uppercase">
+                      {att.mimeType.split("/")[1] || "IMAGE"}
+                    </span>
+                  </div>
+                </div>
+              </PhotoView>
+            );
+          }
+
+          // Cloudinary fl_attachment cannot include the file extension, it automatically infers it.
+          const dotIndex = att.fileName.lastIndexOf('.');
+          const baseName = dotIndex !== -1 ? att.fileName.substring(0, dotIndex) : att.fileName;
+          const safeFileName = baseName.replace(/[^a-zA-Z0-9-]/g, '_');
+          const downloadUrl = att.fileUrl.replace('/upload/', `/upload/fl_attachment:${safeFileName}/`);
+          return (
+            <a
+              key={att.id}
+              href={downloadUrl}
+              download={att.fileName}
+              className="group relative flex items-center gap-2 px-3 py-2 bg-muted/80 hover:bg-muted border border-border/50 rounded-xl text-xs transition-all duration-200 overflow-hidden"
+            >
+              <div className="w-8 h-8 flex-shrink-0 rounded bg-primary/10 flex items-center justify-center text-primary">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className="font-medium text-foreground truncate max-w-[120px] sm:max-w-[180px]">
+                  {att.fileName}
+                </span>
+                <span className="text-[10px] text-muted-foreground uppercase">
+                  {att.mimeType.split("/")[1] || "FILE"}
+                </span>
+              </div>
+            </a>
+          );
+        })}
+      </PhotoProvider>
     </div>
   );
 }
