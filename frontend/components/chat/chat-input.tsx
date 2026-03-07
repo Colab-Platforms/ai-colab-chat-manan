@@ -62,7 +62,7 @@ interface ChatInputProps {
 type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
-const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md";
+const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md,.ppt,.pptx";
 
 function FileAttachmentIcon({ mimeType }: { mimeType: string }) {
   if (IMAGE_TYPES.includes(mimeType)) return <ImageIcon className="w-4 h-4 text-primary" />;

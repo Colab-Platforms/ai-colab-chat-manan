@@ -18,6 +18,9 @@ const ALLOWED_MIME_TYPES = [
   "text/plain",
   "text/markdown",
   "text/x-markdown",
+  // PowerPoint
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 
 const storage = multer.memoryStorage();

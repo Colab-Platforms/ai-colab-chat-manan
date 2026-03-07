@@ -5,6 +5,8 @@ import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
 import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
 import AttachmentService from "@/modules/attachment/attachment.service.js";
+import mammoth from "mammoth";
+import { parseOffice } from "officeparser";
 
 const attachmentService = new AttachmentService();
 
@@ -17,6 +19,10 @@ const PDF_MIME_TYPES = ["application/pdf"];
 const WORD_MIME_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+const PPT_MIME_TYPES = [
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 const TEXT_MIME_TYPES = ["text/plain", "text/markdown", "text/x-markdown"];
 
@@ -91,16 +97,59 @@ async function buildAttachmentContentParts(
           file: { filename: att.fileName, file_data: att.fileUrl },
         });
       }
-    } else if (
-      WORD_MIME_TYPES.includes(mime) ||
-      TEXT_MIME_TYPES.includes(mime)
-    ) {
+    } else if (WORD_MIME_TYPES.includes(mime)) {
+      try {
+        const response = await fetch(att.fileUrl);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const result = await mammoth.extractRawText({ buffer });
+          const text = result.value.trim();
+          if (text) {
+            extraText += `\n\n[Attached Word Document: ${att.fileName}]\n${text}`;
+          }
+        }
+      } catch (e) {
+        console.error(
+          "Failed to extract text from Word document",
+          att.fileName,
+          e,
+        );
+      }
+    } else if (PPT_MIME_TYPES.includes(mime)) {
+      try {
+        const response = await fetch(att.fileUrl);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          try {
+            const ast = await parseOffice(buffer as any);
+            const text = ast.toText();
+            if (text && text.trim()) {
+              extraText += `\n\n[Attached PowerPoint Presentation: ${att.fileName}]\n${text.trim()}`;
+            }
+          } catch (parseError) {
+            console.error(
+              "OfficeParser failed to parse PPTX buffer for",
+              att.fileName,
+              parseError,
+            );
+          }
+        }
+      } catch (e) {
+        console.error(
+          "Failed to extract text from PowerPoint",
+          att.fileName,
+          e,
+        );
+      }
+    } else if (TEXT_MIME_TYPES.includes(mime)) {
       // Fetch the raw text from Cloudinary URL and append inline
       try {
         const response = await fetch(att.fileUrl);
         if (response.ok) {
           const text = await response.text();
-          extraText += `\n\n[Attached file: ${att.fileName}]\n${text}`;
+          extraText += `\n\n[Attached text file: ${att.fileName}]\n${text}`;
         }
       } catch (e) {
         console.error("Failed to fetch text attachment", att.fileName, e);
