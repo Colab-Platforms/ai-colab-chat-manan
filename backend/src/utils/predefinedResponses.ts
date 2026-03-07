@@ -34,6 +34,37 @@ const RESPONSES = {
   bye: `Goodbye! 👋 It was great chatting with you. Come back anytime — I'm always here to help!`,
 } as const;
 
+function extractPreferredName(contextMemory?: string[]): string | null {
+  if (!contextMemory || contextMemory.length === 0) return null;
+
+  const patterns = [
+    /^my name is\s+(.+)$/i,
+    /^i am\s+(.+)$/i,
+    /^i'm\s+(.+)$/i,
+    /^call me\s+(.+)$/i,
+    /^preferred name\s*[:\-]\s*(.+)$/i,
+    /^name\s*[:\-]\s*(.+)$/i,
+  ];
+
+  for (const item of contextMemory) {
+    const trimmed = item.trim();
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (!match?.[1]) continue;
+      const name = match[1].trim().replace(/[.!?,;:]+$/, "");
+      if (name.length > 0) return name;
+    }
+  }
+
+  return null;
+}
+
+function getGreetingResponse(contextMemory?: string[]): string {
+  const preferredName = extractPreferredName(contextMemory);
+  if (!preferredName) return RESPONSES.greeting;
+  return `Hello ${preferredName}! Welcome to **${PLATFORM_NAME}**. How can I help you today?`;
+}
+
 // ---------------------------------------------------------------------------
 // Real-question signal words (if any appear → fall through to OpenRouter)
 // ---------------------------------------------------------------------------
@@ -239,7 +270,10 @@ function hasRealQuestion(normalised: string): boolean {
  * Returns a platform-branded predefined response if the content matches a
  * known intent, or `null` if it should be forwarded to OpenRouter.
  */
-export function checkPredefinedResponse(content: string): string | null {
+export function checkPredefinedResponse(
+  content: string,
+  contextMemory?: string[],
+): string | null {
   const normalised = content
     .toLowerCase()
     .trim()
@@ -256,11 +290,21 @@ export function checkPredefinedResponse(content: string): string | null {
 
   // Tier 1: exact Map lookup (O(1))
   const exactHit = EXACT_LOOKUP.get(normalised);
-  if (exactHit) return exactHit;
+  if (exactHit) {
+    if (exactHit === RESPONSES.greeting) {
+      return getGreetingResponse(contextMemory);
+    }
+    return exactHit;
+  }
 
   // Tier 2: keyword scan
   for (const rule of KEYWORD_RULES) {
-    if (normalised.includes(rule.keyword)) return rule.response;
+    if (normalised.includes(rule.keyword)) {
+      if (rule.response === RESPONSES.greeting) {
+        return getGreetingResponse(contextMemory);
+      }
+      return rule.response;
+    }
   }
 
   return null;

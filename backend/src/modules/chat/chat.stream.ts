@@ -475,7 +475,10 @@ export async function streamChat(req: Request, res: Response) {
     // -----------------------------------------------------------------------
     // Predefined response intercept – platform identity / greetings / about
     // -----------------------------------------------------------------------
-    const predefinedText = checkPredefinedResponse(content);
+    const predefinedText = checkPredefinedResponse(
+      content,
+      userPreference?.contextMemory,
+    );
     if (predefinedText) {
       // Stream word-by-word with a small delay (same feel as OpenRouter)
       const words = predefinedText.split(" ");
@@ -848,7 +851,7 @@ export async function regenerateChat(req: Request, res: Response) {
     const originalContent =
       prevUserMsg?.role === "USER" ? prevUserMsg.content : "";
     const predefinedTextRegen = originalContent
-      ? checkPredefinedResponse(originalContent)
+      ? checkPredefinedResponse(originalContent, userPreference?.contextMemory)
       : null;
     if (predefinedTextRegen) {
       const words = predefinedTextRegen.split(" ");
