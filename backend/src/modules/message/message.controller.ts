@@ -4,6 +4,7 @@ import STATUS_CODES from "@/utils/statusCodes.js";
 import MessageService from "./message.service.js";
 import {
     validateCreateMessageSchema,
+    validateEnhancePromptSchema,
     validateListStarredSchema,
     validateStarResponseSchema,
 } from "./message.validators.js";
@@ -58,6 +59,22 @@ export const listStarred = async (req: Request, res: Response): Promise<void> =>
         sendResponse(res, true, result, "Starred responses fetched successfully", STATUS_CODES.OK);
     } catch (error: any) {
         console.error("List starred responses error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};
+
+export const enhancePrompt = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { error, value } = validateEnhancePromptSchema(req.body);
+        if (error) {
+            sendResponse(res, false, error, error.message, STATUS_CODES.BAD_REQUEST);
+            return;
+        }
+
+        const result = await messageService.enhancePrompt(req.user!.id, value);
+        sendResponse(res, true, result, "Prompt enhanced successfully", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Enhance prompt error", error);
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };

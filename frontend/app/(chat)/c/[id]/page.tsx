@@ -549,6 +549,11 @@ export default function ChatPage() {
     }
   };
 
+  const handleEnhancePrompt = async (prompt: string) => {
+    const res = await messageService.enhancePrompt(prompt);
+    return res.data.data;
+  };
+
   const handleEditVersionChange = (rootMessageId: number, versionIndex: number) => {
     setEditVersionIndices((prev) => ({ ...prev, [rootMessageId]: versionIndex }));
   };
@@ -722,6 +727,7 @@ export default function ChatPage() {
         onModelChange={handleModelChange}
         maxModels={-1}
         onSend={(content, attachmentIds, chatType, attachmentObjects) => sendMessage(content, attachmentIds, undefined, chatType, attachmentObjects)}
+        onEnhancePrompt={handleEnhancePrompt}
         isSending={isSending}
         initialPrompt={initialPrompt}
         onPromptClear={() => setInitialPrompt("")}

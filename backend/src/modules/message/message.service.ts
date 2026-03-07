@@ -1,11 +1,13 @@
 import prisma from "@root/prisma.js";
+import OpenAI from "openai";
 import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
-import { CreateMessageBody } from "./message.types.js";
+import { CreateMessageBody, EnhancePromptBody } from "./message.types.js";
 import {
     getPaginationOptions,
     formatPaginationResponse,
 } from "@/utils/paginationUtils.js";
+import { estimateTokenCount } from "@/utils/tokenCounter.js";
 
 class MessageService {
     async create(userId: number, data: CreateMessageBody) {
@@ -97,6 +99,120 @@ class MessageService {
         ]);
 
         return formatPaginationResponse(responses, totalRecords, page, pageSize);
+    }
+
+    async enhancePrompt(userId: number, data: EnhancePromptBody) {
+        const prompt = data.prompt.trim();
+
+        const model = await prisma.model.findFirst({
+            where: {
+                externalId: "openai/gpt-4.1",
+                isActive: true,
+                isDeleted: false,
+            },
+        });
+
+        if (!model) {
+            throw new ApiError("Enhance model is not available", STATUS_CODES.BAD_REQUEST);
+        }
+
+        const wallet = await prisma.userWallet.findUnique({
+            where: { userId },
+        });
+
+        if (!wallet) {
+            throw new ApiError("Wallet not found. Please subscribe to a plan first", STATUS_CODES.BAD_REQUEST);
+        }
+
+        if (wallet.tokensRemaining <= 0) {
+            throw new ApiError("Insufficient tokens", STATUS_CODES.BAD_REQUEST);
+        }
+
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (!apiKey) {
+            throw new ApiError("OpenRouter API key is not configured", STATUS_CODES.SERVER_ERROR);
+        }
+
+        const client = new OpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey,
+            defaultHeaders: {
+                "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:3000",
+                "X-Title": "AI Colab Chat",
+            },
+        });
+
+        const systemInstruction = "Rewrite the user prompt to be clearer, more specific, and more likely to produce high-quality AI responses. Keep the same intent and language. Return only the improved prompt text with no labels, quotes, markdown, or explanations.";
+        const completion = await client.chat.completions.create({
+            model: model.externalId,
+            temperature: 0.4,
+            messages: [
+                { role: "system", content: systemInstruction },
+                { role: "user", content: prompt },
+            ],
+        });
+
+        const enhancedPrompt = completion.choices?.[0]?.message?.content?.trim();
+        if (!enhancedPrompt) {
+            throw new ApiError("Failed to enhance prompt", STATUS_CODES.SERVER_ERROR);
+        }
+
+        const promptTokens =
+            completion.usage?.prompt_tokens ??
+            estimateTokenCount(systemInstruction) + estimateTokenCount(prompt);
+        const completionTokens =
+            completion.usage?.completion_tokens ?? estimateTokenCount(enhancedPrompt);
+        const totalTokens = promptTokens + completionTokens;
+
+        const tokenMultiplier = model.tokenMultiplier || 1.0;
+        const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
+        const billableCompletionTokens = Math.ceil(completionTokens * tokenMultiplier);
+        const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
+
+        if (wallet.tokensRemaining < billableTotalTokens) {
+            throw new ApiError("Insufficient tokens", STATUS_CODES.BAD_REQUEST);
+        }
+
+        await prisma.$transaction(async (tx) => {
+            await tx.usageLog.create({
+                data: {
+                    userId,
+                    modelId: model.id,
+                    capability: "STANDARD",
+                    promptTokens,
+                    completionTokens,
+                    totalTokens,
+                    billablePromptTokens,
+                    billableCompletionTokens,
+                    billableTotalTokens,
+                },
+            });
+
+            await tx.userWallet.update({
+                where: { userId },
+                data: {
+                    tokensRemaining: { decrement: billableTotalTokens },
+                    tokensUsed: { increment: billableTotalTokens },
+                },
+            });
+        });
+
+        return {
+            enhancedPrompt,
+            model: {
+                id: model.id,
+                name: model.name,
+                externalId: model.externalId,
+            },
+            usage: {
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                billablePromptTokens,
+                billableCompletionTokens,
+                billableTotalTokens,
+            },
+        };
     }
 }
 

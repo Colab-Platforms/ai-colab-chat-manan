@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import { chatService } from "@/lib/services";
+import { chatService, messageService } from "@/lib/services";
 import { modelService } from "@/lib/services";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageSquare, Sparkles } from "lucide-react";
@@ -80,6 +80,11 @@ export default function NewChatPage() {
     }
   };
 
+  const handleEnhancePrompt = async (prompt: string) => {
+    const res = await messageService.enhancePrompt(prompt);
+    return res.data.data;
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Center hero */}
@@ -134,6 +139,7 @@ export default function NewChatPage() {
         onModelChange={handleModelChange}
         maxModels={-1}
         onSend={handleSend}
+        onEnhancePrompt={handleEnhancePrompt}
         isSending={isSending}
         forceReset={true}
         initialPrompt={initialPrompt}

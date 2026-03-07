@@ -53,6 +53,9 @@ interface ChatInputProps {
   onModelChange: (ids: number[]) => void;
   maxModels: number;
   onSend: (content: string, attachmentIds?: number[], chatType?: ChatType, attachmentObjects?: UploadedAttachment[]) => void;
+  onEnhancePrompt?: (content: string) => Promise<{
+    enhancedPrompt: string;
+  }>;
   isSending: boolean;
   forceReset?: boolean;
   initialPrompt?: string;
@@ -152,6 +155,7 @@ export function ChatInput({
   onModelChange,
   maxModels,
   onSend,
+  onEnhancePrompt,
   isSending,
   forceReset,
   initialPrompt,
@@ -160,6 +164,8 @@ export function ChatInput({
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [chatType, setChatType] = useState<ChatType>("STANDARD");
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enhancedPrompt, setEnhancedPrompt] = useState("");
 
   // Speech-to-text: track the text that existed before mic was started
   const preExistingTextRef = useRef("");
@@ -287,10 +293,41 @@ export function ChatInput({
       .map(a => a.id);
     onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, chatType, attachments.filter(a => !a.uploading));
     setContent("");
+    setEnhancedPrompt("");
     // Revoke any object URLs to avoid memory leaks
     attachments.forEach(a => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+  };
+
+  const handleEnhance = async () => {
+    if (!onEnhancePrompt || !content.trim() || isSending || isEnhancing || hasUploadingFiles) return;
+
+    try {
+      setIsEnhancing(true);
+      const result = await onEnhancePrompt(content.trim());
+      const enhanced = result?.enhancedPrompt?.trim();
+      if (!enhanced) {
+        toast.error("No enhanced prompt returned");
+        return;
+      }
+      setEnhancedPrompt(enhanced);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to enhance prompt");
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+
+  const applyEnhancedPrompt = () => {
+    if (!enhancedPrompt.trim()) return;
+    setContent(enhancedPrompt);
+    setEnhancedPrompt("");
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const discardEnhancedPrompt = () => {
+    setEnhancedPrompt("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -388,7 +425,7 @@ export function ChatInput({
   return (
     <div className="pt-2 pb-6 px-4 w-full">
       <div className="max-w-3xl mx-auto">
-        <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-2 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+        <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
 
           {/* Top Row: Chat Type Pill */}
           {chatType !== "STANDARD" && (
@@ -485,8 +522,38 @@ export function ChatInput({
             </div>
           )}
 
+          {enhancedPrompt && (
+            <div className="mx-2 mb-2 mt-1 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-primary">Enhanced prompt preview</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{enhancedPrompt}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 rounded-full px-3"
+                  onClick={applyEnhancedPrompt}
+                >
+                  Use this prompt
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 rounded-full px-3"
+                  onClick={discardEnhancedPrompt}
+                >
+                  Keep original
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Middle Row: input & actions */}
-          <div className="flex items-end gap-2 relative">
+          <div className="flex items-end gap-2 relative pb-1">
             <input
               ref={fileInputRef}
               type="file"
@@ -516,8 +583,24 @@ export function ChatInput({
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-h-[40px] max-h-[200px] leading-relaxed py-2.5 text-[15px] self-center"
             />
 
-            <div className="flex items-center gap-2 flex-shrink-0 mb-0.5 mr-1">
+            <div className="flex items-center gap-0.5 flex-shrink-0 mb-0.5 mr-1">
               <div className="h-6 w-px bg-border/60 mr-1 hidden sm:block" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 rounded-full px-2 text-xs font-medium"
+                onClick={handleEnhance}
+                disabled={!content.trim() || isSending || isEnhancing || hasUploadingFiles || !onEnhancePrompt}
+                title={hasUploadingFiles ? "Wait for files to finish uploading" : "Enhance prompt with GPT-4.1"}
+              >
+                {isEnhancing ? (
+                  <Loader2 className="h-3.5 w-3.5 sm:mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 sm:mr-1.5" />
+                )}
+                <span className="hidden sm:inline">Enhance</span>
+              </Button>
               {/* MicButton is dynamically imported with ssr:false — handles all speech logic */}
               <MicButton
                 onResult={handleSpeechResult}

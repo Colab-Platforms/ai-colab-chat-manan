@@ -12,3 +12,7 @@ export interface ListStarredQuery {
     page?: string;
     pageSize?: string;
 }
+
+export interface EnhancePromptBody {
+    prompt: string;
+}

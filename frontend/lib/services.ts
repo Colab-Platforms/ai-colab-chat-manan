@@ -23,6 +23,7 @@ export const chatService = {
 export const messageService = {
   create: (data: { chatId: number; content: string; editedFromId?: number }) =>
     api.post("/messages", data),
+  enhancePrompt: (prompt: string) => api.post("/messages/enhance", { prompt }),
   listStarred: (params?: Record<string, string>) => api.get("/messages/starred", { params }),
   starResponse: (responseId: number, isStarred: boolean) =>
     api.patch(`/messages/responses/${responseId}/star`, { isStarred }),

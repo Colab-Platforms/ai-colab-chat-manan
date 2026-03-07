@@ -24,6 +24,16 @@ const listStarredSchema = Joi.object({
     pageSize: Joi.number().integer().min(1).optional(),
 });
 
+const enhancePromptSchema = Joi.object({
+    prompt: Joi.string().trim().min(3).max(6000).required().messages({
+        "string.base": "Prompt must be a string",
+        "string.empty": "Prompt is required",
+        "string.min": "Prompt must be at least 3 characters",
+        "string.max": "Prompt must be less than 6000 characters",
+        "any.required": "Prompt is required",
+    }),
+});
+
 export const validateCreateMessageSchema = (data: unknown) => {
     return createMessageSchema.validate(data, { abortEarly: false });
 };
@@ -34,4 +44,8 @@ export const validateStarResponseSchema = (data: unknown) => {
 
 export const validateListStarredSchema = (data: unknown) => {
     return listStarredSchema.validate(data, { abortEarly: false });
+};
+
+export const validateEnhancePromptSchema = (data: unknown) => {
+    return enhancePromptSchema.validate(data, { abortEarly: false });
 };
