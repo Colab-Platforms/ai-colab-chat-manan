@@ -12,6 +12,8 @@ interface Message {
   editedFromId?: number | null;
   attachments?: any[];
   modelResponses?: any[];
+  sourceChatId?: number;
+  sourceChatTitle?: string | null;
 }
 
 interface MessageListProps {
@@ -26,6 +28,10 @@ interface MessageListProps {
   onFollowUpClick?: (question: string) => void;
   showSelectionTooltip?: boolean;
   sharedView?: boolean;
+  onToggleStar?: (responseId: number, isStarred: boolean) => void;
+  bottomAnchorId?: string;
+  forceScrollToBottom?: boolean;
+  scrollContainerId?: string;
 }
 
 /**
@@ -123,7 +129,7 @@ function processMessagesWithVersions(
 export function MessageList({
   messages, activeModelTabs, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersionIndices = {}, onEditVersionChange, onFollowUpClick,
-  showSelectionTooltip = true, sharedView = false
+  showSelectionTooltip = true, sharedView = false, onToggleStar, bottomAnchorId, forceScrollToBottom = false, scrollContainerId
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -135,12 +141,21 @@ export function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isStreaming]);
 
+  useEffect(() => {
+    if (!forceScrollToBottom || !containerRef.current) return;
+    requestAnimationFrame(() => {
+      if (!containerRef.current) return;
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    });
+  }, [forceScrollToBottom, messages.length]);
+
   const processed = processMessagesWithVersions(messages, editVersionIndices);
 
   return (
     <>
       {showSelectionTooltip && <SelectionContextTooltip />}
-      <div ref={containerRef} className="flex-1 overflow-y-auto">
+      <div id={scrollContainerId} ref={containerRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto py-4">
           {processed.map((item, idx) => (
             <MessageBubble
@@ -157,9 +172,10 @@ export function MessageList({
               isLastMessage={idx === processed.length - 1}
               onFollowUpClick={onFollowUpClick}
               sharedView={sharedView}
+              onToggleStar={onToggleStar}
             />
           ))}
-          <div ref={bottomRef} />
+          <div id={bottomAnchorId} ref={bottomRef} />
         </div>
       </div>
     </>

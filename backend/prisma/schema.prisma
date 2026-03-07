@@ -161,6 +161,7 @@ model ModelResponse {
   totalTokens      Int            @default(0)
   status           ResponseStatus @default(PENDING)
   isLiked          Boolean?
+  isStarred        Boolean        @default(false)
   chat             Chat           @relation(fields: [chatId], references: [id])
   message          Message        @relation(fields: [messageId], references: [id])
   model            Model          @relation(fields: [modelId], references: [id])
@@ -171,6 +172,7 @@ model ModelResponse {
   @@index([messageId])
   @@index([modelId])
   @@index([status])
+  @@index([isStarred])
 }
 
 enum MessageRole {

@@ -61,6 +61,7 @@ import {
   X,
   Pin,
   PinOff,
+  Star,
 } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
 import { toast } from "react-toastify";
@@ -489,6 +490,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
   const filteredChats = chats.filter((c) =>
     !c.isArchived && (c.title?.toLowerCase().includes(search.toLowerCase()) || !search)
   );
+  const isStarredRoute = pathname === "/starred";
 
   // Pinned chats float to the top of their respective group
   const sortByPin = (a: Chat, b: Chat) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0);
@@ -525,6 +527,24 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">Search chats</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-9 w-9 rounded-lg cursor-pointer ${
+              isStarredRoute
+                ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/15"
+                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+            }`}
+            onClick={() => { onMobileClose(); router.push("/starred"); }}
+          >
+            <Star className={`w-4 h-4 ${isStarredRoute ? "fill-current" : ""}`} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Starred Messages</TooltipContent>
       </Tooltip>
     </>
   );
@@ -631,8 +651,21 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
             );
           })}
 
+          
+
           {/* Unfoldered chats */}
           {unfoldered.length > 0 && <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-4 uppercase tracking-wider">Chats</div>}
+          <button
+            onClick={() => { onMobileClose(); router.push("/starred"); }}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+              isStarredRoute
+                ? "bg-gradient-to-r from-yellow-500/20 to-yellow-500/10 text-foreground font-medium"
+                : "text-foreground hover:bg-sidebar-accent"
+            }`}
+          >
+            <Star className={`w-4 h-4 ${isStarredRoute ? "fill-current text-yellow-500" : "text-muted-foreground"}`} />
+            <span>Starred Messages</span>
+          </button>
           {unfoldered.map((chat) => (
             <ChatItem
               key={chat.id}

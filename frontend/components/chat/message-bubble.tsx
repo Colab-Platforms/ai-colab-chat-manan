@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   Bot, Copy, ThumbsUp, ThumbsDown, Share2, RefreshCw,
   ChevronLeft, ChevronRight, Check, Loader2, Pencil, X,
-  FileText, File, Image as ImageIcon
+  FileText, File, Image as ImageIcon, Star
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ interface ModelResponse {
   tokensUsed: number | null;
   model: { id: number; name: string };
   isLiked?: boolean | null;
+  isStarred?: boolean;
 }
 
 function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
@@ -71,6 +73,8 @@ interface Message {
   editedFromId?: number | null;
   attachments?: { id: number; fileName: string; fileUrl: string; mimeType: string }[];
   modelResponses?: ModelResponse[];
+  sourceChatId?: number;
+  sourceChatTitle?: string | null;
 }
 
 interface MessageBubbleProps {
@@ -87,15 +91,25 @@ interface MessageBubbleProps {
   isLastMessage?: boolean;
   onFollowUpClick?: (question: string) => void;
   sharedView?: boolean;
+  onToggleStar?: (responseId: number, isStarred: boolean) => void;
 }
 
 export function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
-  isLastMessage, onFollowUpClick, sharedView = false
+  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
+  const hasSourceChat = Boolean(message.sourceChatId);
+  const sourceChatTitle = message.sourceChatTitle || "New Chat";
+  const sourceChatLabel =
+    sourceChatTitle.length > 15 ? `${sourceChatTitle.substring(0, 15)}...` : sourceChatTitle;
+  const sourceChatUrl = message.sourceChatId ? `/c/${message.sourceChatId}` : null;
+  const markStarredNavigation = () => {
+    if (!message.sourceChatId || typeof window === "undefined") return;
+    sessionStorage.setItem("open_chat_from_starred", String(message.sourceChatId));
+  };
 
   // Group responses by model
   const responsesByModel = responses.reduce((acc, resp) => {
@@ -341,6 +355,17 @@ export function MessageBubble({
           <div className="flex items-center gap-2">
             <Bot className="w-4 h-4 text-primary/70 flex-shrink-0" />
             <span className="text-xs font-medium text-muted-foreground">{uniqueModels[0]?.name || "AI"}</span>
+            {hasSourceChat && sourceChatUrl && (
+              <Link
+                href={sourceChatUrl}
+                onClick={markStarredNavigation}
+                className="ml-auto inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                title={sourceChatTitle}
+              >
+                <span className="truncate max-w-[140px]">{sourceChatLabel}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
           </div>
 
           {/* break-words and overflow-hidden prevent horizontal scrolling on long continuous strings */}
@@ -375,6 +400,7 @@ export function MessageBubble({
               onVersionChange={(d) => uniqueModels[0] && handleVersionChange(uniqueModels[0].id, d)}
               onFeedback={onFeedback}
               sharedView={sharedView}
+              onToggleStar={onToggleStar}
               onRegenerate={(msgId, mid) => {
                 setVersionIndices(prev => { const n = { ...prev }; delete n[mid]; return n; });
                 onRegenerate?.(msgId, mid);
@@ -460,6 +486,17 @@ export function MessageBubble({
                       {/* Card header */}
                       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b border-border/30  min-w-0">
                         <span className="text-xs font-semibold text-foreground/80 truncate flex-1 min-w-0">{model.name}</span>
+                        {hasSourceChat && sourceChatUrl && (
+                          <Link
+                            href={sourceChatUrl}
+                            onClick={markStarredNavigation}
+                            className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            title={sourceChatTitle}
+                          >
+                            <span className="truncate max-w-[120px]">{sourceChatLabel}</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </Link>
+                        )}
                         {resp?.status === "STREAMING" && <Loader2 className="w-3 h-3 animate-spin text-primary flex-shrink-0" />}
                         {resp?.status === "COMPLETED" && resp.content && <Check className="w-3 h-3 text-emerald-500 flex-shrink-0" />}
                       </div>
@@ -496,6 +533,7 @@ export function MessageBubble({
                             onVersionChange={(d) => handleVersionChange(model.id, d)}
                             onFeedback={onFeedback}
                             sharedView={sharedView}
+                            onToggleStar={onToggleStar}
                             onRegenerate={(msgId, mid) => {
                               setVersionIndices(prev => { const n = { ...prev }; delete n[mid]; return n; });
                               onRegenerate?.(msgId, mid);
@@ -546,7 +584,7 @@ export function MessageBubble({
 
 // ── Shared action bar ────────────────────────────────────────────────────────
 function CardActions({
-  resp, modelId, messageId, modelResps, verIdx, onVersionChange, onFeedback, onRegenerate, sharedView = false,
+  resp, modelId, messageId, modelResps, verIdx, onVersionChange, onFeedback, onRegenerate, sharedView = false, onToggleStar,
 }: {
   resp: ModelResponse;
   modelId: number;
@@ -557,6 +595,7 @@ function CardActions({
   onFeedback?: (responseId: number, isLiked: boolean | null) => void;
   onRegenerate?: (messageId: number, modelId: number) => void;
   sharedView?: boolean;
+  onToggleStar?: (responseId: number, isStarred: boolean) => void;
 }) {
   return (
     <div className="flex items-center gap-0.5 flex-wrap">
@@ -575,6 +614,16 @@ function CardActions({
         onClick={() => { navigator.clipboard.writeText(resp.content!); toast.success("Copied"); }}>
         <Copy className="w-3.5 h-3.5" />
       </Button>
+      {!sharedView && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-7 w-7 rounded-full ${resp.isStarred ? "text-yellow-500 bg-yellow-500/10" : "text-muted-foreground hover:bg-muted/80"}`}
+          onClick={() => onToggleStar?.(resp.id, !resp.isStarred)}
+        >
+          <Star className={`w-3.5 h-3.5 ${resp.isStarred ? "fill-current" : ""}`} />
+        </Button>
+      )}
       {!sharedView && (
         <Button variant="ghost" size="icon"
           className={`h-7 w-7 rounded-full ${resp.isLiked === true ? "text-green-500 bg-green-500/10" : "text-muted-foreground hover:bg-muted/80"}`}

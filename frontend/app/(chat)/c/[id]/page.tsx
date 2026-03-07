@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { notFound, useParams } from "next/navigation";
-import { chatService, modelService } from "@/lib/services";
+import { chatService, modelService, messageService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { toast } from "react-toastify";
@@ -29,6 +29,7 @@ interface Message {
 export default function ChatPage() {
   const params = useParams();
   const chatId = Number(params.id);
+  const [shouldForceScrollFromStarred, setShouldForceScrollFromStarred] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -148,10 +149,42 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const openedFromStarredChatId = sessionStorage.getItem("open_chat_from_starred");
+    if (openedFromStarredChatId === String(chatId)) {
+      setShouldForceScrollFromStarred(true);
+      sessionStorage.removeItem("open_chat_from_starred");
+    } else {
+      setShouldForceScrollFromStarred(false);
+    }
+  }, [chatId]);
+
+  useEffect(() => {
     fetchModels();
     fetchChat();
   }, [fetchModels, fetchChat]);
 
+  useEffect(() => {
+    if (!shouldForceScrollFromStarred) return;
+    let attempt = 0;
+    const maxAttempts = 8;
+
+    const scrollToBottom = () => {
+      const container = document.getElementById("chat-scroll-container");
+      const anchor = document.getElementById("chat-bottom-anchor");
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+      anchor?.scrollIntoView({ behavior: "auto", block: "end" });
+
+      if (attempt < maxAttempts) {
+        attempt += 1;
+        setTimeout(scrollToBottom, 80);
+      }
+    };
+
+    scrollToBottom();
+  }, [shouldForceScrollFromStarred, messages.length]);
 
   // Stream a single model's response
   const streamSingleModel = (
@@ -499,6 +532,23 @@ export default function ChatPage() {
     setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
   };
 
+  const handleToggleStar = async (responseId: number, isStarred: boolean) => {
+    setMessages((prev) =>
+      prev.map((msg) => ({
+        ...msg,
+        modelResponses: msg.modelResponses?.map((mr: any) =>
+          mr.id === responseId ? { ...mr, isStarred } : mr
+        ),
+      }))
+    );
+    try {
+      await messageService.starResponse(responseId, isStarred);
+    } catch {
+      toast.error("Failed to update starred state");
+      fetchChat();
+    }
+  };
+
   const handleEditVersionChange = (rootMessageId: number, versionIndex: number) => {
     setEditVersionIndices((prev) => ({ ...prev, [rootMessageId]: versionIndex }));
   };
@@ -661,6 +711,10 @@ export default function ChatPage() {
         editVersionIndices={editVersionIndices}
         onEditVersionChange={handleEditVersionChange}
         onFollowUpClick={setInitialPrompt}
+        onToggleStar={handleToggleStar}
+        bottomAnchorId="chat-bottom-anchor"
+        forceScrollToBottom={shouldForceScrollFromStarred}
+        scrollContainerId="chat-scroll-container"
       />
       <ChatInput
         models={models}
