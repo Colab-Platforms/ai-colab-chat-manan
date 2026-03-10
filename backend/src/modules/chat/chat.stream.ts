@@ -10,6 +10,13 @@ import { parseOffice } from "officeparser";
 
 const attachmentService = new AttachmentService();
 
+async function touchChat(chatId: number) {
+  await prisma.chat.update({
+    where: { id: chatId },
+    data: { updatedAt: new Date() },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Helpers for building OpenRouter multipart message content from attachments
 // ---------------------------------------------------------------------------
@@ -402,6 +409,8 @@ export async function streamChat(req: Request, res: Response) {
         data: { chatId, role: "ASSISTANT", content: "" },
       });
     }
+
+    await touchChat(chatId);
 
     // Build conversation history
     const previousMessages = await prisma.message.findMany({
@@ -1244,6 +1253,8 @@ export async function prepareMulti(req: Request, res: Response) {
       data: { chatId, role: "ASSISTANT", content: "" },
     });
 
+    await touchChat(chatId);
+
     res.json({
       status: true,
       data: {
@@ -1362,6 +1373,8 @@ export async function editAndResend(req: Request, res: Response) {
     const assistantMessage = await prisma.message.create({
       data: { chatId, role: "ASSISTANT", content: "" },
     });
+
+    await touchChat(chatId);
 
     // Build conversation history from messages BEFORE the original message
     const previousMessages = await prisma.message.findMany({
@@ -1712,6 +1725,8 @@ export async function prepareEditMulti(req: Request, res: Response) {
     const assistantMessage = await prisma.message.create({
       data: { chatId, role: "ASSISTANT", content: "" },
     });
+
+    await touchChat(chatId);
 
     res.json({
       status: true,
