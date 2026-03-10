@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare,
-  FileText, File
+  FileText, File, Upload
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -166,6 +166,8 @@ export function ChatInput({
   const [chatType, setChatType] = useState<ChatType>("STANDARD");
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhancedPrompt, setEnhancedPrompt] = useState("");
+  const [isDragActive, setIsDragActive] = useState(false);
+  const dragCounterRef = useRef(0);
 
   // Speech-to-text: track the text that existed before mic was started
   const preExistingTextRef = useRef("");
@@ -340,10 +342,9 @@ export function ChatInput({
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const newFiles = Array.from(e.target.files);
-    e.target.value = "";
+  const uploadFiles = useCallback(async (newFiles: File[]) => {
+    if (newFiles.length === 0) return;
+    if (isSending) return;
 
     if (attachments.length + newFiles.length > 5) {
       toast.error("You can only attach up to 5 files per message constraint.");
@@ -381,7 +382,62 @@ export function ChatInput({
         setAttachments(prev => prev.filter(a => a.id !== (tempId as any)));
       }
     }
+  }, [attachments.length, isSending]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const newFiles = Array.from(e.target.files);
+    e.target.value = "";
+    await uploadFiles(newFiles);
   };
+
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes("Files");
+
+    const onDragEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragCounterRef.current += 1;
+      setIsDragActive(true);
+    };
+
+    const onDragOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      if (!isDragActive) setIsDragActive(true);
+    };
+
+    const onDragLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+      if (dragCounterRef.current === 0) {
+        setIsDragActive(false);
+      }
+    };
+
+    const onDrop = async (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragActive(false);
+      const files = Array.from(e.dataTransfer?.files || []);
+      await uploadFiles(files);
+    };
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [isDragActive, uploadFiles]);
 
   const removeAttachment = (id: number) => {
     const found = attachments.find(a => a.id === id);
@@ -426,9 +482,28 @@ export function ChatInput({
   const hasUploadingFiles = attachments.some(a => a.uploading);
 
   return (
-    <div className="pt-2 pb-6 px-4 w-full">
-      <div className="max-w-3xl mx-auto">
-        <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+    <>
+      {isDragActive && (
+        <div className="fixed inset-0 z-[60] pointer-events-none">
+          <div className="absolute inset-0 bg-background/70 dark:bg-background/60 backdrop-blur-md backdrop-saturate-150" />
+          <div className="absolute shadow-[0_0_0_1px_hsl(var(--primary)/0.15)_inset]" />
+          <div className="absolute inset-0 flex items-center justify-center px-4">
+            <div className="w-full max-w-md rounded-3xl px-8 py-8 text-center animate-in fade-in-0 zoom-in-95 duration-150">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl from-primary/25 via-primary/15 to-transparent text-primary">
+                <Upload className="h-7 w-7" />
+              </div>
+              <p className="text-xl font-semibold tracking-tight text-foreground">Add anything</p>
+              <p className="mt-2 text-sm">Drop files anywhere to attach them to your message</p>
+              <div className="mt-5 inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                Max 5 files per message
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="pt-2 pb-6 px-4 w-full">
+        <div className="max-w-3xl mx-auto">
+          <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
 
           {/* Top Row: Chat Type Pill */}
           {chatType !== "STANDARD" && (
@@ -723,8 +798,9 @@ export function ChatInput({
             </DropdownMenu>
           </div>
           
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
