@@ -4,6 +4,7 @@ import { useState, ReactNode, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import * as LucideIcons from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/context/theme-context";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ import {
   Pin,
   PinOff,
   Star,
+  Bot,
 } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
 import { toast } from "react-toastify";
@@ -70,6 +72,20 @@ import { toast } from "react-toastify";
 // Shared Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface Assistant {
+  id: number;
+  name: string;
+  description?: string | null;
+  icon: string;
+  bgFrom?: string | null;
+  bgVia?: string | null;
+  bgTo?: string | null;
+  bgFromDark?: string | null;
+  bgViaDark?: string | null;
+  bgToDark?: string | null;
+  isActive: boolean;
+}
+
 interface Chat {
   id: number;
   title: string | null;
@@ -77,6 +93,8 @@ interface Chat {
   isArchived: boolean;
   isPinned: boolean;
   updatedAt: string;
+  assistantId?: number | null;
+  assistant?: { id: number; name: string; icon: string } | null;
 }
 
 interface FolderItem {
@@ -292,6 +310,11 @@ export function AppSidebar({
 interface SidebarProps {
   chats: Chat[];
   folders: FolderItem[];
+  assistants: Assistant[];
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  assistantsHasMore?: boolean;
+  onLoadMoreAssistants?: () => void;
   onRefresh: () => void;
   onMobileClose: () => void;
   onLogout: () => void;
@@ -301,10 +324,25 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
-export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, hasMore, onLoadMore, collapsed, onToggleCollapse }: SidebarProps) {
+export function Sidebar({
+  chats,
+  folders,
+  assistants,
+  searchQuery,
+  onSearchChange,
+  assistantsHasMore,
+  onLoadMoreAssistants,
+  onRefresh,
+  onMobileClose,
+  onLogout,
+  hasMore,
+  onLoadMore,
+  collapsed,
+  onToggleCollapse,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchQuery);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -328,6 +366,10 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
       setLocalFolders(folders);
     }
   }, [folders, pendingMoveForChat]);
+
+  useEffect(() => {
+    setSearch(searchQuery);
+  }, [searchQuery]);
 
   const handleCreateFolder = async (
     opts?: { forChatId?: number }
@@ -354,6 +396,8 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
 
   const handleNewChat = () => {
     onMobileClose();
+    localStorage.removeItem("selectedAssistantId");
+    window.dispatchEvent(new Event("assistant-selected"));
     router.push("/");
   };
 
@@ -487,9 +531,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
     setCreateFolderOpen(true);
   };
 
-  const filteredChats = chats.filter((c) =>
-    !c.isArchived && (c.title?.toLowerCase().includes(search.toLowerCase()) || !search)
-  );
+  const filteredChats = chats.filter((c) => !c.isArchived);
   const isStarredRoute = pathname === "/starred";
 
   // Pinned chats float to the top of their respective group
@@ -577,7 +619,11 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
           <Input
             placeholder="Search chats..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearch(value);
+              onSearchChange(value);
+            }}
             className="pl-9 h-9 bg-sidebar-accent/50 border-none text-sm"
           />
         </div>
@@ -653,6 +699,46 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
 
           
 
+          {/* Assistants Section */}
+          {assistants.length > 0 && (
+            <>
+              <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-2 uppercase tracking-wider">Assistants</div>
+              {assistants.map((assistant) => {
+                const IconComponent = (LucideIcons as any)[assistant.icon] as React.ElementType || Bot;
+                
+                return (
+                  <button
+                    key={assistant.id}
+                    onClick={async () => {
+                      onMobileClose();
+                      localStorage.setItem("selectedAssistantId", String(assistant.id));
+                      window.dispatchEvent(
+                        new CustomEvent("assistant-selected", {
+                          detail: { assistant },
+                        }),
+                      );
+                      router.push("/");
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer hover:bg-sidebar-accent text-foreground"
+                    title={assistant.description || assistant.name}
+                  >
+                    <IconComponent className="w-4 h-4 flex-shrink-0 text-primary" />
+                    <span className="truncate flex-1 text-left">{assistant.name}</span>
+                  </button>
+                );
+              })}
+              {assistantsHasMore && (
+                <Button
+                  variant="ghost"
+                  className="w-full mt-1 text-xs text-muted-foreground hover:text-foreground h-8 cursor-pointer"
+                  onClick={onLoadMoreAssistants}
+                >
+                  Load More Assistants
+                </Button>
+              )}
+            </>
+          )}
+
           {/* Unfoldered chats */}
           {unfoldered.length > 0 && <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-4 uppercase tracking-wider">Chats</div>}
           <button
@@ -691,7 +777,7 @@ export function Sidebar({ chats, folders, onRefresh, onMobileClose, onLogout, ha
               className="w-full mt-2 text-xs text-muted-foreground hover:text-foreground h-8 cursor-pointer"
               onClick={onLoadMore}
             >
-              Load More
+              Load More Chats
             </Button>
           )}
         </div>
@@ -863,6 +949,7 @@ function ChatItem({
             : "hover:bg-sidebar-accent text-foreground"
         }`}
       >
+        {/* Always use MessageSquare for chat history */}
         <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
         <span className="truncate flex-1" title={chat.title || "New Chat"}>
           {(chat.title || "New Chat").length > 15

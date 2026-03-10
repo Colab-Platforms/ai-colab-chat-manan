@@ -6,6 +6,7 @@ import {
   getPaginationOptions,
   formatPaginationResponse,
 } from "@/utils/paginationUtils.js";
+import { buildPrismaQuery } from "prisma-qb";
 
 class FolderService {
   async create(userId: number, data: CreateFolderBody) {
@@ -19,14 +20,27 @@ class FolderService {
   async list(userId: number, query: any) {
     const { take, skip, page, pageSize } = getPaginationOptions(query, 20);
 
-    const where = { userId, isDeleted: false };
+    const { where: qbWhere, orderBy } = buildPrismaQuery({
+      query,
+      searchFields: [{ field: "name" }],
+      filterFields: [],
+      sortFields: [
+        { key: "createdAt", field: "createdAt" },
+        { key: "name", field: "name" },
+      ],
+      defaultSort: { key: "createdAt", order: "desc" },
+      softDelete: { field: "isDeleted", value: false },
+      allowedQueryKeys: ["page", "pageSize"],
+    });
+
+    const where = { ...qbWhere, userId };
 
     const [folders, totalRecords] = await Promise.all([
       prisma.folder.findMany({
         where,
         skip,
         take,
-        orderBy: { createdAt: "desc" },
+        orderBy,
       }),
       prisma.folder.count({ where }),
     ]);

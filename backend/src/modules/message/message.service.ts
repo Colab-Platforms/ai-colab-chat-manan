@@ -8,6 +8,7 @@ import {
     formatPaginationResponse,
 } from "@/utils/paginationUtils.js";
 import { estimateTokenCount } from "@/utils/tokenCounter.js";
+import { buildPrismaQuery } from "prisma-qb";
 
 class MessageService {
     async create(userId: number, data: CreateMessageBody) {
@@ -72,7 +73,17 @@ class MessageService {
 
     async listStarredResponses(userId: number, query: any) {
         const { take, skip, page, pageSize } = getPaginationOptions(query, 30);
+        const { where: qbWhere, orderBy } = buildPrismaQuery({
+            query,
+            searchFields: [{ field: "content" }],
+            filterFields: [],
+            sortFields: [{ key: "createdAt", field: "createdAt" }],
+            defaultSort: { key: "createdAt", order: "desc" },
+            allowedQueryKeys: ["page", "pageSize"],
+        });
+
         const where = {
+            ...qbWhere,
             isStarred: true,
             chat: {
                 userId,
@@ -88,7 +99,7 @@ class MessageService {
                 where,
                 skip,
                 take,
-                orderBy: { createdAt: "desc" },
+                orderBy,
                 include: {
                     model: { select: { id: true, name: true, externalId: true } },
                     chat: { select: { id: true, title: true } },

@@ -13,6 +13,7 @@ import usageLogRoutes from "@/modules/usage-log/usageLog.route.js";
 import modelRoutes from "@/modules/model/model.route.js";
 import modelProviderRoutes from "@/modules/model-provider/modelProvider.route.js";
 import userPreferenceRoutes from "@/modules/user-preference/user-preference.route.js";
+import assistantRoutes from "@/modules/assistant/assistant.route.js";
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.use("/usage-logs", usageLogRoutes);
 router.use("/models", modelRoutes);
 router.use("/model-providers", modelProviderRoutes);
 router.use("/preferences", userPreferenceRoutes);
+router.use("/assistants", assistantRoutes);
 
 export default router;

@@ -4,25 +4,27 @@ import { seedModelProviders } from "./modelProviders.seed.js";
 import { seedModels } from "./models.seed.js";
 import { seedPlans } from "./plans.seed.js";
 import { seedSuperAdmin } from "./superAdmin.seed.js";
+import { seedAssistants } from "./assistants.seed.js";
 
 async function main() {
-    console.log("🌱 Starting seed...\n");
+  console.log("🌱 Starting seed...\n");
 
-    // Order matters — dependencies first
-    await seedRoles();
-    await seedModelProviders();
-    await seedModels();
-    await seedPlans();
-    await seedSuperAdmin();
+  // Order matters — dependencies first
+  await seedRoles();
+  await seedModelProviders();
+  await seedModels();
+  await seedPlans();
+  await seedSuperAdmin();
+  await seedAssistants();
 
-    console.log("\n✅ All seeds completed successfully!");
+  console.log("\n✅ All seeds completed successfully!");
 }
 
 main()
-    .catch((e) => {
-        console.error("❌ Seed failed:", e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+  .catch((e) => {
+    console.error("❌ Seed failed:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

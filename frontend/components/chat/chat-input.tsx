@@ -257,7 +257,10 @@ export function ChatInput({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      const maxHeight = 112;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
+      textareaRef.current.style.overflowY =
+        textareaRef.current.scrollHeight > maxHeight ? "auto" : "hidden";
     }
   }, [content]);
 
@@ -580,7 +583,7 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               placeholder="Ask anything..."
               rows={1}
-              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-h-[40px] max-h-[200px] leading-relaxed py-2.5 text-[15px] self-center"
+              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-h-[40px] max-h-[112px] leading-relaxed py-2.5 text-[15px] self-center overflow-y-auto"
             />
 
             <div className="flex items-center gap-0.5 flex-shrink-0 mb-0.5 mr-1">

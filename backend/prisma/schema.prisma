@@ -106,27 +106,30 @@ model Folder {
 }
 
 model Chat {
-  id         Int             @id @default(autoincrement())
-  title      String?
-  userId     Int
-  folderId   Int?
-  messages   Message[]
-  responses  ModelResponse[]
-  isPinned   Boolean         @default(false)
-  isArchived Boolean         @default(false)
-  isShared   Boolean         @default(false)
-  isDeleted  Boolean         @default(false)
-  shareId    String?         @unique
-  sharedAt   DateTime?
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  deletedAt  DateTime?
-  user       User            @relation(fields: [userId], references: [id])
-  folder     Folder?         @relation(fields: [folderId], references: [id])
-  usageLogs  UsageLog[]
+  id          Int             @id @default(autoincrement())
+  title       String?
+  userId      Int
+  folderId    Int?
+  assistantId Int?
+  messages    Message[]
+  responses   ModelResponse[]
+  isPinned    Boolean         @default(false)
+  isArchived  Boolean         @default(false)
+  isShared    Boolean         @default(false)
+  isDeleted   Boolean         @default(false)
+  shareId     String?         @unique
+  sharedAt    DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  user        User            @relation(fields: [userId], references: [id])
+  folder      Folder?         @relation(fields: [folderId], references: [id])
+  assistant   Assistant?      @relation(fields: [assistantId], references: [id])
+  usageLogs   UsageLog[]
 
   @@index([userId])
   @@index([folderId])
+  @@index([assistantId])
 }
 
 model Message {
@@ -213,8 +216,35 @@ model Model {
   deletedAt              DateTime?
   usageLogs              UsageLog[]
   modelProvider          ModelProvider     @relation(fields: [modelProviderId], references: [id])
+  assistants             Assistant[]
 
   @@unique([modelProviderId, externalId])
+}
+
+model Assistant {
+  id               Int       @id @default(autoincrement())
+  name             String
+  slug             String    @unique
+  description      String?
+  icon             String    @default("Bot") // Lucide icon name
+  bgFrom           String?
+  bgVia            String?
+  bgTo             String?
+  bgFromDark       String?
+  bgViaDark        String?
+  bgToDark         String?
+  systemPrompt     String
+  defaultModelId   Int?
+  temperature      Float     @default(0.7) // OpenRouter supports 0.0 - 2.0
+  greeting         String?
+  suggestedPrompts Json?
+  isActive         Boolean   @default(true)
+  isDeleted        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+  defaultModel     Model?    @relation(fields: [defaultModelId], references: [id])
+  chats            Chat[]
 }
 
 model ModelProvider {

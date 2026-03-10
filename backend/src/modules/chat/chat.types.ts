@@ -1,4 +1,5 @@
 export interface CreateChatBody {
-    title?: string;
-    folderId?: number;
+  title?: string;
+  folderId?: number;
+  assistantId?: number | null;
 }

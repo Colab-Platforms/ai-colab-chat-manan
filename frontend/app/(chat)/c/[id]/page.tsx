@@ -2,10 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { notFound, useParams } from "next/navigation";
-import { chatService, modelService, messageService } from "@/lib/services";
+import { chatService, modelService, messageService, assistantService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { toast } from "react-toastify";
+import * as LucideIcons from "lucide-react";
+import { Bot, Sparkles, MessageSquare } from "lucide-react";
+
+const SUGGESTED_PROMPTS = [
+  { text: "Brainstorm ideas for...", value: "Brainstorm ideas for ", icon: Sparkles, className: "w-3.5 h-3.5 inline mr-2" },
+  { text: "Help me write a...", value: "Help me write a ", icon: MessageSquare, className: "w-3.5 h-3.5 inline mr-2" },
+  { text: "Explain how...", value: "Explain how ", icon: MessageSquare, className: "w-3.5 h-3.5 inline mr-2 inline-block transform scale-x-[-1]" },
+];
 
 interface Model {
   id: number;
@@ -41,6 +49,7 @@ export default function ChatPage() {
   const [editVersionIndices, setEditVersionIndices] = useState<Record<number, number>>({});
   const [isNotFound, setIsNotFound] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState("");
+  const [assistant, setAssistant] = useState<{ id: number; name: string; description?: string | null; icon: string } | null>(null);
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
   const modelsRestoredRef = useRef(false);
@@ -49,6 +58,16 @@ export default function ChatPage() {
     try {
       const res = await chatService.getById(chatId);
       const chat = res.data.data;
+
+      // Load assistant info if this chat has one
+      if (chat.assistantId) {
+        try {
+          const aRes = await assistantService.getById(chat.assistantId);
+          setAssistant(aRes.data.data);
+        } catch { /* ignore */ }
+      } else {
+        setAssistant(null);
+      }
 
       setMessages((prev) => {
         if (isStreamingRef.current) return prev;
@@ -364,6 +383,8 @@ export default function ChatPage() {
 
       isStreamingRef.current = false;
       await fetchChat();
+      // Dispatch refresh so sidebar title updates after first message
+      window.dispatchEvent(new Event("refresh-chats"));
     } catch (err: any) {
       toast.error(err.message || "Failed to send message");
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMsgId && m.id !== streamingMsgId));

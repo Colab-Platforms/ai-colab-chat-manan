@@ -31,6 +31,7 @@ const adminNav = [
   { label: "Users", href: "/profile/users", icon: Users },
   { label: "Plans", href: "/profile/plans", icon: PlansIcon },
   { label: "Models", href: "/profile/models", icon: Bot },
+  { label: "Assistants", href: "/profile/assistants", icon: Bot },
   { label: "Providers", href: "/profile/providers", icon: Building },
   { label: "Usage", href: "/profile/usage", icon: BarChart3 },
 ];

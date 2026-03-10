@@ -421,6 +421,25 @@ export async function streamChat(req: Request, res: Response) {
     const enableFollowUpQuestions =
       userPreference?.enableFollowUpQuestions !== false;
 
+    // -----------------------------------------------------------------------
+    // Assistant persona injection – prepend assistant system prompt first
+    // so it sits at the very beginning of the conversation context.
+    // Context memory (user personalisation) is stacked on top of it next.
+    // -----------------------------------------------------------------------
+    let assistantTemperature: number | undefined;
+    if (chat.assistantId) {
+      const chatAssistant = await prisma.assistant.findFirst({
+        where: { id: chat.assistantId, isActive: true, isDeleted: false },
+      });
+      if (chatAssistant) {
+        conversationHistory.unshift({
+          role: "system",
+          content: chatAssistant.systemPrompt,
+        });
+        assistantTemperature = chatAssistant.temperature;
+      }
+    }
+
     // Prepend context memory as a system message (zero extra queries — already fetched above)
     const contextItems = userPreference?.contextMemory || [];
     if (contextItems.length > 0) {
@@ -565,6 +584,7 @@ export async function streamChat(req: Request, res: Response) {
         chatType,
         max_tokens: maxCompletionTokens,
         plugins: streamPlugins.length > 0 ? streamPlugins : undefined,
+        temperature: assistantTemperature,
       });
 
       for await (const chunk of stream) {

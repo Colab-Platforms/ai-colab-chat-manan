@@ -7,6 +7,7 @@ import {
   getPaginationOptions,
   formatPaginationResponse,
 } from "@/utils/paginationUtils.js";
+import { buildPrismaQuery } from "prisma-qb";
 
 class ChatService {
   async create(userId: number, data: CreateChatBody) {
@@ -18,11 +19,23 @@ class ChatService {
         throw new ApiError("Folder not found", STATUS_CODES.NOT_FOUND);
     }
 
+    if (data.assistantId) {
+      const assistant = await prisma.assistant.findFirst({
+        where: { id: data.assistantId, isActive: true, isDeleted: false },
+      });
+      if (!assistant)
+        throw new ApiError(
+          "Assistant not found or inactive",
+          STATUS_CODES.NOT_FOUND,
+        );
+    }
+
     const chat = await prisma.chat.create({
       data: {
         title: data.title,
         userId,
         folderId: data.folderId ?? null,
+        assistantId: data.assistantId ?? null,
       },
     });
 
@@ -32,17 +45,33 @@ class ChatService {
   async list(userId: number, query: any) {
     const { take, skip, page, pageSize } = getPaginationOptions(query, 20);
 
-    const where: any = { userId, isDeleted: false };
-    if (query.folderId) where.folderId = parseInt(query.folderId);
-    if (query.isArchived !== undefined)
-      where.isArchived = query.isArchived === "true";
+    const { where: qbWhere, orderBy } = buildPrismaQuery({
+      query,
+      searchFields: [{ field: "title" }],
+      filterFields: [
+        { key: "folderId", field: "folderId", type: "number" },
+        { key: "isArchived", field: "isArchived", type: "boolean" },
+      ],
+      sortFields: [
+        { key: "updatedAt", field: "updatedAt" },
+        { key: "createdAt", field: "createdAt" },
+      ],
+      defaultSort: { key: "updatedAt", order: "desc" },
+      softDelete: { field: "isDeleted", value: false },
+      allowedQueryKeys: ["page", "pageSize"],
+    });
+
+    const where: any = { ...qbWhere, userId };
 
     const [chats, totalRecords] = await Promise.all([
       prisma.chat.findMany({
         where,
         skip,
         take,
-        orderBy: { updatedAt: "desc" },
+        orderBy,
+        include: {
+          assistant: { select: { id: true, name: true, icon: true } },
+        },
       }),
       prisma.chat.count({ where }),
     ]);
@@ -77,7 +106,11 @@ class ChatService {
   async update(
     userId: number,
     chatId: number,
-    data: { title?: string; folderId?: number | null },
+    data: {
+      title?: string;
+      folderId?: number | null;
+      assistantId?: number | null;
+    },
   ) {
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId, isDeleted: false },
@@ -95,10 +128,7 @@ class ChatService {
 
     const updated = await prisma.chat.update({
       where: { id: chatId },
-      data: {
-        ...(data.title !== undefined && { title: data.title }),
-        ...(data.folderId !== undefined && { folderId: data.folderId }),
-      },
+      data,
     });
 
     return updated;

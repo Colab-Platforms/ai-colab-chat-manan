@@ -5,8 +5,11 @@ export const healthService = {
 };
 
 export const chatService = {
-  create: (data: { title?: string; folderId?: number }) =>
-    api.post("/chats", data),
+  create: (data: {
+    title?: string;
+    folderId?: number;
+    assistantId?: number | null;
+  }) => api.post("/chats", data),
   list: (params?: Record<string, string>) => api.get("/chats", { params }),
   getById: (id: number) => api.get(`/chats/${id}`),
   archive: (id: number) => api.patch(`/chats/${id}/archive`),
@@ -14,8 +17,14 @@ export const chatService = {
   share: (id: number) => api.patch(`/chats/${id}/share`),
   getShared: (shareId: string) => api.get(`/chats/shared/${shareId}`),
   delete: (id: number) => api.delete(`/chats/${id}`),
-  update: (id: number, data: { title?: string; folderId?: number | null }) =>
-    api.put(`/chats/${id}`, data),
+  update: (
+    id: number,
+    data: {
+      title?: string;
+      folderId?: number | null;
+      assistantId?: number | null;
+    },
+  ) => api.put(`/chats/${id}`, data),
   feedback: (chatId: number, responseId: number, isLiked: boolean | null) =>
     api.post(`/chats/${chatId}/responses/${responseId}/feedback`, { isLiked }),
 };
@@ -24,7 +33,8 @@ export const messageService = {
   create: (data: { chatId: number; content: string; editedFromId?: number }) =>
     api.post("/messages", data),
   enhancePrompt: (prompt: string) => api.post("/messages/enhance", { prompt }),
-  listStarred: (params?: Record<string, string>) => api.get("/messages/starred", { params }),
+  listStarred: (params?: Record<string, string>) =>
+    api.get("/messages/starred", { params }),
   starResponse: (responseId: number, isStarred: boolean) =>
     api.patch(`/messages/responses/${responseId}/star`, { isStarred }),
 };
@@ -123,4 +133,13 @@ export const userPreferenceService = {
     enableFollowUpQuestions?: boolean;
     contextMemory?: string[];
   }) => api.put("/preferences", data),
+};
+
+export const assistantService = {
+  list: (params?: Record<string, string>) => api.get("/assistants", { params }),
+  getById: (id: number) => api.get(`/assistants/${id}`),
+  create: (data: any) => api.post("/assistants", data),
+  update: (id: number, data: any) => api.put(`/assistants/${id}`, data),
+  toggle: (id: number) => api.patch(`/assistants/${id}/toggle`),
+  delete: (id: number) => api.delete(`/assistants/${id}`),
 };

@@ -6,7 +6,7 @@ import { useAuth } from "@/context/auth-context";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { Button } from "@/components/ui/button";
 import { Menu, Settings, LogOut, Sun, Moon } from "lucide-react";
-import { chatService, folderService } from "@/lib/services";
+import { chatService, folderService, assistantService } from "@/lib/services";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +24,22 @@ interface Chat {
   isArchived: boolean;
   isPinned: boolean;
   updatedAt: string;
+  assistantId?: number | null;
+  assistant?: { id: number; name: string; icon: string } | null;
+}
+
+interface Assistant {
+  id: number;
+  name: string;
+  description?: string | null;
+  icon: string;
+  bgFrom?: string | null;
+  bgVia?: string | null;
+  bgTo?: string | null;
+  bgFromDark?: string | null;
+  bgViaDark?: string | null;
+  bgToDark?: string | null;
+  isActive: boolean;
 }
 
 interface Folder {
@@ -41,7 +57,15 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [chatSearch, setChatSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [assistants, setAssistants] = useState<Assistant[]>([]);
+  const [assistantsPage, setAssistantsPage] = useState(1);
+  const [assistantsHasMore, setAssistantsHasMore] = useState(false);
+  const [activeAssistantId, setActiveAssistantId] = useState<number | null>(null);
+  const [activeAssistantTheme, setActiveAssistantTheme] = useState<Assistant | null>(
+    null,
+  );
 
   // Hydrate sidebar collapsed state from localStorage
   useEffect(() => {
@@ -59,10 +83,16 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
   const isProfileRoute = pathname.startsWith("/profile");
 
-  const fetchChats = useCallback(async (pageNum = 1) => {
+  const fetchChats = useCallback(async (pageNum = 1, searchTerm = chatSearch) => {
     try {
-      const res = await chatService.list({ page: pageNum.toString(), pageSize: "10" });
-      const fetched = res.data.data?.data || [];
+      const res = await chatService.list({
+        page: pageNum.toString(),
+        pageSize: "6",
+        isArchived: "false",
+        ...(searchTerm ? { search: searchTerm } : {}),
+      });
+      const result = res.data.data;
+      const fetched = result?.data || [];
 
       setChats(prev => {
         if (pageNum === 1) return fetched;
@@ -71,14 +101,30 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       });
 
       setPage(pageNum);
-      setHasMore(fetched.length === 10);
+      setHasMore(Boolean(result?.hasNextPage));
     } catch { /* ignore */ }
-  }, []);
+  }, [chatSearch]);
 
   const fetchFolders = useCallback(async () => {
     try {
       const res = await folderService.list();
       setFolders(res.data.data?.data || []);
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchAssistants = useCallback(async (pageNum = 1) => {
+    try {
+      const res = await assistantService.list({
+        isActive: "true",
+        page: pageNum.toString(),
+        pageSize: "4",
+      });
+      const result = res.data.data;
+      const fetched = result?.data || [];
+
+      setAssistants((prev) => (pageNum === 1 ? fetched : [...prev, ...fetched]));
+      setAssistantsPage(pageNum);
+      setAssistantsHasMore(Boolean(result?.hasNextPage));
     } catch { /* ignore */ }
   }, []);
 
@@ -88,16 +134,106 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       return;
     }
     if (user) {
-      fetchChats(1);
+      fetchChats(1, chatSearch);
       fetchFolders();
+      fetchAssistants(1);
     }
-  }, [user, isLoading, router, fetchChats, fetchFolders]);
+  }, [user, isLoading, router, fetchChats, fetchFolders, fetchAssistants, chatSearch]);
 
   useEffect(() => {
     const handleRefresh = () => fetchChats(1);
     window.addEventListener("refresh-chats", handleRefresh);
     return () => window.removeEventListener("refresh-chats", handleRefresh);
   }, [fetchChats]);
+
+  useEffect(() => {
+    const handleRefreshAssistants = () => fetchAssistants(1);
+    window.addEventListener("refresh-assistants", handleRefreshAssistants);
+    return () =>
+      window.removeEventListener("refresh-assistants", handleRefreshAssistants);
+  }, [fetchAssistants]);
+
+  useEffect(() => {
+    const handleAssistantSelected = (evt: Event) => {
+      const customEvt = evt as CustomEvent<{ assistant?: Assistant }>;
+      const assistant = customEvt.detail?.assistant;
+      const raw = localStorage.getItem("selectedAssistantId");
+      const parsed = raw ? Number(raw) : NaN;
+      setActiveAssistantId(Number.isNaN(parsed) ? null : parsed);
+      if (assistant) {
+        setActiveAssistantTheme(assistant);
+      }
+    };
+    window.addEventListener("assistant-selected", handleAssistantSelected);
+    return () =>
+      window.removeEventListener("assistant-selected", handleAssistantSelected);
+  }, []);
+
+  useEffect(() => {
+    if (!isProfileRoute && user) {
+      fetchAssistants(1);
+    }
+  }, [pathname, isProfileRoute, user, fetchAssistants]);
+
+  useEffect(() => {
+    fetchChats(1, chatSearch);
+  }, [chatSearch, fetchChats]);
+
+  useEffect(() => {
+    const resolveActiveAssistant = async () => {
+      if (pathname === "/") {
+        const raw = localStorage.getItem("selectedAssistantId");
+        const parsed = raw ? Number(raw) : NaN;
+        setActiveAssistantId(Number.isNaN(parsed) ? null : parsed);
+        return;
+      }
+
+      if (pathname.startsWith("/c/")) {
+        const match = pathname.match(/^\/c\/(\d+)/);
+        const chatId = match ? Number(match[1]) : NaN;
+        if (Number.isNaN(chatId)) {
+          setActiveAssistantId(null);
+          return;
+        }
+
+        const listChat = chats.find((c) => c.id === chatId);
+        if (listChat) {
+          setActiveAssistantId(listChat.assistantId ?? null);
+          return;
+        }
+
+        try {
+          const res = await chatService.getById(chatId);
+          setActiveAssistantId(res.data.data?.assistantId ?? null);
+        } catch {
+          setActiveAssistantId(null);
+        }
+        return;
+      }
+
+      setActiveAssistantId(null);
+    };
+
+    resolveActiveAssistant();
+  }, [pathname, chats]);
+
+  useEffect(() => {
+    if (!activeAssistantId) {
+      setActiveAssistantTheme(null);
+      return;
+    }
+
+    const listMatch = assistants.find((a) => a.id === activeAssistantId);
+    if (listMatch) {
+      setActiveAssistantTheme(listMatch);
+      return;
+    }
+
+    assistantService
+      .getById(activeAssistantId)
+      .then((res) => setActiveAssistantTheme(res.data.data || null))
+      .catch(() => setActiveAssistantTheme(null));
+  }, [activeAssistantId, assistants]);
 
   if (isLoading) {
     return (
@@ -129,18 +265,55 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     <Sidebar
       chats={chats}
       folders={folders}
-      onRefresh={() => { fetchChats(1); fetchFolders(); }}
+      assistants={assistants}
+      onRefresh={() => { fetchChats(1, chatSearch); fetchFolders(); fetchAssistants(1); }}
       onMobileClose={() => setMobileOpen(false)}
       onLogout={handleLogout}
       hasMore={hasMore}
-      onLoadMore={() => { if (hasMore) fetchChats(page + 1); }}
+      onLoadMore={() => { if (hasMore) fetchChats(page + 1, chatSearch); }}
+      searchQuery={chatSearch}
+      onSearchChange={setChatSearch}
+      assistantsHasMore={assistantsHasMore}
+      onLoadMoreAssistants={() => { if (assistantsHasMore) fetchAssistants(assistantsPage + 1); }}
       collapsed={sidebarCollapsed}
       onToggleCollapse={toggleSidebarCollapsed}
     />
   );
 
+  const resolvedGradient = activeAssistantTheme
+    ? theme === "dark" &&
+      activeAssistantTheme.bgFromDark &&
+      activeAssistantTheme.bgToDark
+      ? {
+          from: activeAssistantTheme.bgFromDark,
+          via:
+            activeAssistantTheme.bgViaDark || activeAssistantTheme.bgFromDark,
+          to: activeAssistantTheme.bgToDark,
+        }
+      : activeAssistantTheme.bgFrom && activeAssistantTheme.bgTo
+        ? {
+            from: activeAssistantTheme.bgFrom,
+            via: activeAssistantTheme.bgVia || activeAssistantTheme.bgFrom,
+            to: activeAssistantTheme.bgTo,
+          }
+        : null
+    : null;
+  const hasAssistantGradient = !!resolvedGradient;
+  const dynamicBackgroundStyle = resolvedGradient
+    ? {
+        background: `linear-gradient(135deg, ${resolvedGradient.from}, ${resolvedGradient.via}, ${resolvedGradient.to})`,
+      }
+    : undefined;
+
   return (
-    <div className="h-dvh flex bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 overflow-hidden text-foreground">
+    <div
+      className={`h-dvh flex overflow-hidden text-foreground ${
+        hasAssistantGradient
+          ? "bg-background"
+          : "bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
+      }`}
+      style={dynamicBackgroundStyle}
+    >
       {/* Desktop sidebar */}
       <aside
         className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-all duration-300 ease-in-out ${
