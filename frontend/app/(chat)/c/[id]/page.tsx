@@ -784,6 +784,7 @@ export default function ChatPage() {
         isSending={isSending}
         initialPrompt={initialPrompt}
         onPromptClear={() => setInitialPrompt("")}
+        draftStorageKey={`chat_draft_${chatId}`}
       />
     </div>
   );

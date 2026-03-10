@@ -60,6 +60,7 @@ interface ChatInputProps {
   forceReset?: boolean;
   initialPrompt?: string;
   onPromptClear?: () => void;
+  draftStorageKey?: string;
 }
 
 type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH";
@@ -160,6 +161,7 @@ export function ChatInput({
   forceReset,
   initialPrompt,
   onPromptClear,
+  draftStorageKey,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
@@ -255,6 +257,28 @@ export function ChatInput({
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resolvedDraftStorageKey = draftStorageKey?.trim();
+  const skipNextDraftSaveRef = useRef(false);
+
+  useEffect(() => {
+    if (!resolvedDraftStorageKey) return;
+    skipNextDraftSaveRef.current = true;
+    const storedDraft = localStorage.getItem(resolvedDraftStorageKey);
+    setContent(storedDraft || "");
+  }, [resolvedDraftStorageKey]);
+
+  useEffect(() => {
+    if (!resolvedDraftStorageKey) return;
+    if (skipNextDraftSaveRef.current) {
+      skipNextDraftSaveRef.current = false;
+      return;
+    }
+    if (content) {
+      localStorage.setItem(resolvedDraftStorageKey, content);
+    } else {
+      localStorage.removeItem(resolvedDraftStorageKey);
+    }
+  }, [content, resolvedDraftStorageKey]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -298,6 +322,9 @@ export function ChatInput({
       .map(a => a.id);
     onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, chatType, attachments.filter(a => !a.uploading));
     setContent("");
+    if (resolvedDraftStorageKey) {
+      localStorage.removeItem(resolvedDraftStorageKey);
+    }
     setEnhancedPrompt("");
     // Revoke any object URLs to avoid memory leaks
     attachments.forEach(a => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });

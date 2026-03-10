@@ -202,6 +202,7 @@ export default function NewChatPage() {
         forceReset={true}
         initialPrompt={initialPrompt}
         onPromptClear={() => setInitialPrompt(undefined)}
+        draftStorageKey="chat_draft_new"
       />
     </div>
   );
