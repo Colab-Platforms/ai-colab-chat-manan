@@ -69,6 +69,79 @@ type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH"
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
 const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md,.ppt,.pptx";
 
+const CAPABILITY_PATTERNS: Record<Exclude<ChatType, "STANDARD">, RegExp[]> = {
+  IMAGE_GENERATION: [
+    /\b(generate|create|make|design|draw|render)\b.{0,40}\b(image|picture|photo|art|illustration|logo|icon|poster|banner)\b/i,
+    /\b(image|picture|photo|art|illustration|logo|icon|poster|banner)\b.{0,40}\b(generate|create|make|design|draw|render)\b/i,
+    /\b(text to image|text-to-image|image generation|generate an image|create an image)\b/i,
+    /\b(img|pic|pics|wallpaper|thumbnail|avatar|sticker|sketch|concept art|cover art|mockup)\b/i,
+    /\b(make|create|generate|design)\b.{0,40}\b(img|pic|photo|wallpaper|thumbnail|avatar|sticker|logo)\b/i,
+    /\b(a|an)\s+(image|img|picture|photo|logo|icon|poster|banner)\s+(of|for)\b/i,
+    /\b(illustrate|visualize)\b/i,
+    /\b(can you|could you|please)\b.{0,30}\b(make|create|generate|design|draw)\b.{0,40}\b(image|img|picture|photo|logo|icon|art)\b/i,
+    /\bi need\b.{0,30}\b(image|img|picture|photo|logo|icon|banner|poster)\b/i,
+    /\bturn\b.{0,30}\b(this|that|text|idea|prompt)\b.{0,30}\binto\b.{0,30}\b(image|img|picture|art)\b/i,
+    /\bshow me\b.{0,30}\b(image|img|visual|mockup|design)\b/i,
+  ],
+  DEEP_RESEARCH: [
+    /\b(deep research|comprehensive research|research thoroughly|investigate deeply|in depth research|detailed report)\b/i,
+    /\b(analyze|investigate|evaluate|compare)\b.{0,40}\b(in depth|thoroughly|comprehensively|detailed)\b/i,
+    /\b(deep dive|deep-dive|thorough analysis|comprehensive analysis|detailed analysis)\b/i,
+    /\b(literature review|systematic review|research paper|whitepaper|thesis)\b/i,
+    /\b(citations?|references|sources?)\b.{0,40}\b(required|needed|please|include|with)\b/i,
+    /\b(with citations|with references|with sources|cite sources)\b/i,
+    /\b(analyse|analyze|compare|evaluate)\b.{0,40}\b(pros and cons|trade[- ]?offs|in detail)\b/i,
+    /\bresearch about\b/i,
+    /\bthink before answering\b/i,
+    /\bthink (deeply|carefully|step by step)\b/i,
+    /\b(do|perform)\b.{0,20}\bdeep\b.{0,20}\bresearch\b/i,
+    /\b(give|provide)\b.{0,30}\b(detailed|in-depth|thorough)\b.{0,30}\b(answer|analysis|breakdown)\b/i,
+    /\bexplain\b.{0,30}\b(step by step|in depth|in detail)\b/i,
+  ],
+  WEB_SEARCH: [
+    /\b(web search|search the web|browse the web|look up|google|find online)\b/i,
+    /\b(latest|current|today|recent|news|updated)\b.{0,40}\b(info|information|updates|price|prices|trend|trends|status)\b/i,
+    /\b(search online|search internet|look it up|google it|check online|find on the web|browse online)\b/i,
+    /\b(search|find|lookup|look up|check|browse)\b.{0,40}\b(web|online|internet|google|website|site)\b/i,
+    /\b(web|online|internet|google)\b.{0,40}\b(search|find|lookup|look up|check|browse)\b/i,
+    /\b(latest|breaking|current|recent|today|up to date|up-to-date)\b.{0,40}\b(news|price|prices|weather|score|scores|updates?)\b/i,
+    /\bwhat('?s| is)\b.{0,30}\b(latest|new|current|today)\b/i,
+    /\bcheck\b.{0,30}\b(latest|current|today|recent)\b.{0,30}\b(on|about)\b/i,
+    /\b(find|show)\b.{0,30}\b(latest|recent|current)\b.{0,30}\b(news|updates|info|information)\b/i,
+    /\bsearch\b.{0,30}\bfor\b/i,
+    /\blook\b.{0,30}\bit up\b/i,
+  ],
+};
+
+function inferChatTypeFromPrompt(prompt: string): ChatType {
+  const text = prompt.trim();
+  if (!text) return "STANDARD";
+
+  const orderedTypes = ["IMAGE_GENERATION", "DEEP_RESEARCH", "WEB_SEARCH"] as const;
+  const scores: Record<(typeof orderedTypes)[number], number> = {
+    IMAGE_GENERATION: 0,
+    DEEP_RESEARCH: 0,
+    WEB_SEARCH: 0,
+  };
+
+  for (const type of orderedTypes) {
+    scores[type] = CAPABILITY_PATTERNS[type].reduce((count, pattern) => {
+      return count + (pattern.test(text) ? 1 : 0);
+    }, 0);
+  }
+
+  let bestType: ChatType = "STANDARD";
+  let bestScore = 0;
+  for (const type of orderedTypes) {
+    if (scores[type] > bestScore) {
+      bestType = type;
+      bestScore = scores[type];
+    }
+  }
+
+  return bestType;
+}
+
 function getAttachmentCategory(fileName: string, mimeType: string) {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const lowerMime = mimeType.toLowerCase();
@@ -207,9 +280,11 @@ export function ChatInput({
   }, [forceReset]);
 
   // Save chat type changes
-  const handleChatTypeChange = (type: ChatType) => {
+  const applyChatType = (type: ChatType, persistPreference: boolean) => {
     setChatType(type);
-    localStorage.setItem("preferredChatType", type);
+    if (persistPreference) {
+      localStorage.setItem("preferredChatType", type);
+    }
 
     // Only keep models that support the new type
     const validModels = models.filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(type));
@@ -229,6 +304,17 @@ export function ChatInput({
       onModelChange(newSelectedModels);
     }
   };
+
+  const handleChatTypeChange = (type: ChatType) => {
+    applyChatType(type, true);
+  };
+
+  useEffect(() => {
+    const inferredType = inferChatTypeFromPrompt(content);
+    if (inferredType !== chatType) {
+      applyChatType(inferredType, false);
+    }
+  }, [content, chatType, models, selectedModels]);
 
   // Automatically enforce VISION capability if image files are attached
   useEffect(() => {
