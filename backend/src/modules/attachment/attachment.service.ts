@@ -7,6 +7,62 @@ import {
 } from "@/utils/cloudinary.js";
 
 class AttachmentService {
+  private getImageModerationProviders(): string[] {
+    const raw = (process.env.CLOUDINARY_IMAGE_MODERATION || "").trim();
+    if (!raw) return [];
+    return raw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  private isBlockedByModeration(statuses?: string[]): boolean {
+    if (!statuses || statuses.length === 0) return false;
+    return statuses.some((status) =>
+      ["rejected", "flagged", "blocked", "failed"].includes(status),
+    );
+  }
+
+  private isPendingModeration(statuses?: string[]): boolean {
+    if (!statuses || statuses.length === 0) return false;
+    return statuses.some((status) => status === "pending");
+  }
+
+  private async uploadAttachmentWithModeration(file: Express.Multer.File) {
+    const providers = this.getImageModerationProviders();
+    const shouldModerateImage = file.mimetype.startsWith("image/");
+    const moderationOption =
+      shouldModerateImage && providers.length > 0 ? providers[0] : undefined;
+
+    const result = await uploadToCloudinary(file.buffer, {
+      folder: "ai-colab-chat/attachments",
+      resourceType: "auto",
+      moderation: moderationOption,
+    });
+
+    if (this.isBlockedByModeration(result.moderationStatuses)) {
+      try {
+        await deleteFromCloudinary(result.publicId);
+      } catch {}
+      throw new ApiError(
+        "Image blocked by safety policy. Please upload a different image.",
+        STATUS_CODES.BAD_REQUEST,
+      );
+    }
+
+    if (this.isPendingModeration(result.moderationStatuses)) {
+      try {
+        await deleteFromCloudinary(result.publicId);
+      } catch {}
+      throw new ApiError(
+        "Image is awaiting safety review. Please try a different image.",
+        STATUS_CODES.BAD_REQUEST,
+      );
+    }
+
+    return result;
+  }
+
   /**
    * Delete an attachment by ID from Cloudinary and the Database.
    */
@@ -39,10 +95,7 @@ class AttachmentService {
    * Called BEFORE a message exists (presend flow); messageId is null until linked.
    */
   async presend(file: Express.Multer.File) {
-    const result = await uploadToCloudinary(file.buffer, {
-      folder: "ai-colab-chat/attachments",
-      resourceType: "auto",
-    });
+    const result = await this.uploadAttachmentWithModeration(file);
 
     const attachment = await prisma.attachment.create({
       data: {
@@ -93,10 +146,7 @@ class AttachmentService {
       throw new ApiError("Message not found", STATUS_CODES.NOT_FOUND);
     }
 
-    const result = await uploadToCloudinary(file.buffer, {
-      folder: "ai-colab-chat/attachments",
-      resourceType: "auto",
-    });
+    const result = await this.uploadAttachmentWithModeration(file);
 
     const attachment = await prisma.attachment.create({
       data: {

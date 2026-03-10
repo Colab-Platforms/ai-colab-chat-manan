@@ -6,6 +6,7 @@ cloudinary.config();
 interface UploadResult {
   url: string;
   publicId: string;
+  moderationStatuses?: string[];
 }
 
 export interface UploadOptions {
@@ -13,7 +14,20 @@ export interface UploadOptions {
   resourceType?: "image" | "raw" | "auto";
   format?: string;
   quality?: string;
+  moderation?: string;
 }
+
+const normalizeModerationStatuses = (
+  moderationData: unknown,
+): string[] | undefined => {
+  if (!Array.isArray(moderationData)) return undefined;
+  const statuses = moderationData
+    .map((entry: any) =>
+      typeof entry?.status === "string" ? entry.status.toLowerCase() : null,
+    )
+    .filter((status: string | null): status is string => Boolean(status));
+  return statuses.length > 0 ? statuses : undefined;
+};
 
 /**
  * Upload a file (Buffer from multer) or a direct URL to Cloudinary.
@@ -28,26 +42,42 @@ export const uploadToCloudinary = async (
     resourceType = "auto",
     format,
     quality,
+    moderation,
   } = options;
 
   if (typeof file === "string") {
-    // It's a URL or base64 string
     const result = await cloudinary.uploader.upload(file, {
       folder,
       resource_type: resourceType,
       format,
       quality,
+      moderation,
     });
-    return { url: result.secure_url, publicId: result.public_id };
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+      moderationStatuses: normalizeModerationStatuses((result as any).moderation),
+    };
   } else {
-    // It's a Buffer (e.g., from Multer)
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: resourceType, format, quality },
+        {
+          folder,
+          resource_type: resourceType,
+          format,
+          quality,
+          moderation,
+        },
         (error, result?: UploadApiResponse) => {
           if (error || !result)
             return reject(error || new Error("Upload failed"));
-          resolve({ url: result.secure_url, publicId: result.public_id });
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+            moderationStatuses: normalizeModerationStatuses(
+              (result as any).moderation,
+            ),
+          });
         },
       );
       stream.end(file);

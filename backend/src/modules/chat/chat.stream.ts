@@ -279,6 +279,22 @@ interface SendMessageBody {
   attachmentIds?: number[];
 }
 
+function keepOnlyFirstImageMarkdown(content: string): string {
+  if (!content) return content;
+  const imageMarkdownRegex = /!\[[^\]]*]\(([^)]+)\)/g;
+  let firstMatchSeen = false;
+  return content.replace(imageMarkdownRegex, (match) => {
+    if (!firstMatchSeen) {
+      firstMatchSeen = true;
+      return match;
+    }
+    return "";
+  });
+}
+
+const EMPTY_IMAGE_RESPONSE_ERROR =
+  "Image generation failed: the request was blocked by safety checks or produced no image output.";
+
 export async function streamChat(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
@@ -576,6 +592,7 @@ export async function streamChat(req: Request, res: Response) {
     let promptTokens = 0;
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
+    let selectedImageUrl: string | null = null;
 
     try {
       const stream = await createOpenRouterStream({
@@ -595,11 +612,21 @@ export async function streamChat(req: Request, res: Response) {
           chunk.choices?.[0]?.delta?.images ||
           chunk.choices?.[0]?.message?.images;
         if (images && Array.isArray(images)) {
-          const imageMd = images
-            .map((img: any) => {
-              const url = img.image_url?.url || img.url;
-              if (url && !imagesToUpload.includes(url))
-                imagesToUpload.push(url);
+          const imageUrls = images
+            .map((img: any) => img.image_url?.url || img.url)
+            .filter((url: string | undefined): url is string => Boolean(url));
+          const uniqueUrls = [...new Set(imageUrls)];
+          let selectedUrls = uniqueUrls;
+          if (chatType === "IMAGE_GENERATION") {
+            if (!selectedImageUrl && uniqueUrls.length > 0) {
+              selectedImageUrl = uniqueUrls[0];
+            }
+            selectedUrls = selectedImageUrl ? [selectedImageUrl] : [];
+          }
+          const imageMd = selectedUrls
+            .map((url: string) => {
+              if (imagesToUpload.includes(url)) return "";
+              imagesToUpload.push(url);
               return `\n![Generated Image](${url})\n`;
             })
             .join("");
@@ -664,6 +691,35 @@ export async function streamChat(req: Request, res: Response) {
       return;
     }
 
+    if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
+      const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
+      await prisma.$transaction(async (tx) => {
+        await tx.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: failureMessage },
+        });
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: failureMessage,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            status: "FAILED",
+            completedAt: new Date(),
+          },
+        });
+      });
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
     if (imagesToUpload.length > 0) {
       for (const origUrl of imagesToUpload) {
         try {
@@ -679,6 +735,9 @@ export async function streamChat(req: Request, res: Response) {
           console.error("  ❌ Failed to upload image to Cloudinary:", imgError);
         }
       }
+    }
+    if (chatType === "IMAGE_GENERATION") {
+      fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
     const totalTokens = promptTokens + completionTokens;
@@ -944,6 +1003,7 @@ export async function regenerateChat(req: Request, res: Response) {
     let promptTokens = 0;
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
+    let selectedImageUrl: string | null = null;
 
     try {
       const stream = await createOpenRouterStream({
@@ -960,11 +1020,21 @@ export async function regenerateChat(req: Request, res: Response) {
           chunk.choices?.[0]?.delta?.images ||
           chunk.choices?.[0]?.message?.images;
         if (images && Array.isArray(images)) {
-          const imageMd = images
-            .map((img: any) => {
-              const url = img.image_url?.url || img.url;
-              if (url && !imagesToUpload.includes(url))
-                imagesToUpload.push(url);
+          const imageUrls = images
+            .map((img: any) => img.image_url?.url || img.url)
+            .filter((url: string | undefined): url is string => Boolean(url));
+          const uniqueUrls = [...new Set(imageUrls)];
+          let selectedUrls = uniqueUrls;
+          if (chatType === "IMAGE_GENERATION") {
+            if (!selectedImageUrl && uniqueUrls.length > 0) {
+              selectedImageUrl = uniqueUrls[0];
+            }
+            selectedUrls = selectedImageUrl ? [selectedImageUrl] : [];
+          }
+          const imageMd = selectedUrls
+            .map((url: string) => {
+              if (imagesToUpload.includes(url)) return "";
+              imagesToUpload.push(url);
               return `\n![Generated Image](${url})\n`;
             })
             .join("");
@@ -1014,6 +1084,29 @@ export async function regenerateChat(req: Request, res: Response) {
       return;
     }
 
+    if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
+      const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
+      await prisma.modelResponse.create({
+        data: {
+          chatId,
+          messageId,
+          modelId: model.id,
+          content: failureMessage,
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          status: "FAILED",
+          completedAt: new Date(),
+        },
+      });
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
     if (imagesToUpload.length > 0) {
       for (const origUrl of imagesToUpload) {
         try {
@@ -1029,6 +1122,9 @@ export async function regenerateChat(req: Request, res: Response) {
           console.error("  ❌ Failed to upload image to Cloudinary:", imgError);
         }
       }
+    }
+    if (chatType === "IMAGE_GENERATION") {
+      fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
     const totalTokens = promptTokens + completionTokens;
@@ -1328,6 +1424,7 @@ export async function editAndResend(req: Request, res: Response) {
     let promptTokens = 0;
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
+    let selectedImageUrl: string | null = null;
 
     try {
       const stream = await createOpenRouterStream({
@@ -1344,11 +1441,21 @@ export async function editAndResend(req: Request, res: Response) {
           chunk.choices?.[0]?.delta?.images ||
           chunk.choices?.[0]?.message?.images;
         if (images && Array.isArray(images)) {
-          const imageMd = images
-            .map((img: any) => {
-              const url = img.image_url?.url || img.url;
-              if (url && !imagesToUpload.includes(url))
-                imagesToUpload.push(url);
+          const imageUrls = images
+            .map((img: any) => img.image_url?.url || img.url)
+            .filter((url: string | undefined): url is string => Boolean(url));
+          const uniqueUrls = [...new Set(imageUrls)];
+          let selectedUrls = uniqueUrls;
+          if (chatType === "IMAGE_GENERATION") {
+            if (!selectedImageUrl && uniqueUrls.length > 0) {
+              selectedImageUrl = uniqueUrls[0];
+            }
+            selectedUrls = selectedImageUrl ? [selectedImageUrl] : [];
+          }
+          const imageMd = selectedUrls
+            .map((url: string) => {
+              if (imagesToUpload.includes(url)) return "";
+              imagesToUpload.push(url);
               return `\n![Generated Image](${url})\n`;
             })
             .join("");
@@ -1402,6 +1509,35 @@ export async function editAndResend(req: Request, res: Response) {
       return;
     }
 
+    if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
+      const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
+      await prisma.$transaction(async (tx) => {
+        await tx.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: failureMessage },
+        });
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: failureMessage,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            status: "FAILED",
+            completedAt: new Date(),
+          },
+        });
+      });
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
     // Upload images to Cloudinary
     if (imagesToUpload.length > 0) {
       for (const origUrl of imagesToUpload) {
@@ -1418,6 +1554,9 @@ export async function editAndResend(req: Request, res: Response) {
           console.error("  ❌ Failed to upload image to Cloudinary:", imgError);
         }
       }
+    }
+    if (chatType === "IMAGE_GENERATION") {
+      fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
     const totalTokens = promptTokens + completionTokens;

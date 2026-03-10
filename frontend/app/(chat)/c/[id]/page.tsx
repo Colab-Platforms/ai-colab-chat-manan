@@ -278,6 +278,22 @@ export default function ChatPage() {
                   )
                 );
               } else if (parsed.type === "error") {
+                const errorMessage = parsed.message || "Generation failed";
+                accumulated = errorMessage;
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === streamingMsgId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
+                            mr.model.id === mid
+                              ? { ...mr, content: errorMessage, status: "FAILED" }
+                              : mr
+                          ),
+                        }
+                      : msg
+                  )
+                );
                 toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${parsed.message}`);
               } else if (parsed.type === "done") {
                 setMessages((prev) =>
@@ -491,7 +507,23 @@ export default function ChatPage() {
                   )
                 );
               } else if (parsed.type === "error") {
-                toast.error(parsed.message);
+                const errorMessage = parsed.message || "Generation failed";
+                accumulated = errorMessage;
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === messageId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
+                            mr.id === streamingRespId
+                              ? { ...mr, content: errorMessage, status: "FAILED" }
+                              : mr
+                          ),
+                        }
+                      : msg
+                  )
+                );
+                toast.error(errorMessage);
               } else if (parsed.type === "done") {
                 setMessages((prev) =>
                   prev.map((msg) =>

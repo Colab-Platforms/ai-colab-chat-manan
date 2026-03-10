@@ -35,6 +35,7 @@ export const createOpenRouterStream = async (
     messages: messages as any,
     max_tokens: options.max_tokens,
     temperature: options.temperature,
+    n: chatType === "IMAGE_GENERATION" ? 1 : undefined,
     stream: true,
     stream_options: { include_usage: true },
     modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,
