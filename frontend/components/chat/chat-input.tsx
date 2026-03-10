@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare,
+  Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare, Square,
   FileText, File, Upload
 } from "lucide-react";
 import {
@@ -57,6 +57,7 @@ interface ChatInputProps {
     enhancedPrompt: string;
   }>;
   isSending: boolean;
+  onStopStreaming?: () => void;
   forceReset?: boolean;
   initialPrompt?: string;
   onPromptClear?: () => void;
@@ -158,6 +159,7 @@ export function ChatInput({
   onSend,
   onEnhancePrompt,
   isSending,
+  onStopStreaming,
   forceReset,
   initialPrompt,
   onPromptClear,
@@ -715,18 +717,25 @@ export function ChatInput({
               />
 
               <Button
+                type="button"
                 size="icon"
                 className={`h-10 w-10 rounded-full transition-all duration-200 ${
                   content.trim() && !isSending && !hasUploadingFiles
                     ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md scale-100"
                     : "bg-muted text-muted-foreground scale-95"
                 }`}
-                onClick={handleSubmit}
-                disabled={!content.trim() || isSending || hasUploadingFiles}
-                title={hasUploadingFiles ? "Wait for files to finish uploading" : "Send message"}
+                onClick={isSending ? onStopStreaming : handleSubmit}
+                disabled={!isSending && (!content.trim() || hasUploadingFiles)}
+                title={
+                  isSending
+                    ? "Stop generating"
+                    : hasUploadingFiles
+                      ? "Wait for files to finish uploading"
+                      : "Send message"
+                }
               >
                 {isSending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Square className="w-4 h-4 fill-current" />
                 ) : (
                   <ArrowUp className="w-5 h-5" />
                 )}

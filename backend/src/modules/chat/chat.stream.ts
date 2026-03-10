@@ -10,6 +10,42 @@ import { parseOffice } from "officeparser";
 
 const attachmentService = new AttachmentService();
 
+function isAbortError(error: any) {
+  return (
+    error?.name === "AbortError" ||
+    error?.code === "ABORT_ERR" ||
+    String(error?.message || "").toLowerCase().includes("aborted")
+  );
+}
+
+function setupClientAbortTracking(
+  req: Request,
+  res: Response,
+  abortController: AbortController,
+) {
+  let clientAborted = false;
+  let responseFinished = false;
+  const onResponseFinish = () => {
+    responseFinished = true;
+  };
+  const abortIfDisconnected = () => {
+    if (responseFinished) return;
+    if (!req.aborted && req.complete) return;
+    clientAborted = true;
+    abortController.abort();
+  };
+  const onClientDisconnect = () => {
+    if (responseFinished) return;
+    clientAborted = true;
+    abortController.abort();
+  };
+  req.on("aborted", abortIfDisconnected);
+  req.on("close", abortIfDisconnected);
+  res.on("close", onClientDisconnect);
+  res.on("finish", onResponseFinish);
+  return () => clientAborted || abortController.signal.aborted;
+}
+
 async function touchChat(chatId: number) {
   await prisma.chat.update({
     where: { id: chatId },
@@ -313,6 +349,8 @@ export async function streamChat(req: Request, res: Response) {
     assistantMessageId,
     attachmentIds,
   } = req.body as SendMessageBody;
+  const abortController = new AbortController();
+  const isClientAborted = setupClientAbortTracking(req, res, abortController);
 
   try {
     // Validate inputs
@@ -611,6 +649,7 @@ export async function streamChat(req: Request, res: Response) {
         max_tokens: maxCompletionTokens,
         plugins: streamPlugins.length > 0 ? streamPlugins : undefined,
         temperature: assistantTemperature,
+        signal: abortController.signal,
       });
 
       for await (const chunk of stream) {
@@ -658,7 +697,38 @@ export async function streamChat(req: Request, res: Response) {
           completionTokens = chunk.usage.completion_tokens || 0;
         }
       }
+      if (isClientAborted()) {
+        const abortError = new Error("Generation aborted by client");
+        (abortError as any).name = "AbortError";
+        throw abortError;
+      }
     } catch (aiError: any) {
+      if (isClientAborted() || isAbortError(aiError)) {
+        const stoppedContent = fullContent.trim() || "Generation stopped by user.";
+        try {
+          await prisma.message.update({
+            where: { id: assistantMessage.id },
+            data: { content: fullContent },
+          });
+          await prisma.modelResponse.create({
+            data: {
+              chatId,
+              messageId: assistantMessage.id,
+              modelId: model.id,
+              content: stoppedContent,
+              promptTokens: promptTokens || 0,
+              completionTokens: completionTokens || 0,
+              totalTokens: (promptTokens || 0) + (completionTokens || 0),
+              status: "FAILED",
+              completedAt: new Date(),
+            },
+          });
+        } catch {}
+        if (!res.writableEnded) {
+          res.end();
+        }
+        return;
+      }
       console.error("❌ OpenRouter Error:");
       console.error("  Status:", aiError.status);
       console.error("  Message:", aiError.message);
@@ -836,6 +906,8 @@ export async function regenerateChat(req: Request, res: Response) {
     modelId: number;
     chatType?: string;
   };
+  const abortController = new AbortController();
+  const isClientAborted = setupClientAbortTracking(req, res, abortController);
 
   try {
     if (!modelId) {
@@ -1020,6 +1092,7 @@ export async function regenerateChat(req: Request, res: Response) {
         messages: trimmedHistory,
         chatType,
         max_tokens: maxCompletionTokens,
+        signal: abortController.signal,
       });
 
       for await (const chunk of stream) {
@@ -1065,7 +1138,34 @@ export async function regenerateChat(req: Request, res: Response) {
           completionTokens = chunk.usage.completion_tokens || 0;
         }
       }
+      if (isClientAborted()) {
+        const abortError = new Error("Generation aborted by client");
+        (abortError as any).name = "AbortError";
+        throw abortError;
+      }
     } catch (aiError: any) {
+      if (isClientAborted() || isAbortError(aiError)) {
+        const stoppedContent = fullContent.trim() || "Generation stopped by user.";
+        try {
+          await prisma.modelResponse.create({
+            data: {
+              chatId,
+              messageId,
+              modelId: model.id,
+              content: stoppedContent,
+              promptTokens: promptTokens || 0,
+              completionTokens: completionTokens || 0,
+              totalTokens: (promptTokens || 0) + (completionTokens || 0),
+              status: "FAILED",
+              completedAt: new Date(),
+            },
+          });
+        } catch {}
+        if (!res.writableEnded) {
+          res.end();
+        }
+        return;
+      }
       console.error("❌ OpenRouter Error in regenerate:", aiError.message);
       try {
         await prisma.modelResponse.create({
@@ -1280,6 +1380,8 @@ export async function editAndResend(req: Request, res: Response) {
     modelId: number;
     chatType?: string;
   };
+  const abortController = new AbortController();
+  const isClientAborted = setupClientAbortTracking(req, res, abortController);
 
   try {
     if (!content?.trim()) {
@@ -1445,6 +1547,7 @@ export async function editAndResend(req: Request, res: Response) {
         messages: trimmedHistory,
         chatType,
         max_tokens: maxCompletionTokens,
+        signal: abortController.signal,
       });
 
       for await (const chunk of stream) {
@@ -1490,7 +1593,38 @@ export async function editAndResend(req: Request, res: Response) {
           completionTokens = chunk.usage.completion_tokens || 0;
         }
       }
+      if (isClientAborted()) {
+        const abortError = new Error("Generation aborted by client");
+        (abortError as any).name = "AbortError";
+        throw abortError;
+      }
     } catch (aiError: any) {
+      if (isClientAborted() || isAbortError(aiError)) {
+        const stoppedContent = fullContent.trim() || "Generation stopped by user.";
+        try {
+          await prisma.message.update({
+            where: { id: assistantMessage.id },
+            data: { content: fullContent },
+          });
+          await prisma.modelResponse.create({
+            data: {
+              chatId,
+              messageId: assistantMessage.id,
+              modelId: model.id,
+              content: stoppedContent,
+              promptTokens: promptTokens || 0,
+              completionTokens: completionTokens || 0,
+              totalTokens: (promptTokens || 0) + (completionTokens || 0),
+              status: "FAILED",
+              completedAt: new Date(),
+            },
+          });
+        } catch {}
+        if (!res.writableEnded) {
+          res.end();
+        }
+        return;
+      }
       console.error("❌ OpenRouter Error in editAndResend:", aiError.message);
       try {
         await prisma.modelResponse.create({

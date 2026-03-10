@@ -7,12 +7,13 @@ export interface OpenRouterStreamOptions {
   max_tokens?: number;
   plugins?: any[];
   temperature?: number;
+  signal?: AbortSignal;
 }
 
 export const createOpenRouterStream = async (
   options: OpenRouterStreamOptions,
 ): Promise<AsyncIterable<any>> => {
-  const { model, messages, chatType, plugins } = options;
+  const { model, messages, chatType, plugins, signal } = options;
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   const client = new OpenAI({
@@ -30,17 +31,20 @@ export const createOpenRouterStream = async (
     builtinPlugins.push({ id: "web", max_results: 2 });
   const allPlugins = [...builtinPlugins, ...(plugins ?? [])];
 
-  const stream = (await client.chat.completions.create({
-    model,
-    messages: messages as any,
-    max_tokens: options.max_tokens,
-    temperature: options.temperature,
-    n: chatType === "IMAGE_GENERATION" ? 1 : undefined,
-    stream: true,
-    stream_options: { include_usage: true },
-    modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,
-    plugins: allPlugins.length > 0 ? allPlugins : undefined,
-  } as any)) as unknown as AsyncIterable<any>;
+  const stream = (await client.chat.completions.create(
+    {
+      model,
+      messages: messages as any,
+      max_tokens: options.max_tokens,
+      temperature: options.temperature,
+      n: chatType === "IMAGE_GENERATION" ? 1 : undefined,
+      stream: true,
+      stream_options: { include_usage: true },
+      modalities: chatType === "IMAGE_GENERATION" ? ["image"] : undefined,
+      plugins: allPlugins.length > 0 ? allPlugins : undefined,
+    } as any,
+    signal ? ({ signal } as any) : undefined,
+  )) as unknown as AsyncIterable<any>;
 
   return stream;
 };

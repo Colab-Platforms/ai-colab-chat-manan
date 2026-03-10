@@ -53,6 +53,32 @@ export default function ChatPage() {
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
   const modelsRestoredRef = useRef(false);
+  const streamAbortControllersRef = useRef<AbortController[]>([]);
+  const stopRequestedRef = useRef(false);
+
+  const clearStreamAbortControllers = useCallback(() => {
+    streamAbortControllersRef.current = [];
+  }, []);
+
+  const createStreamAbortController = useCallback(() => {
+    const controller = new AbortController();
+    streamAbortControllersRef.current.push(controller);
+    if (stopRequestedRef.current) {
+      controller.abort();
+    }
+    return controller;
+  }, []);
+
+  const isAbortError = (error: any) =>
+    error?.name === "AbortError" ||
+    error?.code === "ABORT_ERR" ||
+    String(error?.message || "").toLowerCase().includes("aborted");
+
+  const stopStreaming = useCallback(() => {
+    stopRequestedRef.current = true;
+    streamAbortControllersRef.current.forEach((controller) => controller.abort());
+    toast.info("Generation stopped");
+  }, []);
 
   const fetchChat = useCallback(async () => {
     try {
@@ -115,6 +141,12 @@ export default function ChatPage() {
       }
     }
   }, [chatId]);
+
+  const syncChatAfterStop = useCallback(() => {
+    window.setTimeout(() => {
+      fetchChat();
+    }, 500);
+  }, [fetchChat]);
 
   const fetchModels = useCallback(async () => {
     try {
@@ -216,6 +248,7 @@ export default function ChatPage() {
     userMessageId: number,
     assistantMessageId: number,
     attachmentIds?: number[],
+    signal?: AbortSignal,
   ) => {
     return fetch(`${apiUrl}/chats/${chatId}/send`, {
       method: "POST",
@@ -232,6 +265,7 @@ export default function ChatPage() {
         assistantMessageId,
         ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       }),
+      signal,
     }).then(async (response) => {
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -320,6 +354,8 @@ export default function ChatPage() {
 
   const sendMessage = async (content: string, attachmentIds?: number[], modelIds?: number[], chatType?: string, attachmentObjects?: any[]) => {
     if (isSending) return;
+    stopRequestedRef.current = false;
+    clearStreamAbortControllers();
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
@@ -368,10 +404,11 @@ export default function ChatPage() {
 
     try {
       if (targetModelIds.length === 1) {
+        const controller = createStreamAbortController();
         // Single model: use existing /send endpoint directly (creates user+assistant msg)
         await streamSingleModel(
           targetModelIds[0], streamingMsgId, token, apiUrl,
-          content, chatType, 0, 0, attachmentIds // 0 means the endpoint creates them
+          content, chatType, 0, 0, attachmentIds, controller.signal
         );
       } else {
         // Multi model: call /prepare-multi FIRST to get IDs, then fire ALL streams at once
@@ -390,11 +427,58 @@ export default function ChatPage() {
         const { userMessageId, assistantMessageId } = prepData.data;
 
         // Fire ALL models simultaneously — no waiting between them!
-        await Promise.allSettled(
+        const responses = await Promise.allSettled(
           targetModelIds.map((mid) =>
-            streamSingleModel(mid, streamingMsgId, token, apiUrl, content, chatType, userMessageId, assistantMessageId, attachmentIds)
+            streamSingleModel(
+              mid,
+              streamingMsgId,
+              token,
+              apiUrl,
+              content,
+              chatType,
+              userMessageId,
+              assistantMessageId,
+              attachmentIds,
+              createStreamAbortController().signal
+            )
           )
         );
+        responses.forEach((result, idx) => {
+          if (result.status !== "rejected") return;
+          const mid = targetModelIds[idx];
+          if (isAbortError(result.reason) || stopRequestedRef.current) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === streamingMsgId
+                  ? {
+                      ...msg,
+                      modelResponses: msg.modelResponses?.map((mr: any) =>
+                        mr.model.id === mid
+                          ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." }
+                          : mr
+                      ),
+                    }
+                  : msg
+              )
+            );
+            return;
+          }
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === streamingMsgId
+                ? {
+                    ...msg,
+                    modelResponses: msg.modelResponses?.map((mr: any) =>
+                      mr.model.id === mid
+                        ? { ...mr, status: "FAILED", content: result.reason?.message || "Failed to stream response" }
+                        : mr
+                    ),
+                  }
+                : msg
+            )
+          );
+          toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${result.reason?.message || "Failed to stream response"}`);
+        });
       }
 
       isStreamingRef.current = false;
@@ -402,18 +486,41 @@ export default function ChatPage() {
       // Dispatch refresh so sidebar title updates after first message
       window.dispatchEvent(new Event("refresh-chats"));
     } catch (err: any) {
-      toast.error(err.message || "Failed to send message");
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsgId && m.id !== streamingMsgId));
+      if (isAbortError(err) || stopRequestedRef.current) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingMsgId
+              ? {
+                  ...msg,
+                  modelResponses: msg.modelResponses?.map((mr: any) =>
+                    mr.status === "STREAMING"
+                      ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." }
+                      : mr
+                  ),
+                }
+              : msg
+          )
+        );
+        isStreamingRef.current = false;
+        syncChatAfterStop();
+      } else {
+        toast.error(err.message || "Failed to send message");
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserMsgId && m.id !== streamingMsgId));
+      }
     } finally {
+      clearStreamAbortControllers();
       isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
       setStreamingContent("");
+      stopRequestedRef.current = false;
     }
   };
 
   const handleRegenerate = async (messageId: number, modelId: number) => {
     if (isSending) return;
+    stopRequestedRef.current = false;
+    clearStreamAbortControllers();
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
@@ -451,6 +558,7 @@ export default function ChatPage() {
     try {
       const token = localStorage.getItem("token");
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+      const controller = createStreamAbortController();
 
       const response = await fetch(`${apiUrl}/chats/${chatId}/messages/${messageId}/regenerate`, {
         method: "POST",
@@ -460,6 +568,7 @@ export default function ChatPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ modelId, chatType: localStorage.getItem("preferredChatType") || "STANDARD" }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -548,21 +657,39 @@ export default function ChatPage() {
       isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
-      toast.error(err.message || "Failed to regenerate message");
-      setMessages((prev) => prev.map(msg => {
-        if (msg.id === messageId) {
+      if (isAbortError(err) || stopRequestedRef.current) {
+        setMessages((prev) => prev.map(msg => {
+          if (msg.id !== messageId) return msg;
           return {
             ...msg,
-            modelResponses: msg.modelResponses?.filter((mr: any) => mr.id !== streamingRespId)
+            modelResponses: msg.modelResponses?.map((mr: any) =>
+              mr.id === streamingRespId
+                ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." }
+                : mr
+            )
           };
-        }
-        return msg;
-      }));
+        }));
+        isStreamingRef.current = false;
+        syncChatAfterStop();
+      } else {
+        toast.error(err.message || "Failed to regenerate message");
+        setMessages((prev) => prev.map(msg => {
+          if (msg.id === messageId) {
+            return {
+              ...msg,
+              modelResponses: msg.modelResponses?.filter((mr: any) => mr.id !== streamingRespId)
+            };
+          }
+          return msg;
+        }));
+      }
     } finally {
+      clearStreamAbortControllers();
       isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
       setStreamingContent("");
+      stopRequestedRef.current = false;
     }
   };
 
@@ -613,6 +740,8 @@ export default function ChatPage() {
 
   const handleEditMessage = async (messageId: number, newContent: string) => {
     if (isSending) return;
+    stopRequestedRef.current = false;
+    clearStreamAbortControllers();
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
@@ -714,7 +843,18 @@ export default function ChatPage() {
       // 3. Fire concurrent stream requests for all original models
       const responses = await Promise.allSettled(
         targetModelIds.map((mid) =>
-          streamSingleModel(mid, assistantMsgId, token, apiUrl, newContent, chatType, userMsgId, assistantMsgId)
+          streamSingleModel(
+            mid,
+            assistantMsgId,
+            token,
+            apiUrl,
+            newContent,
+            chatType,
+            userMsgId,
+            assistantMsgId,
+            undefined,
+            createStreamAbortController().signal
+          )
         )
       );
 
@@ -722,6 +862,23 @@ export default function ChatPage() {
       responses.forEach((res, idx) => {
         if (res.status === "rejected") {
           const mid = targetModelIds[idx];
+          if (isAbortError(res.reason) || stopRequestedRef.current) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? {
+                      ...msg,
+                      modelResponses: msg.modelResponses?.map((mr: any) =>
+                        mr.model.id === mid
+                          ? { ...mr, content: mr.content || "Generation stopped by user.", status: "FAILED" }
+                          : mr
+                      ),
+                    }
+                  : msg
+              )
+            );
+            return;
+          }
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMsgId
@@ -743,12 +900,19 @@ export default function ChatPage() {
       isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
-      toast.error(err.message || "Failed to edit message");
+      if (isAbortError(err) || stopRequestedRef.current) {
+        isStreamingRef.current = false;
+        syncChatAfterStop();
+      } else {
+        toast.error(err.message || "Failed to edit message");
+      }
     } finally {
+      clearStreamAbortControllers();
       isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
       setStreamingContent("");
+      stopRequestedRef.current = false;
     }
   };
 
@@ -782,6 +946,7 @@ export default function ChatPage() {
         onSend={(content, attachmentIds, chatType, attachmentObjects) => sendMessage(content, attachmentIds, undefined, chatType, attachmentObjects)}
         onEnhancePrompt={handleEnhancePrompt}
         isSending={isSending}
+        onStopStreaming={stopStreaming}
         initialPrompt={initialPrompt}
         onPromptClear={() => setInitialPrompt("")}
         draftStorageKey={`chat_draft_${chatId}`}
