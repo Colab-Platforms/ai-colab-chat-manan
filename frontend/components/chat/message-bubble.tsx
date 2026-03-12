@@ -26,20 +26,39 @@ interface ModelResponse {
 
 function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
   if (!text) return { cleanText: "", questions: [] };
-  const jsonBlockRegex = /```json\s*(\[\s*[\s\S]*?\s*\])\s*```[\s]*$/i;
-  const match = text.match(jsonBlockRegex);
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[1]);
-      if (Array.isArray(parsed)) {
-        return {
-          cleanText: text.replace(match[0], "").trimEnd(),
-          questions: parsed.filter(q => typeof q === "string").slice(0, 3)
-        };
+  
+  // Flexible regex to match an array of strings, optionally wrapped in markdown backticks or a "json" prefix
+  const arrayRegex = /(?:```(?:json|JSON)?\s*|(?:\bjson\b|\bJSON\b)\s*)?(\[\s*"(?:[^"\\]|\\.)*"(?:\s*,\s*"(?:[^"\\]|\\.)*")*\s*\])(?:\s*```)?/gi;
+  
+  const matches = Array.from(text.matchAll(arrayRegex));
+  if (matches.length > 0) {
+    const lastMatch = matches[matches.length - 1];
+    const fullMatch = lastMatch[0];
+    const jsonContent = lastMatch[1];
+    
+    // Check if what follows the match is just whitespace, newlines, or citations/punctuation
+    const trailingText = text.slice(lastMatch.index! + fullMatch.length);
+    const isAtEnd = /^(\s|\[\d+\]|,|\.|-)*$/.test(trailingText);
+    
+    if (isAtEnd) {
+      try {
+        const parsed = JSON.parse(jsonContent);
+        if (Array.isArray(parsed)) {
+          const questions = parsed.filter(q => typeof q === "string").slice(0, 4);
+          if (questions.length > 0) {
+            return {
+              cleanText: text.replace(fullMatch, "").replace(/[\s`\-]+$/, ""),
+              questions
+            };
+          }
+        }
+      } catch (e) {
+        // Fallback if JSON is malformed
       }
-    } catch (e) {}
+    }
   }
-  return { cleanText: text, questions: [] };
+  
+  return { cleanText: text.replace(/[\s`\-]+$/, ""), questions: [] };
 }
 
 function FollowUpTabs({ questions, onClick }: { questions: string[], onClick: (q: string) => void }) {
@@ -52,9 +71,9 @@ function FollowUpTabs({ questions, onClick }: { questions: string[], onClick: (q
           <button
             key={i}
             onClick={() => onClick(q)}
-          className="group relative flex items-center gap-2 text-xs px-4 py-2 rounded-2xl border border-border/90 bg-muted/30 text-foreground/70 hover:text-foreground transition-colors duration-200 text-left cursor-pointer"
+          className="group relative flex items-center gap-2 text-xs px-4 py-2 rounded-2xl border border-border/90 bg-muted/30 text-foreground/70 hover:text-foreground transition-colors duration-200 text-left cursor-pointer max-w-full sm:max-w-[48%]"
         >
-          <span className="flex-1 truncate max-w-[280px] sm:max-w-[400px]">
+          <span className="">
             {q}
           </span>
           <ChevronRight className="w-3.5 h-3.5 opacity-0 -ml-1 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200 flex-shrink-0" />

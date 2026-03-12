@@ -14,7 +14,9 @@ function isAbortError(error: any) {
   return (
     error?.name === "AbortError" ||
     error?.code === "ABORT_ERR" ||
-    String(error?.message || "").toLowerCase().includes("aborted")
+    String(error?.message || "")
+      .toLowerCase()
+      .includes("aborted")
   );
 }
 
@@ -292,11 +294,25 @@ async function checkTokenLimitsAndSetupStream(
 
   // Always append the latest prompt at the end so the AI responds to the current message
   if (enableFollowUpQuestions) {
-    const promptWithInstructions = {
+    const instruction = "\n\n---\nBased on your response, suggest 4 concise follow-up questions the user could ask next. Format them as a JSON array of strings inside a ```json block at the very end of your response.";
+    let updatedContent = latestPrompt.content;
+
+    if (Array.isArray(updatedContent)) {
+      // Find the last text part and append it there, or add a new text part
+      const lastTextPart = [...updatedContent].reverse().find(p => p.type === "text");
+      if (lastTextPart) {
+        lastTextPart.text += instruction;
+      } else {
+        updatedContent.push({ type: "text", text: instruction });
+      }
+    } else {
+      updatedContent = `${updatedContent}${instruction}`;
+    }
+
+    trimmedHistoryData.push({
       ...latestPrompt,
-      content: `${latestPrompt.content}\n\n---\nBased on your response, suggest 4 concise follow-up questions the user could ask next. Format them as a JSON array of strings inside a \`\`\`json block at the very end of your response.`,
-    };
-    trimmedHistoryData.push(promptWithInstructions);
+      content: updatedContent,
+    });
   } else {
     trimmedHistoryData.push(latestPrompt);
   }
@@ -654,6 +670,10 @@ export async function streamChat(req: Request, res: Response) {
 
       for await (const chunk of stream) {
         let delta = chunk.choices?.[0]?.delta?.content || "";
+        const annotations =
+          chunk.choices?.[0]?.delta?.annotations ||
+          chunk.choices?.[0]?.message?.annotations ||
+          chunk.choices?.[0]?.delta?.content.annotations;
 
         // Handle images payload from OpenRouter
         const images =
@@ -689,6 +709,11 @@ export async function streamChat(req: Request, res: Response) {
           if (typeof (res as any).flush === "function") {
             (res as any).flush();
           }
+          if (annotations && annotations.length > 0) {
+            res.write(
+              `data: ${JSON.stringify({ type: "annotations", annotations })}\n\n`,
+            );
+          }
         }
 
         // Capture usage from the final chunk
@@ -704,7 +729,8 @@ export async function streamChat(req: Request, res: Response) {
       }
     } catch (aiError: any) {
       if (isClientAborted() || isAbortError(aiError)) {
-        const stoppedContent = fullContent.trim() || "Generation stopped by user.";
+        const stoppedContent =
+          fullContent.trim() || "Generation stopped by user.";
         try {
           await prisma.message.update({
             where: { id: assistantMessage.id },
@@ -1145,7 +1171,8 @@ export async function regenerateChat(req: Request, res: Response) {
       }
     } catch (aiError: any) {
       if (isClientAborted() || isAbortError(aiError)) {
-        const stoppedContent = fullContent.trim() || "Generation stopped by user.";
+        const stoppedContent =
+          fullContent.trim() || "Generation stopped by user.";
         try {
           await prisma.modelResponse.create({
             data: {
@@ -1600,7 +1627,8 @@ export async function editAndResend(req: Request, res: Response) {
       }
     } catch (aiError: any) {
       if (isClientAborted() || isAbortError(aiError)) {
-        const stoppedContent = fullContent.trim() || "Generation stopped by user.";
+        const stoppedContent =
+          fullContent.trim() || "Generation stopped by user.";
         try {
           await prisma.message.update({
             where: { id: assistantMessage.id },

@@ -153,6 +153,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             }
 
             // Inline code
+            if (!children || String(children).trim() === "") return null;
             return (
               <code className="px-1.5 py-0.5 rounded-md bg-muted text-sm font-mono text-foreground" {...props}>
                 {children}

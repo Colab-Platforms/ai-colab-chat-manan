@@ -28,7 +28,11 @@ export const createOpenRouterStream = async (
   // Merge caller-supplied plugins with any capability-driven ones
   const builtinPlugins: any[] = [];
   if (chatType === "WEB_SEARCH")
-    builtinPlugins.push({ id: "web", max_results: 2 });
+    builtinPlugins.push({
+      id: "web",
+      max_results: 2,
+      search_context_size: "medium",
+    });
   const allPlugins = [...builtinPlugins, ...(plugins ?? [])];
 
   const stream = (await client.chat.completions.create(
