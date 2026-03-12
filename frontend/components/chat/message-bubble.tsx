@@ -502,7 +502,7 @@ export function MessageBubble({
                       </div>
 
                       {/* Card content */}
-                      <div className="flex-1 px-3 py-2.5 text-sm overflow-y-auto max-h-[360px] scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20 w-full min-w-0 max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
+                      <div className="flex-1 px-3 py-2.5 text-sm overflow-y-auto max-h-[550px] scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20 w-full min-w-0 max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
                         {parsedMulti.cleanText ? (
                           <>
                             <div data-message-text="true">

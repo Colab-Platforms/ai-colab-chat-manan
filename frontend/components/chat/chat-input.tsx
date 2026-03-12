@@ -71,7 +71,7 @@ const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md,.ppt,.pptx";
 
 const CAPABILITY_PATTERNS: Record<Exclude<ChatType, "STANDARD">, RegExp[]> = {
   IMAGE_GENERATION: [
-    /\b(generate|create|make|design|draw|render)\b.{0,40}\b(image|picture|photo|art|illustration|logo|icon|poster|banner)\b/i,
+    /\b(generate|create|make|design|draw|render)\b.{0,40}\b(creative|image|picture|photo|art|illustration|logo|icon|poster|banner)\b/i,
     /\b(image|picture|photo|art|illustration|logo|icon|poster|banner)\b.{0,40}\b(generate|create|make|design|draw|render)\b/i,
     /\b(text to image|text-to-image|image generation|generate an image|create an image)\b/i,
     /\b(img|pic|pics|wallpaper|thumbnail|avatar|sticker|sketch|concept art|cover art|mockup)\b/i,
@@ -314,7 +314,8 @@ export function ChatInput({
     if (inferredType !== chatType) {
       applyChatType(inferredType, false);
     }
-  }, [content, chatType, models, selectedModels]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
 
   // Automatically enforce VISION capability if image files are attached
   useEffect(() => {
@@ -623,7 +624,7 @@ export function ChatInput({
           {/* Top Row: Chat Type Pill */}
           {chatType !== "STANDARD" && (
             <div className="flex items-center mb-1 px-2">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 shadow-sm animate-in fade-in zoom-in-95">
                 {chatType === "WEB_SEARCH" && <Search className="w-3.5 h-3.5" />}
                 {chatType === "DEEP_RESEARCH" && <Sparkles className="w-3.5 h-3.5" />}
                 {chatType === "IMAGE_GENERATION" && <ImageIcon className="w-3.5 h-3.5" />}
@@ -843,7 +844,7 @@ export function ChatInput({
                     : <Globe className="w-4 h-4 opacity-70" />;
                 })()}
                 <span className="truncate max-w-[200px] sm:max-w-[300px]">
-                  {chatType !== "STANDARD" ? `${typeLabels[chatType]} only` : "Standard chat"} 
+                  {chatType !== "STANDARD" ? typeLabels[chatType] : "Standard chat"} 
                   {" • "} 
                   {selectedModels.length > 1 ? `${selectedModels.length} models` : (selectedModelNames || "Select a model")}
                 </span>
@@ -879,6 +880,7 @@ export function ChatInput({
                     <span>Image Generation</span>
                   </div>
                 </DropdownMenuItem>
+
                 
                 <DropdownMenuSeparator className="my-2" />
                 
