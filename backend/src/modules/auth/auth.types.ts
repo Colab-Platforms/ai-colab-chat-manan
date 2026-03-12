@@ -12,6 +12,21 @@ export interface LoginBody {
     password: string;
 }
 
+export interface VerifyEmailOtpBody {
+    email: string;
+    otp: string;
+}
+
+export interface ForgotPasswordBody {
+    email: string;
+}
+
+export interface ResetPasswordBody {
+    email: string;
+    otp: string;
+    newPassword: string;
+}
+
 export interface JwtPayload {
     id: number;
     role: "USER" | "ADMIN" | "SUPERADMIN";

@@ -6,9 +6,14 @@ import jwt from "jsonwebtoken";
 import { hashPassword, comparePassword } from "@/utils/auth.js";
 import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
+import { generateOtp, getOtpExpiry } from "@/utils/otp.js";
+import { sendOtpEmail } from "@/utils/email.js";
 import {
   RegisterBody,
   LoginBody,
+  VerifyEmailOtpBody,
+  ForgotPasswordBody,
+  ResetPasswordBody,
   userSelectFields,
 } from "./auth.types.js";
 
@@ -27,7 +32,6 @@ const formatUser = (user: any) => ({
     .format("YYYY-MM-DDTHH:mm"),
 });
 
-// Determine the highest-priority role for JWT
 const getHighestRole = (
   roleNames: string[],
 ): "USER" | "ADMIN" | "SUPERADMIN" => {
@@ -38,16 +42,38 @@ const getHighestRole = (
 };
 
 class AuthService {
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+  }
+
+  private getArchivedEmail(email: string, userId: number) {
+    return `${email}__deleted_${userId}_${Date.now()}`;
+  }
+
   async register(data: RegisterBody) {
+    const email = this.normalizeEmail(data.email);
     const existingUser = await prisma.user.findFirst({
-      where: { email: data.email, isDeleted: false },
+      where: { email },
     });
 
-    if (existingUser) {
+    if (existingUser && !existingUser.isDeleted) {
       throw new ApiError("Email already registered", STATUS_CODES.CONFLICT);
     }
 
+    if (existingUser && existingUser.isDeleted) {
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          email: this.getArchivedEmail(existingUser.email, existingUser.id),
+          isActive: false,
+        },
+      });
+    }
+
     const hashedPassword = await hashPassword(data.password);
+    const otp = generateOtp();
+    const otpHash = await hashPassword(otp);
+    const otpExpiresAt = getOtpExpiry();
 
     const roleRecord = await prisma.role.findUnique({
       where: { name: "USER" },
@@ -63,8 +89,10 @@ class AuthService {
         data: {
           firstName: data.firstName,
           lastName: data.lastName,
-          email: data.email,
+          email,
           password: hashedPassword,
+          emailVerificationOtpHash: otpHash,
+          emailVerificationOtpExpiresAt: otpExpiresAt,
         },
         select: userSelectFields,
       });
@@ -118,12 +146,18 @@ class AuthService {
       });
     });
 
-    return { user: formatUser(user) };
+    await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
+
+    return {
+      user: formatUser(user),
+      requiresEmailVerification: true,
+    };
   }
 
   async login(data: LoginBody) {
+    const email = this.normalizeEmail(data.email);
     const user = await prisma.user.findFirst({
-      where: { email: data.email, isDeleted: false },
+      where: { email, isDeleted: false },
       include: {
         userRoles: {
           include: { role: true },
@@ -154,6 +188,27 @@ class AuthService {
       );
     }
 
+    if (!user.isVerified) {
+      const otp = generateOtp();
+      const otpHash = await hashPassword(otp);
+      const otpExpiresAt = getOtpExpiry();
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerificationOtpHash: otpHash,
+          emailVerificationOtpExpiresAt: otpExpiresAt,
+        },
+      });
+
+      await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
+
+      return {
+        requiresEmailVerification: true,
+        email,
+      };
+    }
+
     if (!process.env.JWT_SECRET) {
       throw new ApiError(
         "JWT secret is not defined",
@@ -175,9 +230,160 @@ class AuthService {
       { expiresIn: "90d" },
     );
 
-    const { password: _, ...userWithoutPassword } = user;
+    const {
+      password: _password,
+      emailVerificationOtpHash: _emailVerificationOtpHash,
+      emailVerificationOtpExpiresAt: _emailVerificationOtpExpiresAt,
+      passwordResetOtpHash: _passwordResetOtpHash,
+      passwordResetOtpExpiresAt: _passwordResetOtpExpiresAt,
+      ...userWithoutPassword
+    } = user;
 
     return { user: formatUser(userWithoutPassword), token };
+  }
+
+  async verifyEmailOtp(data: VerifyEmailOtpBody) {
+    const email = this.normalizeEmail(data.email);
+    const user = await prisma.user.findFirst({
+      where: { email, isDeleted: false },
+    });
+
+    if (!user) {
+      throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+    }
+
+    if (user.isVerified) {
+      return { verified: true };
+    }
+
+    if (
+      !user.emailVerificationOtpHash ||
+      !user.emailVerificationOtpExpiresAt ||
+      user.emailVerificationOtpExpiresAt.getTime() < Date.now()
+    ) {
+      throw new ApiError(
+        "OTP expired. Please request a new OTP",
+        STATUS_CODES.BAD_REQUEST,
+      );
+    }
+
+    const isOtpValid = await comparePassword(
+      data.otp,
+      user.emailVerificationOtpHash,
+    );
+
+    if (!isOtpValid) {
+      throw new ApiError("Invalid OTP", STATUS_CODES.BAD_REQUEST);
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isVerified: true,
+        emailVerificationOtpHash: null,
+        emailVerificationOtpExpiresAt: null,
+      },
+    });
+
+    return { verified: true };
+  }
+
+  async resendEmailVerificationOtp(data: ForgotPasswordBody) {
+    const email = this.normalizeEmail(data.email);
+    const user = await prisma.user.findFirst({
+      where: { email, isDeleted: false },
+    });
+
+    if (!user) {
+      throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+    }
+
+    if (user.isVerified) {
+      throw new ApiError("Email is already verified", STATUS_CODES.BAD_REQUEST);
+    }
+
+    const otp = generateOtp();
+    const otpHash = await hashPassword(otp);
+    const otpExpiresAt = getOtpExpiry();
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationOtpHash: otpHash,
+        emailVerificationOtpExpiresAt: otpExpiresAt,
+      },
+    });
+
+    await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
+
+    return { sent: true };
+  }
+
+  async forgotPassword(data: ForgotPasswordBody) {
+    const email = this.normalizeEmail(data.email);
+    const user = await prisma.user.findFirst({
+      where: { email, isDeleted: false },
+    });
+
+    if (user) {
+      const otp = generateOtp();
+      const otpHash = await hashPassword(otp);
+      const otpExpiresAt = getOtpExpiry();
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordResetOtpHash: otpHash,
+          passwordResetOtpExpiresAt: otpExpiresAt,
+        },
+      });
+
+      await sendOtpEmail(email, otp, "PASSWORD_RESET");
+    }
+
+    return { sent: true };
+  }
+
+  async resetPassword(data: ResetPasswordBody) {
+    const email = this.normalizeEmail(data.email);
+    const user = await prisma.user.findFirst({
+      where: { email, isDeleted: false },
+    });
+
+    if (!user) {
+      throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+    }
+
+    if (
+      !user.passwordResetOtpHash ||
+      !user.passwordResetOtpExpiresAt ||
+      user.passwordResetOtpExpiresAt.getTime() < Date.now()
+    ) {
+      throw new ApiError(
+        "OTP expired. Please request a new OTP",
+        STATUS_CODES.BAD_REQUEST,
+      );
+    }
+
+    const isOtpValid = await comparePassword(
+      data.otp,
+      user.passwordResetOtpHash,
+    );
+    if (!isOtpValid) {
+      throw new ApiError("Invalid OTP", STATUS_CODES.BAD_REQUEST);
+    }
+
+    const nextPasswordHash = await hashPassword(data.newPassword);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: nextPasswordHash,
+        passwordResetOtpHash: null,
+        passwordResetOtpExpiresAt: null,
+      },
+    });
+
+    return { updated: true };
   }
 }
 

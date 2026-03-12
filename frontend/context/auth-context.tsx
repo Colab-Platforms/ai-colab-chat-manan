@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback } from "react";
 import api from "@/lib/api";
 
 interface User {
@@ -18,8 +18,12 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requiresEmailVerification: boolean; email?: string }>;
   register: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<void>;
+  verifyEmailOtp: (email: string, otp: string) => Promise<void>;
+  resendEmailOtp: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
   logout: () => void;
   hasRole: (role: string) => boolean;
   refreshUser: () => void;
@@ -28,24 +32,24 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token");
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window === "undefined") return null;
     const storedUser = localStorage.getItem("user");
-    if (storedToken && storedUser) {
-      try {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-      }
+    if (!storedUser) return null;
+    try {
+      return JSON.parse(storedUser);
+    } catch {
+      localStorage.removeItem("user");
+      return null;
     }
-    setIsLoading(false);
-  }, []);
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) return null;
+    return storedToken;
+  });
+  const isLoading = false;
 
   const saveAuth = (userData: User, tokenData: string) => {
     setUser(userData);
@@ -56,12 +60,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const res = await api.post("/auth/login", { email, password });
-    const { user: userData, token: tokenData } = res.data.data;
+    const data = res.data.data;
+    if (data?.requiresEmailVerification) {
+      return { requiresEmailVerification: true, email: data.email || email };
+    }
+    const { user: userData, token: tokenData } = data;
     saveAuth(userData, tokenData);
+    return { requiresEmailVerification: false };
   };
 
   const register = async (data: { firstName: string; lastName: string; email: string; password: string }) => {
     await api.post("/auth/register", data);
+  };
+
+  const verifyEmailOtp = async (email: string, otp: string) => {
+    await api.post("/auth/verify-email-otp", { email, otp });
+  };
+
+  const resendEmailOtp = async (email: string) => {
+    await api.post("/auth/resend-email-otp", { email });
+  };
+
+  const forgotPassword = async (email: string) => {
+    await api.post("/auth/forgot-password", { email });
+  };
+
+  const resetPassword = async (email: string, otp: string, newPassword: string) => {
+    await api.post("/auth/reset-password", { email, otp, newPassword });
   };
 
   const logout = useCallback(() => {
@@ -94,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, hasRole, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, verifyEmailOtp, resendEmailOtp, forgotPassword, resetPassword, logout, hasRole, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

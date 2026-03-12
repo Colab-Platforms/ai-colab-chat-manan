@@ -24,6 +24,10 @@ model User {
   email         String          @unique
   phoneNumber   String?         @unique
   password      String
+  emailVerificationOtpHash      String?
+  emailVerificationOtpExpiresAt DateTime?
+  passwordResetOtpHash          String?
+  passwordResetOtpExpiresAt     DateTime?
   isActive      Boolean         @default(true)
   isVerified    Boolean         @default(false)
   isDeleted     Boolean         @default(false)

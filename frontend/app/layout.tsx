@@ -47,19 +47,20 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          pauseOnHover
+          theme="light"
+          toastClassName="!text-sm"
+          style={{ zIndex: 99999 }}
+        />
         <ThemeProvider>
           <AuthProvider>
             {children}
-            <ToastContainer
-              position="top-right"
-              autoClose={3000}
-              hideProgressBar={false}
-              newestOnTop
-              closeOnClick
-              pauseOnHover
-              theme="colored"
-              toastClassName="!text-sm"
-            />
             <PwaInstallPrompt />
           </AuthProvider>
         </ThemeProvider>

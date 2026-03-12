@@ -27,6 +27,10 @@ const formatUser = (user: any) => ({
 });
 
 class UserService {
+  private getArchivedEmail(email: string, userId: number) {
+    return `${email}__deleted_${userId}_${Date.now()}`;
+  }
+
   async getProfile(userId: number) {
     const user = await prisma.user.findFirst({
       where: { id: userId, isDeleted: false },
@@ -234,7 +238,12 @@ class UserService {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { isDeleted: true, deletedAt: new Date() },
+      data: {
+        email: this.getArchivedEmail(user.email, user.id),
+        isActive: false,
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
     });
 
     return { message: "User deleted successfully" };
