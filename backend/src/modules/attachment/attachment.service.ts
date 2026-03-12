@@ -34,11 +34,27 @@ class AttachmentService {
     const moderationOption =
       shouldModerateImage && providers.length > 0 ? providers[0] : undefined;
 
-    const result = await uploadToCloudinary(file.buffer, {
-      folder: "ai-colab-chat/attachments",
-      resourceType: "auto",
-      moderation: moderationOption,
-    });
+    let result;
+    try {
+      result = await uploadToCloudinary(file.buffer, {
+        folder: "ai-colab-chat/attachments",
+        resourceType: "auto",
+        moderation: moderationOption,
+      });
+    } catch (error: any) {
+      if (
+        error?.message?.includes("Rate Limit Exceeded") ||
+        error?.message?.includes("Rekognition AI Moderation")
+      ) {
+        // Fallback: Upload without moderation if the Cloudinary API rate limit is reached
+        result = await uploadToCloudinary(file.buffer, {
+          folder: "ai-colab-chat/attachments",
+          resourceType: "auto",
+        });
+      } else {
+        throw error;
+      }
+    }
 
     if (this.isBlockedByModeration(result.moderationStatuses)) {
       try {
