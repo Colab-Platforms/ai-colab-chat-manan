@@ -75,7 +75,7 @@ export default function SubscriptionPage() {
               Expires: {new Date(subscription.expiresAt).toLocaleDateString()}
             </p>
             {subscription.status === "ACTIVE" && (
-              <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelling}>
+              <Button variant="destructive" size="sm" onClick={handleCancel} disabled>
                 {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel subscription"}
               </Button>
             )}
@@ -104,7 +104,7 @@ export default function SubscriptionPage() {
                   {plan.features?.attachments && <p>📎 File attachments</p>}
                 </div>
                 {(!subscription || subscription.planId !== plan.id) ? (
-                  <Button size="sm" className="w-full" onClick={() => handleSubscribe(plan.id)}>
+                  <Button size="sm" className="w-full" onClick={() => handleSubscribe(plan.id)} disabled>
                     {plan.monthlyPrice === 0 ? "Start Free" : "Subscribe"}
                   </Button>
                 ) : (
