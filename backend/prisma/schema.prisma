@@ -18,31 +18,31 @@ model Role {
 }
 
 model User {
-  id            Int             @id @default(autoincrement())
-  firstName     String
-  lastName      String
-  email         String          @unique
-  phoneNumber   String?         @unique
-  password      String
+  id                            Int             @id @default(autoincrement())
+  firstName                     String
+  lastName                      String
+  email                         String          @unique
+  phoneNumber                   String?         @unique
+  password                      String
   emailVerificationOtpHash      String?
   emailVerificationOtpExpiresAt DateTime?
   passwordResetOtpHash          String?
   passwordResetOtpExpiresAt     DateTime?
-  isActive      Boolean         @default(true)
-  isVerified    Boolean         @default(false)
-  isDeleted     Boolean         @default(false)
-  profileImage  String?
-  timezone      String          @default("Asia/Kolkata")
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  deletedAt     DateTime?
-  folders       Folder[]
-  chats         Chat[]
-  usageLogs     UsageLog[]
-  subscriptions Subscription[]
-  userWallet    UserWallet?
-  userRoles     UserRole[]
-  preference    UserPreference?
+  isActive                      Boolean         @default(true)
+  isVerified                    Boolean         @default(false)
+  isDeleted                     Boolean         @default(false)
+  profileImage                  String?
+  timezone                      String          @default("Asia/Kolkata")
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
+  deletedAt                     DateTime?
+  folders                       Folder[]
+  chats                         Chat[]
+  usageLogs                     UsageLog[]
+  subscriptions                 Subscription[]
+  userWallet                    UserWallet?
+  userRoles                     UserRole[]
+  preference                    UserPreference?
   // walletTransactions WalletTransaction[]
 }
 
@@ -173,6 +173,7 @@ model ModelResponse {
   message          Message        @relation(fields: [messageId], references: [id])
   model            Model          @relation(fields: [modelId], references: [id])
   createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   completedAt      DateTime?
 
   @@index([chatId])
