@@ -333,7 +333,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         >
           <Menu className="w-5 h-5" />
         </Button>
-        <span className="font-semibold text-sm">AI Colab</span>
+        <span className="font-semibold text-sm">
+          {activeAssistantTheme?.name || "AI Colab"}
+        </span>
         <div className="flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
