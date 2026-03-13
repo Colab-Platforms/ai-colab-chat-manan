@@ -125,6 +125,7 @@ function inferChatTypeFromPrompt(prompt: string): ChatType {
   };
 
   for (const type of orderedTypes) {
+    if (type === "DEEP_RESEARCH") continue;
     scores[type] = CAPABILITY_PATTERNS[type].reduce((count, pattern) => {
       return count + (pattern.test(text) ? 1 : 0);
     }, 0);
@@ -273,7 +274,10 @@ export function ChatInput({
       localStorage.setItem("preferredChatType", "STANDARD");
     } else {
       const savedType = localStorage.getItem("preferredChatType") as ChatType | null;
-      if (savedType && ["STANDARD", "DEEP_RESEARCH", "IMAGE_GENERATION", "WEB_SEARCH"].includes(savedType)) {
+      if (savedType === "DEEP_RESEARCH") {
+        setChatType("STANDARD");
+        localStorage.setItem("preferredChatType", "STANDARD");
+      } else if (savedType && ["STANDARD", "IMAGE_GENERATION", "WEB_SEARCH"].includes(savedType)) {
         setChatType(savedType);
       }
     }
@@ -866,6 +870,7 @@ export function ChatInput({
                     <span>Web Search</span>
                   </div>
                 </DropdownMenuItem>
+                {/*
                 <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("DEEP_RESEARCH")}>
                   <div className="w-4 flex justify-center">{chatType === "DEEP_RESEARCH" && <Check className="w-3 h-3 text-primary" />}</div>
                   <div className="flex items-center gap-2">
@@ -873,6 +878,7 @@ export function ChatInput({
                     <span>Deep Research</span>
                   </div>
                 </DropdownMenuItem>
+                */}
                 <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("IMAGE_GENERATION")}>
                   <div className="w-4 flex justify-center">{chatType === "IMAGE_GENERATION" && <Check className="w-3 h-3 text-primary" />}</div>
                   <div className="flex items-center gap-2">
