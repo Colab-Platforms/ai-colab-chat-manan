@@ -140,13 +140,15 @@ class AuthService {
         });
       }
 
-      return await tx.user.findUnique({
+      const user = await tx.user.findUnique({
         where: { id: createdUser.id },
         select: userSelectFields,
       });
-    });
 
-    await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
+      await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
+
+      return user;
+    });
 
     return {
       user: formatUser(user),
