@@ -1,28 +1,12 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { ApiError } from "./ApiError.js";
 import STATUS_CODES from "./statusCodes.js";
 
-const smtpPort = Number(process.env.SMTP_PORT || 587);
-const smtpSecure = process.env.SMTP_SECURE === "true";
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: smtpPort,
-  secure: smtpSecure,
-  auth:
-    process.env.SMTP_USER && process.env.SMTP_PASSWORD
-      ? {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASSWORD,
-        }
-      : undefined,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const getFromAddress = () => {
-  if (!process.env.SMTP_FROM) {
-    return process.env.SMTP_USER;
-  }
-  return process.env.SMTP_FROM;
+  // Try to use configured environment variables, fallback to Resend onboarding default
+  return process.env.SMTP_FROM || process.env.SMTP_USER || "onboarding@resend.dev";
 };
 
 interface SendEmailPayload {
@@ -34,20 +18,26 @@ interface SendEmailPayload {
 
 export const sendEmail = async (payload: SendEmailPayload) => {
   const from = getFromAddress();
-  if (!process.env.SMTP_HOST || !from) {
+  
+  if (!process.env.RESEND_API_KEY) {
     throw new ApiError(
-      "SMTP is not configured. Please set SMTP env variables",
+      "RESEND_API_KEY is not configured. Please set the RESEND_API_KEY in .env.",
       STATUS_CODES.SERVER_ERROR,
     );
   }
 
-  await transporter.sendMail({
+  const { error } = await resend.emails.send({
     from,
-    to: payload.to,
+    to: [payload.to],
     subject: payload.subject,
     text: payload.text,
     html: payload.html,
   });
+
+  if (error) {
+    console.error("Resend API failed:", error);
+    throw new ApiError("Failed to send email via Resend", STATUS_CODES.SERVER_ERROR);
+  }
 };
 
 const renderOtpTemplate = ({
