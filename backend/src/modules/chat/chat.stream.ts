@@ -426,7 +426,7 @@ export async function streamChat(req: Request, res: Response) {
       userMessage = existing;
     } else {
       userMessage = await prisma.message.create({
-        data: { chatId, role: "USER", content: content.trim() },
+        data: { chatId, role: "USER", content: content.trim(), chatType: chatType || "STANDARD" },
       });
 
       // Link any presend attachments to this new message
@@ -460,7 +460,7 @@ export async function streamChat(req: Request, res: Response) {
       assistantMessage = existing;
     } else {
       assistantMessage = await prisma.message.create({
-        data: { chatId, role: "ASSISTANT", content: "" },
+        data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
       });
     }
 
@@ -1338,9 +1338,10 @@ export async function regenerateChat(req: Request, res: Response) {
 export async function prepareMulti(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
-  const { content, attachmentIds } = req.body as {
+  const { content, attachmentIds, chatType } = req.body as {
     content: string;
     attachmentIds?: number[];
+    chatType?: string;
   };
 
   try {
@@ -1359,7 +1360,7 @@ export async function prepareMulti(req: Request, res: Response) {
 
     // Create user message
     const userMessage = await prisma.message.create({
-      data: { chatId, role: "USER", content: content.trim() },
+      data: { chatId, role: "USER", content: content.trim(), chatType: chatType || "STANDARD" },
     });
 
     if (attachmentIds && attachmentIds.length > 0) {
@@ -1377,7 +1378,7 @@ export async function prepareMulti(req: Request, res: Response) {
 
     // Create empty assistant message
     const assistantMessage = await prisma.message.create({
-      data: { chatId, role: "ASSISTANT", content: "" },
+      data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
     });
 
     await touchChat(chatId);
@@ -1495,12 +1496,13 @@ export async function editAndResend(req: Request, res: Response) {
         role: "USER",
         content: content.trim(),
         editedFromId: rootMessageId,
+        chatType: chatType || "STANDARD",
       },
     });
 
     // Create empty assistant message
     const assistantMessage = await prisma.message.create({
-      data: { chatId, role: "ASSISTANT", content: "" },
+      data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
     });
 
     await touchChat(chatId);
@@ -1817,7 +1819,7 @@ export async function prepareEditMulti(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
   const messageId = Number(req.params.messageId);
-  const { content } = req.body as { content: string };
+  const { content, chatType } = req.body as { content: string; chatType?: string; };
 
   try {
     if (!content?.trim()) {
@@ -1880,12 +1882,13 @@ export async function prepareEditMulti(req: Request, res: Response) {
         role: "USER",
         content: content.trim(),
         editedFromId: rootMessageId,
+        chatType: chatType || "STANDARD",
       },
     });
 
     // Create empty assistant message
     const assistantMessage = await prisma.message.create({
-      data: { chatId, role: "ASSISTANT", content: "" },
+      data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
     });
 
     await touchChat(chatId);

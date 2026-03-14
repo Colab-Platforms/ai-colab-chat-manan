@@ -141,6 +141,7 @@ model Message {
   chatId         Int
   role           MessageRole
   content        String
+  chatType       String          @default("STANDARD")
   chat           Chat            @relation(fields: [chatId], references: [id])
   attachments    Attachment[]
   editedFromId   Int?

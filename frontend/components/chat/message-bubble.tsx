@@ -94,6 +94,7 @@ interface Message {
   modelResponses?: ModelResponse[];
   sourceChatId?: number;
   sourceChatTitle?: string | null;
+  chatType?: string;
 }
 
 interface MessageBubbleProps {
@@ -398,7 +399,7 @@ export function MessageBubble({
               ) : singleResp.status === "FAILED" ? (
                 <p className="text-sm text-destructive">Response failed. Please try again.</p>
               ) : (
-                <TypingIndicator isImageMode={typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION"} />
+                <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
               )
             ) : (
               <p className="text-sm whitespace-pre-wrap">{parsedSingle.cleanText || message.content}</p>
@@ -530,7 +531,7 @@ export function MessageBubble({
                             {resp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                           </>
                         ) : resp ? (
-                          <TypingIndicator />
+                          <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
                         ) : null}
                       </div>
 

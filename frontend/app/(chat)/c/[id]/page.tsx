@@ -32,6 +32,7 @@ interface Message {
   editedFromId?: number | null;
   attachments?: any[];
   modelResponses?: any[];
+  chatType?: string;
 }
 
 export default function ChatPage() {
@@ -237,7 +238,6 @@ export default function ChatPage() {
     scrollToBottom();
   }, [shouldForceScrollFromStarred, messages.length]);
 
-  // Stream a single model's response
   const streamSingleModel = (
     mid: number,
     streamingMsgId: number,
@@ -389,6 +389,7 @@ export default function ChatPage() {
       role: "ASSISTANT",
       content: "",
       createdAt: new Date().toISOString(),
+      chatType,
       modelResponses: targetModelIds.map((mid) => ({
         id: mid,
         model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" },
@@ -539,6 +540,7 @@ export default function ChatPage() {
       if (msg.id === messageId) {
         return {
           ...msg,
+          chatType: msg.chatType || localStorage.getItem("preferredChatType") || "STANDARD",
           modelResponses: [
             ...(msg.modelResponses || []),
             {
@@ -801,6 +803,7 @@ export default function ChatPage() {
           role: "ASSISTANT",
           content: "",
           createdAt: new Date().toISOString(),
+          chatType,
           modelResponses: targetModelIds.map((mid) => ({
             id: mid,
             model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" },
