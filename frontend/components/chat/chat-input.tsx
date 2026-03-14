@@ -777,6 +777,7 @@ export function ChatInput({
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask anything..."
+              maxLength={10000}
               rows={1}
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-h-[40px] max-h-[112px] leading-relaxed py-2.5 text-[15px] self-center overflow-y-auto"
             />

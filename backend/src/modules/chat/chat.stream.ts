@@ -252,33 +252,87 @@ async function checkTokenLimitsAndSetupStream(
   let currentHistoryTokens = estimateMessageTokens([latestPrompt]);
 
   if (currentHistoryTokens + MIN_RESPONSE_TOKENS >= maxAffordableTokens) {
-    res.write(
-      `data: ${JSON.stringify({ type: "error", message: "Insufficient tokens for this prompt length." })}\n\n`,
-    );
-    res.write("data: [DONE]\n\n");
-    res.end();
+    const allowedPromptTokens = Math.max(0, maxAffordableTokens - MIN_RESPONSE_TOKENS - 6 - 3);
 
-    await prisma.modelResponse.create({
-      data: {
-        chatId,
-        messageId: assistantMessageId,
-        modelId: model.id,
-        content: "System: Insufficient tokens for this prompt.",
-        promptTokens: currentHistoryTokens,
-        completionTokens: 0,
-        totalTokens: currentHistoryTokens,
-        status: "FAILED",
-        completedAt: new Date(),
-      },
-    });
-    return null;
+    if (allowedPromptTokens <= 0) {
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: "Insufficient tokens for this prompt length." })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+
+      await prisma.modelResponse.create({
+        data: {
+          chatId,
+          messageId: assistantMessageId,
+          modelId: model.id,
+          content: "System: Insufficient tokens for this prompt.",
+          promptTokens: currentHistoryTokens,
+          completionTokens: 0,
+          totalTokens: currentHistoryTokens,
+          status: "FAILED",
+          completedAt: new Date(),
+        },
+      });
+      return null;
+    }
+
+    if (typeof latestPrompt.content === "string") {
+      const maxChars = Math.floor(allowedPromptTokens * 2.2);
+      latestPrompt.content = latestPrompt.content.substring(0, maxChars) + "... [Truncated to fit limits]";
+    } else if (Array.isArray(latestPrompt.content)) {
+      let remainingTokens = allowedPromptTokens;
+      const truncatedContent = [];
+
+      for (const part of latestPrompt.content) {
+        if (part.type === "text" && typeof part.text === "string") {
+          const partTokens = Math.ceil(part.text.length / 2.2);
+          if (partTokens <= remainingTokens) {
+            truncatedContent.push(part);
+            remainingTokens -= partTokens;
+          } else {
+            const maxChars = Math.floor(remainingTokens * 2.2);
+            if (maxChars > 0) {
+              truncatedContent.push({
+                ...part,
+                text: part.text.substring(0, maxChars) + "... [Truncated to fit limits]"
+              });
+            }
+            break;
+          }
+        } else if (part.type === "image_url") {
+          if (remainingTokens >= 300) {
+            truncatedContent.push(part);
+            remainingTokens -= 300;
+          } else {
+            break;
+          }
+        } else if (part.type === "file" && part.file && typeof part.file.file_data === "string") {
+          const fileTokens = Math.ceil(part.file.file_data.length / 50);
+          if (fileTokens <= remainingTokens) {
+            truncatedContent.push(part);
+            remainingTokens -= fileTokens;
+          } else {
+            break;
+          }
+        } else {
+          truncatedContent.push(part);
+        }
+      }
+      latestPrompt.content = truncatedContent;
+    }
+
+    currentHistoryTokens = estimateMessageTokens([latestPrompt]);
   }
 
   // Start adding older messages back in from newest to oldest
   const reversedHistory = conversationHistory.reverse();
   const trimmedHistoryData: any[] = [];
 
+  let historyMessageCount = 0;
   for (const msg of reversedHistory) {
+    if (historyMessageCount >= 4) break;
+
     const msgTokens = estimateMessageTokens([msg]) - 3; // subtracting base overhead per message loop
     if (
       currentHistoryTokens + msgTokens + MIN_RESPONSE_TOKENS <
@@ -286,6 +340,7 @@ async function checkTokenLimitsAndSetupStream(
     ) {
       currentHistoryTokens += msgTokens;
       trimmedHistoryData.unshift(msg);
+      historyMessageCount++;
     } else {
       // Reached the token limit, drop the rest of the older messages
       break;
