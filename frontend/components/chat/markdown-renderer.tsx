@@ -77,7 +77,118 @@ function CustomImage({ src, alt }: { src?: string; alt?: string }) {
   );
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+const MemoizedCodeBlock = React.memo(
+  ({ className, children, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || "");
+    const codeString = String(children).replace(/\n$/, "");
+
+    if (match) {
+      return (
+        <div className="not-prose my-3 rounded-xl overflow-hidden border border-border/30 bg-[#282c34]">
+          <div className="flex items-center justify-between px-4 py-2 bg-[#21252b] border-b border-border/20">
+            <span className="text-xs font-mono text-muted-foreground">{match[1]}</span>
+            <CopyButton text={codeString} />
+          </div>
+          <SyntaxHighlighter
+            style={oneDark}
+            language={match[1]}
+            PreTag="div"
+            customStyle={{
+              margin: 0,
+              padding: "1rem",
+              background: "transparent",
+              fontSize: "0.8rem",
+              lineHeight: "1.5",
+            }}
+          >
+            {codeString}
+          </SyntaxHighlighter>
+        </div>
+      );
+    }
+
+    if (!children || String(children).trim() === "") return null;
+    return (
+      <code className="px-1.5 py-0.5 rounded-md bg-muted text-sm font-mono text-foreground" {...props}>
+        {children}
+      </code>
+    );
+  },
+  (prevProps, nextProps) => {
+    return prevProps.children === nextProps.children && prevProps.className === nextProps.className;
+  }
+);
+
+const remarkPluginsList = [remarkGfm];
+
+const markdownComponents: any = {
+  img({ src, alt }: any) {
+    return <CustomImage src={typeof src === "string" ? src : undefined} alt={alt} />;
+  },
+  code: MemoizedCodeBlock,
+  p({ children }: any) {
+    return <p className="mb-3 last:mb-0 leading-7">{children}</p>;
+  },
+  h1({ children }: any) {
+    return <h1 className="text-xl font-bold mt-5 mb-3">{children}</h1>;
+  },
+  h2({ children }: any) {
+    return <h2 className="text-lg font-semibold mt-4 mb-2">{children}</h2>;
+  },
+  h3({ children }: any) {
+    return <h3 className="text-base font-semibold mt-3 mb-2">{children}</h3>;
+  },
+  ul({ children }: any) {
+    return <ul className="list-disc list-inside space-y-1 mb-3 ml-1">{children}</ul>;
+  },
+  ol({ children }: any) {
+    return <ol className="list-decimal list-inside space-y-1 mb-3 ml-1">{children}</ol>;
+  },
+  li({ children }: any) {
+    return <li className="leading-7">{children}</li>;
+  },
+  blockquote({ children }: any) {
+    return (
+      <blockquote className="border-l-3 border-primary/40 pl-4 my-3 italic text-muted-foreground">
+        {children}
+      </blockquote>
+    );
+  },
+  a({ href, children }: any) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+        {children}
+      </a>
+    );
+  },
+  strong({ children }: any) {
+    return <strong className="font-semibold text-foreground">{children}</strong>;
+  },
+  em({ children }: any) {
+    return <em className="italic">{children}</em>;
+  },
+  hr() {
+    return <hr className="my-4 border-border/50" />;
+  },
+  table({ children }: any) {
+    return (
+      <div className="my-3 overflow-x-auto rounded-lg border border-border/50">
+        <table className="w-full text-sm">{children}</table>
+      </div>
+    );
+  },
+  thead({ children }: any) {
+    return <thead className="bg-muted/50 border-b border-border/50">{children}</thead>;
+  },
+  th({ children }: any) {
+    return <th className="px-3 py-2 text-left font-medium">{children}</th>;
+  },
+  td({ children }: any) {
+    return <td className="px-3 py-2 border-t border-border/30">{children}</td>;
+  },
+};
+
+export const MarkdownRenderer = React.memo(({ content }: MarkdownRendererProps) => {
   const handleDownloadGlobal = async (src: string) => {
     try {
       if (!src) return;
@@ -117,114 +228,14 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
     >
       <div className="prose-chat">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
+        
+          remarkPlugins={remarkPluginsList}
           urlTransform={(value) => value}
-          components={{
-            img({ src, alt }) {
-              return <CustomImage src={typeof src === "string" ? src : undefined} alt={alt} />;
-            },
-          code({ className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || "");
-            const codeString = String(children).replace(/\n$/, "");
-
-            if (match) {
-              return (
-                <div className="not-prose my-3 rounded-xl overflow-hidden border border-border/30 bg-[#282c34]">
-                  <div className="flex items-center justify-between px-4 py-2 bg-[#21252b] border-b border-border/20">
-                    <span className="text-xs font-mono text-muted-foreground">{match[1]}</span>
-                    <CopyButton text={codeString} />
-                  </div>
-                  <SyntaxHighlighter
-                    style={oneDark}
-                    language={match[1]}
-                    PreTag="div"
-                    customStyle={{
-                      margin: 0,
-                      padding: "1rem",
-                      background: "transparent",
-                      fontSize: "0.8rem",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    {codeString}
-                  </SyntaxHighlighter>
-                </div>
-              );
-            }
-
-            // Inline code
-            if (!children || String(children).trim() === "") return null;
-            return (
-              <code className="px-1.5 py-0.5 rounded-md bg-muted text-sm font-mono text-foreground" {...props}>
-                {children}
-              </code>
-            );
-          },
-          p({ children }) {
-            return <p className="mb-3 last:mb-0 leading-7">{children}</p>;
-          },
-          h1({ children }) {
-            return <h1 className="text-xl font-bold mt-5 mb-3">{children}</h1>;
-          },
-          h2({ children }) {
-            return <h2 className="text-lg font-semibold mt-4 mb-2">{children}</h2>;
-          },
-          h3({ children }) {
-            return <h3 className="text-base font-semibold mt-3 mb-2">{children}</h3>;
-          },
-          ul({ children }) {
-            return <ul className="list-disc list-inside space-y-1 mb-3 ml-1">{children}</ul>;
-          },
-          ol({ children }) {
-            return <ol className="list-decimal list-inside space-y-1 mb-3 ml-1">{children}</ol>;
-          },
-          li({ children }) {
-            return <li className="leading-7">{children}</li>;
-          },
-          blockquote({ children }) {
-            return (
-              <blockquote className="border-l-3 border-primary/40 pl-4 my-3 italic text-muted-foreground">
-                {children}
-              </blockquote>
-            );
-          },
-          a({ href, children }) {
-            return (
-              <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
-                {children}
-              </a>
-            );
-          },
-          strong({ children }) {
-            return <strong className="font-semibold text-foreground">{children}</strong>;
-          },
-          em({ children }) {
-            return <em className="italic">{children}</em>;
-          },
-          hr() {
-            return <hr className="my-4 border-border/50" />;
-          },
-          table({ children }) {
-            return (
-              <div className="my-3 overflow-x-auto rounded-lg border border-border/50">
-                <table className="w-full text-sm">{children}</table>
-              </div>
-            );
-          },
-          thead({ children }) {
-            return <thead className="bg-muted/50 border-b border-border/50">{children}</thead>;
-          },
-          th({ children }) {
-            return <th className="px-3 py-2 text-left font-medium">{children}</th>;
-          },
-          td({ children }) {
-            return <td className="px-3 py-2 border-t border-border/30">{children}</td>;
-          },
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+          components={markdownComponents}
+        >
+          {content}
+        </ReactMarkdown>
       </div>
     </PhotoProvider>
   );
-}
+});

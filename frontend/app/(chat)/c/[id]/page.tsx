@@ -42,6 +42,7 @@ export default function ChatPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [models, setModels] = useState<Model[]>([]);
+  const modelsRef = useRef<Model[]>([]);
   const [selectedModels, setSelectedModels] = useState<number[]>([]);
   const [activeModelTabs, setActiveModelTabs] = useState<Record<number, number>>({});
   const [isSending, setIsSending] = useState(false);
@@ -155,6 +156,7 @@ export default function ChatPage() {
       const allModels = res.data.data?.data || [];
       const activeModels = allModels.filter((m: any) => m.isActive);
       setModels(activeModels);
+      modelsRef.current = activeModels;
       
       if (activeModels.length > 0 && selectedModels.length === 0) {
         const storedModelId = localStorage.getItem("preferredModelId");
@@ -328,7 +330,7 @@ export default function ChatPage() {
                       : msg
                   )
                 );
-                toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${parsed.message}`);
+                toast.error(`${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${parsed.message}`);
               } else if (parsed.type === "done") {
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -392,7 +394,7 @@ export default function ChatPage() {
       chatType,
       modelResponses: targetModelIds.map((mid) => ({
         id: mid,
-        model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" },
+        model: { id: mid, name: modelsRef.current.find((m) => m.id === mid)?.name || "AI" },
         content: "",
         status: "STREAMING",
         tokensUsed: null,
@@ -478,7 +480,7 @@ export default function ChatPage() {
                 : msg
             )
           );
-          toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${result.reason?.message || "Failed to stream response"}`);
+          toast.error(`${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${result.reason?.message || "Failed to stream response"}`);
         });
       }
 
@@ -545,7 +547,7 @@ export default function ChatPage() {
             ...(msg.modelResponses || []),
             {
               id: streamingRespId,
-              model: { id: modelId, name: models.find((m) => m.id === modelId)?.name || "AI" },
+              model: { id: modelId, name: modelsRef.current.find((m) => m.id === modelId)?.name || "AI" },
               content: "",
               status: "STREAMING",
               tokensUsed: null,

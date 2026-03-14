@@ -27,17 +27,22 @@ interface ModelResponse {
 function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
   if (!text) return { cleanText: "", questions: [] };
   
-  // Flexible regex to match an array of strings, optionally wrapped in markdown backticks or a "json" prefix
+  // Optimization: Only search for follow-up questions in the last 1500 characters
+  // since they always appear at the end of the response and regex on huge strings is slow.
+  const searchLength = 1500;
+  const startIndex = Math.max(0, text.length - searchLength);
+  const searchString = text.substring(startIndex);
+  
   const arrayRegex = /(?:```(?:json|JSON)?\s*|(?:\bjson\b|\bJSON\b)\s*)?(\[\s*"(?:[^"\\]|\\.)*"(?:\s*,\s*"(?:[^"\\]|\\.)*")*\s*\])(?:\s*```)?/gi;
   
-  const matches = Array.from(text.matchAll(arrayRegex));
+  const matches = Array.from(searchString.matchAll(arrayRegex));
   if (matches.length > 0) {
     const lastMatch = matches[matches.length - 1];
     const fullMatch = lastMatch[0];
     const jsonContent = lastMatch[1];
     
     // Check if what follows the match is just whitespace, newlines, or citations/punctuation
-    const trailingText = text.slice(lastMatch.index! + fullMatch.length);
+    const trailingText = searchString.slice(lastMatch.index! + fullMatch.length);
     const isAtEnd = /^(\s|\[\d+\]|,|\.|-)*$/.test(trailingText);
     
     if (isAtEnd) {
@@ -46,8 +51,11 @@ function parseFollowUpQuestions(text: string): { cleanText: string; questions: s
         if (Array.isArray(parsed)) {
           const questions = parsed.filter(q => typeof q === "string").slice(0, 4);
           if (questions.length > 0) {
+            // Reconstruct clean text safely using exact index
+            const globalIndex = startIndex + lastMatch.index!;
+            const cleanText = text.substring(0, globalIndex) + text.substring(globalIndex + fullMatch.length);
             return {
-              cleanText: text.replace(fullMatch, "").replace(/[\s`\-]+$/, ""),
+              cleanText: cleanText.replace(/[\s`\-]+$/, ""),
               questions
             };
           }
@@ -114,7 +122,7 @@ interface MessageBubbleProps {
   onToggleStar?: (responseId: number, isStarred: boolean) => void;
 }
 
-export function MessageBubble({
+export const MessageBubble = React.memo(function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
   isLastMessage, onFollowUpClick, sharedView = false, onToggleStar
@@ -600,7 +608,34 @@ export function MessageBubble({
       <Attachments message={message} />
     </div>
   );
-}
+}, (prev, next) => {
+  if (prev.activeModelTab !== next.activeModelTab) return false;
+  if (prev.isLastMessage !== next.isLastMessage) return false;
+  if (prev.editVersionIndex !== next.editVersionIndex) return false;
+  if (prev.sharedView !== next.sharedView) return false;
+  
+  const pMsg = prev.message;
+  const nMsg = next.message;
+  if (pMsg.id !== nMsg.id) return false;
+  if (pMsg.content !== nMsg.content) return false;
+  if (pMsg.sourceChatId !== nMsg.sourceChatId) return false;
+  
+  const pResps = pMsg.modelResponses || [];
+  const nResps = nMsg.modelResponses || [];
+  if (pResps.length !== nResps.length) return false;
+  for (let i = 0; i < pResps.length; i++) {
+    const pr = pResps[i];
+    const nr = nResps[i];
+    if (pr.status !== nr.status || pr.content !== nr.content || pr.isLiked !== nr.isLiked || pr.isStarred !== nr.isStarred) {
+      return false;
+    }
+  }
+  
+  if (pMsg.attachments?.length !== nMsg.attachments?.length) return false;
+  if (prev.editVersions?.length !== next.editVersions?.length) return false;
+  
+  return true;
+});
 
 // ── Shared action bar ────────────────────────────────────────────────────────
 function CardActions({
