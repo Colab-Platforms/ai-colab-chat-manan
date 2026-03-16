@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreateSubscriptionBody } from "./subscription.types.js";
+import { createWalletTransaction } from "@/utils/walletUtils.js";
 
 class SubscriptionService {
     async create(userId: number, data: CreateSubscriptionBody) {
@@ -50,7 +51,7 @@ class SubscriptionService {
                 },
             });
 
-            await tx.userWallet.upsert({
+            const wallet = await tx.userWallet.upsert({
                 where: { userId },
                 create: {
                     userId,
@@ -65,6 +66,15 @@ class SubscriptionService {
                     currentPeriodStart: now,
                     currentPeriodEnd: dayjs(now).add(1, "month").toDate(),
                 },
+            });
+
+            await createWalletTransaction(tx, {
+                userId,
+                walletId: wallet.id,
+                amount: plan.tokenLimit,
+                type: "CREDIT",
+                referenceId: `sub_${subscription.id}`,
+                meta: { reason: "SUBSCRIPTION_CREATION", planId: plan.id, planName: plan.name },
             });
 
             return subscription;

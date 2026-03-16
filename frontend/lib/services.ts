@@ -78,6 +78,7 @@ export const userService = {
 
 export const walletService = {
   get: () => api.get("/wallet"),
+  getTransactions: (params?: Record<string, string>) => api.get("/wallet/transactions", { params }),
 };
 
 export const subscriptionService = {

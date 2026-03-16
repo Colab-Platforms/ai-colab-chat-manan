@@ -4,6 +4,7 @@ import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
 import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
+import { createWalletTransaction } from "@/utils/walletUtils.js";
 import AttachmentService from "@/modules/attachment/attachment.service.js";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
@@ -688,12 +689,21 @@ export async function streamChat(req: Request, res: Response) {
             billableTotalTokens: billableTotalPre,
           },
         });
-        await tx.userWallet.update({
+        const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
             tokensRemaining: { decrement: billableTotalPre },
             tokensUsed: { increment: billableTotalPre },
           },
+        });
+        
+        await createWalletTransaction(tx, {
+          userId,
+          walletId: updatedWallet.id,
+          amount: billableTotalPre,
+          type: "DEBIT",
+          referenceId: `msg_${assistantMessage.id}`,
+          meta: { reason: "PREDEFINED_RESPONSE", chatId, messageId: assistantMessage.id },
         });
       });
 
@@ -946,12 +956,21 @@ export async function streamChat(req: Request, res: Response) {
           },
         });
 
-        await tx.userWallet.update({
+        const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
             tokensRemaining: { decrement: billableTotalTokens },
             tokensUsed: { increment: billableTotalTokens },
           },
+        });
+        
+        await createWalletTransaction(tx, {
+          userId,
+          walletId: updatedWallet.id,
+          amount: billableTotalTokens,
+          type: "DEBIT",
+          referenceId: `msg_${assistantMessage.id}`,
+          meta: { reason: "STREAMED_RESPONSE", chatId, messageId: assistantMessage.id },
         });
       }
     });
@@ -1144,12 +1163,21 @@ export async function regenerateChat(req: Request, res: Response) {
             billableTotalTokens: billableTotalRegen,
           },
         });
-        await tx.userWallet.update({
+        const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
             tokensRemaining: { decrement: billableTotalRegen },
             tokensUsed: { increment: billableTotalRegen },
           },
+        });
+        
+        await createWalletTransaction(tx, {
+          userId,
+          walletId: updatedWallet.id,
+          amount: billableTotalRegen,
+          type: "DEBIT",
+          referenceId: `msg_${messageId}`,
+          meta: { reason: "PREDEFINED_REGENERATE", chatId, messageId },
         });
       });
 
@@ -1358,12 +1386,21 @@ export async function regenerateChat(req: Request, res: Response) {
           },
         });
 
-        await tx.userWallet.update({
+        const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
             tokensRemaining: { decrement: billableTotalTokens },
             tokensUsed: { increment: billableTotalTokens },
           },
+        });
+        
+        await createWalletTransaction(tx, {
+          userId,
+          walletId: updatedWallet.id,
+          amount: billableTotalTokens,
+          type: "DEBIT",
+          referenceId: `msg_${messageId}`,
+          meta: { reason: "STREAMED_REGENERATE", chatId, messageId },
         });
       }
     });

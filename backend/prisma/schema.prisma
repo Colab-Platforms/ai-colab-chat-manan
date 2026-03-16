@@ -18,23 +18,23 @@ model Role {
 }
 
 model User {
-  id                            Int             @id @default(autoincrement())
+  id                            Int                 @id @default(autoincrement())
   firstName                     String
   lastName                      String
-  email                         String          @unique
-  phoneNumber                   String?         @unique
+  email                         String              @unique
+  phoneNumber                   String?             @unique
   password                      String
   emailVerificationOtpHash      String?
   emailVerificationOtpExpiresAt DateTime?
   passwordResetOtpHash          String?
   passwordResetOtpExpiresAt     DateTime?
-  isActive                      Boolean         @default(true)
-  isVerified                    Boolean         @default(false)
-  isDeleted                     Boolean         @default(false)
+  isActive                      Boolean             @default(true)
+  isVerified                    Boolean             @default(false)
+  isDeleted                     Boolean             @default(false)
   profileImage                  String?
-  timezone                      String          @default("Asia/Kolkata")
-  createdAt                     DateTime        @default(now())
-  updatedAt                     DateTime        @updatedAt
+  timezone                      String              @default("Asia/Kolkata")
+  createdAt                     DateTime            @default(now())
+  updatedAt                     DateTime            @updatedAt
   deletedAt                     DateTime?
   folders                       Folder[]
   chats                         Chat[]
@@ -43,7 +43,7 @@ model User {
   userWallet                    UserWallet?
   userRoles                     UserRole[]
   preference                    UserPreference?
-  // walletTransactions WalletTransaction[]
+  walletTransactions            WalletTransaction[]
 }
 
 model UserPreference {
@@ -70,32 +70,41 @@ model UserRole {
 }
 
 model UserWallet {
-  id                 Int       @id @default(autoincrement())
-  userId             Int       @unique
-  user               User      @relation(fields: [userId], references: [id])
-  tokensRemaining    Int       @default(0)
-  tokensUsed         Int       @default(0)
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @unique
+  user               User                @relation(fields: [userId], references: [id])
+  tokensRemaining    Int                 @default(0)
+  tokensUsed         Int                 @default(0)
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  walletTransactions WalletTransaction[]
 }
 
-// model WalletTransaction {
-//   id        Int                   @id @default(autoincrement())
-//   userId    Int
-//   user      User                  @relation(fields: [userId], references: [id])
-//   amount    Int
-//   type      WalletTransactionType
-//   meta      Json?
-//   createdAt DateTime              @default(now())
-//   updatedAt DateTime              @updatedAt
-// }
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+}
 
-// enum WalletTransactionType {
-//   CREDIT
-//   DEBIT
-// }
+model WalletTransaction {
+  id          Int                   @id @default(autoincrement())
+  userId      Int
+  user        User                  @relation(fields: [userId], references: [id])
+  walletId    Int
+  wallet      UserWallet            @relation(fields: [walletId], references: [id])
+  amount      Int
+  type        WalletTransactionType
+  referenceId String?
+  meta        Json?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([createdAt])
+  @@index([referenceId])
+}
 
 model Folder {
   id        Int       @id @default(autoincrement())
@@ -134,6 +143,7 @@ model Chat {
   @@index([userId])
   @@index([folderId])
   @@index([assistantId])
+  @@index([userId, createdAt])
 }
 
 model Message {
@@ -156,6 +166,7 @@ model Message {
 
   @@index([chatId])
   @@index([createdAt])
+  @@index([chatId, createdAt])
 }
 
 model ModelResponse {
@@ -301,6 +312,9 @@ model UsageLog {
   @@index([modelId])
   @@index([createdAt])
   @@index([messageId])
+  @@index([userId, createdAt])
+  @@index([modelId, createdAt])
+  @@index([capability, createdAt])
 }
 
 model Plan {

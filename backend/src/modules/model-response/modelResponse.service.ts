@@ -2,6 +2,7 @@ import prisma from "@root/prisma.js";
 import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import { CompleteResponseBody } from "./modelResponse.types.js";
+import { createWalletTransaction } from "@/utils/walletUtils.js";
 
 class ModelResponseService {
   async completeResponse(userId: number, data: CompleteResponseBody) {
@@ -75,12 +76,21 @@ class ModelResponseService {
         },
       });
 
-      await tx.userWallet.update({
+      const updatedWallet = await tx.userWallet.update({
         where: { userId },
         data: {
           tokensRemaining: { decrement: billableTotalTokens },
           tokensUsed: { increment: billableTotalTokens },
         },
+      });
+
+      await createWalletTransaction(tx, {
+        userId,
+        walletId: updatedWallet.id,
+        amount: billableTotalTokens,
+        type: "DEBIT",
+        referenceId: `msg_${data.messageId}`,
+        meta: { reason: "MODEL_RESPONSE_COMPLETE", chatId: data.chatId, messageId: data.messageId },
       });
 
       return modelResponse;

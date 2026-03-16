@@ -14,3 +14,13 @@ export const getWallet = async (req: Request, res: Response): Promise<void> => {
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };
+
+export const getTransactions = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const result = await walletService.getTransactions(req.query, req.user!.id);
+        sendResponse(res, true, result, "Transactions fetched successfully", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Get wallet transactions error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};
