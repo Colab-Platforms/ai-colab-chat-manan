@@ -576,7 +576,13 @@ export async function streamChat(req: Request, res: Response) {
         console.log(`[DEBUG] Adding Assistant System Prompt for: ${chatAssistant.name}`);
         conversationHistory.unshift({
           role: "system",
-          content: chatAssistant.systemPrompt,
+          content: [
+            {
+              type: "text",
+              text: chatAssistant.systemPrompt,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
         });
         assistantTemperature = chatAssistant.temperature;
       } else {
@@ -601,7 +607,16 @@ export async function streamChat(req: Request, res: Response) {
     if (contextStrings.length > 0) {
       console.log(`[DEBUG] Adding User Context (${contextStrings.length} items)`);
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c) => `- ${c}`).join("\n")}`;
-      conversationHistory.unshift({ role: "system", content: systemContent });
+      conversationHistory.unshift({
+        role: "system",
+        content: [
+          {
+            type: "text",
+            text: systemContent,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+      });
     }
 
     // Build multipart content for current message if attachments are present
