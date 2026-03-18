@@ -89,7 +89,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         page: pageNum.toString(),
         pageSize: "6",
         isArchived: "false",
-        ...(searchTerm ? { search: searchTerm } : {}),
+        ...(searchTerm ? { search: searchTerm } : { folderId: "null" }),
       });
       const result = res.data.data;
       const fetched = result?.data || [];
@@ -271,7 +271,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       chats={chats}
       folders={folders}
       assistants={assistants}
-      onRefresh={() => { fetchChats(1, chatSearch); fetchFolders(); fetchAssistants(1); }}
+      onRefresh={() => { fetchChats(1, chatSearch); fetchFolders(); fetchAssistants(1); window.dispatchEvent(new Event("refresh-chats")); }}
       onMobileClose={() => setMobileOpen(false)}
       onLogout={handleLogout}
       hasMore={hasMore}

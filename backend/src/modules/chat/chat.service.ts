@@ -63,6 +63,10 @@ class ChatService {
 
     const where: any = { ...qbWhere, userId };
 
+    if (query.folderId === 'null') {
+      where.folderId = null;
+    }
+
     const [chats, totalRecords] = await Promise.all([
       prisma.chat.findMany({
         where,

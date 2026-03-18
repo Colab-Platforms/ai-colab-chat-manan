@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode, useEffect } from "react";
+import { useState, ReactNode, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -324,6 +324,173 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FolderGroup – Handles its own chat fetching and local pagination
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FolderGroup({
+  folder,
+  pathname,
+  onRefresh,
+  onMobileClose,
+  handleArchiveChat,
+  handlePinChat,
+  handleRenameChat,
+  handleMoveChat,
+  handleShareChat,
+  handleOpenCreateFolderForMove,
+  localFolders,
+  pendingMoveForChat,
+  pendingMoveNewFolderId,
+  setPendingMoveForChat,
+  setPendingMoveNewFolderId,
+  setRenameFolderTarget,
+  setDeleteFolderTarget,
+  setDeleteTarget,
+  searchQuery,
+  globalChats,
+}: {
+  folder: FolderItem;
+  pathname: string;
+  onRefresh: () => void;
+  onMobileClose: () => void;
+  handleArchiveChat: any;
+  handlePinChat: any;
+  handleRenameChat: any;
+  handleMoveChat: any;
+  handleShareChat: any;
+  handleOpenCreateFolderForMove: any;
+  localFolders: FolderItem[];
+  pendingMoveForChat: number | null;
+  pendingMoveNewFolderId: number | null;
+  setPendingMoveForChat: any;
+  setPendingMoveNewFolderId: any;
+  setRenameFolderTarget: any;
+  setDeleteFolderTarget: any;
+  setDeleteTarget: any;
+  searchQuery: string;
+  globalChats: Chat[];
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const fetchFolderChats = useCallback(async (pageNum = 1) => {
+    if (searchQuery) return;
+    setLoading(true);
+    try {
+      const res = await chatService.list({
+        folderId: folder.id.toString(),
+        page: pageNum.toString(),
+        pageSize: "8",
+        isArchived: "false",
+      });
+      const result = res.data.data;
+      const fetched = result?.data || [];
+      setChats((prev: Chat[]) => {
+        if (pageNum === 1) return fetched;
+        const exists = new Set(prev.map((c: Chat) => c.id));
+        return [...prev, ...fetched.filter((c: Chat) => !exists.has(c.id))];
+      });
+      setPage(pageNum);
+      setHasMore(Boolean(result?.hasNextPage));
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [folder.id, searchQuery]);
+
+  useEffect(() => {
+    if (isExpanded && !searchQuery && chats.length === 0) {
+      fetchFolderChats(1);
+    }
+  }, [isExpanded, searchQuery, chats.length, fetchFolderChats]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (!searchQuery) fetchFolderChats(1);
+    };
+    window.addEventListener("refresh-chats", handleRefresh);
+    return () => window.removeEventListener("refresh-chats", handleRefresh);
+  }, [searchQuery, fetchFolderChats]);
+
+  // When searching, use chats from parent
+  const displayChats = searchQuery 
+    ? globalChats.filter((c: Chat) => c.folderId === folder.id)
+    : chats;
+
+  const sortByPin = (a: Chat, b: Chat) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0);
+  const sortedChats = [...displayChats].sort(sortByPin);
+
+  if (searchQuery && displayChats.length === 0) return null;
+
+  return (
+    <div key={folder.id}>
+      <div className="group relative w-full flex items-center">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-sidebar-accent transition-colors text-muted-foreground cursor-pointer pr-10"
+        >
+          <Folder className="w-4 h-4" />
+          <span className="truncate flex-1 text-left">{folder.name}</span>
+          <ChevronRight className={`w-3 h-3 transition-transform ${isExpanded || searchQuery ? "rotate-90" : ""}`} />
+        </button>
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-7 w-7 p-0 rounded text-muted-foreground transition-opacity hover:text-foreground hover:bg-sidebar-accent md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameFolderTarget({ id: folder.id, name: folder.name }); }}>
+                <Edit2 className="w-4 h-4 mr-2" /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setDeleteFolderTarget(folder.id); }}>
+                <Trash2 className="w-4 h-4 mr-2" /> Delete Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      {(isExpanded || searchQuery) && (
+        <div className="space-y-0.5">
+          {sortedChats.map((chat) => (
+            <ChatItem
+              key={chat.id}
+              chat={chat}
+              folders={localFolders}
+              isActive={pathname === `/c/${chat.id}`}
+              onDelete={(e, id) => { e.stopPropagation(); e.preventDefault(); setDeleteTarget(id); }}
+              onArchive={handleArchiveChat}
+              onPin={handlePinChat}
+              onNavigate={onMobileClose}
+              onRename={handleRenameChat}
+              onMove={handleMoveChat}
+              onShare={handleShareChat}
+              onCreateFolderForMove={handleOpenCreateFolderForMove}
+              pendingMoveNewFolderId={pendingMoveForChat === chat.id ? pendingMoveNewFolderId : null}
+              onPendingMoveConsumed={() => { setPendingMoveForChat(null); setPendingMoveNewFolderId(null); }}
+              indent
+            />
+          ))}
+          {!searchQuery && hasMore && (
+            <Button
+              variant="ghost"
+              className="w-[calc(100%-24px)] ml-6 mt-1 text-[10px] text-muted-foreground hover:text-foreground h-6 cursor-pointer py-0 justify-start"
+              onClick={() => fetchFolderChats(page + 1)}
+              disabled={loading}
+            >
+              {loading ? "Loading..." : "Load More"}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar({
   chats,
   folders = [],
@@ -532,12 +699,12 @@ export function Sidebar({
     setCreateFolderOpen(true);
   };
 
-  const filteredChats = chats.filter((c) => !c.isArchived);
+  const filteredChats = chats.filter((c: Chat) => !c.isArchived);
   const isStarredRoute = pathname === "/starred";
 
   // Pinned chats float to the top of their respective group
   const sortByPin = (a: Chat, b: Chat) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0);
-  const unfoldered = filteredChats.filter((c) => !c.folderId).sort(sortByPin);
+  const unfoldered = filteredChats.filter((c: Chat) => !c.folderId).sort(sortByPin);
 
   // ─── Collapsed icon-only icons for chat variant ───
   const collapsedIcons = (
@@ -641,62 +808,31 @@ export function Sidebar({
 
 
           {safeFolders.length > 0 && <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-1 uppercase tracking-wider">Projects</div>}
-          {safeFolders.map((folder) => {
-            const folderChats = filteredChats.filter((c) => c.folderId === folder.id).sort(sortByPin);
-            const isExpanded = expandedFolders.has(folder.id);
-
-            return (
-              <div key={folder.id}>
-                <div className="group relative w-full flex items-center">
-                  <button
-                    onClick={() => toggleFolder(folder.id)}
-                    className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-sidebar-accent transition-colors text-muted-foreground cursor-pointer pr-10"
-                  >
-                    <Folder className="w-4 h-4" />
-                    <span className="truncate flex-1 text-left">{folder.name}</span>
-                    <ChevronRight className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                  </button>
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-7 w-7 p-0 rounded text-muted-foreground transition-opacity hover:text-foreground hover:bg-sidebar-accent md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameFolderTarget({ id: folder.id, name: folder.name }); }}>
-                          <Edit2 className="w-4 h-4 mr-2" /> Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setDeleteFolderTarget(folder.id); }}>
-                          <Trash2 className="w-4 h-4 mr-2" /> Delete Project
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                {isExpanded && folderChats.map((chat) => (
-                  <ChatItem
-                    key={chat.id}
-                    chat={chat}
-                    folders={localFolders}
-                    isActive={pathname === `/c/${chat.id}`}
-                    onDelete={(e, id) => { e.stopPropagation(); e.preventDefault(); setDeleteTarget(id); }}
-                    onArchive={handleArchiveChat}
-                    onPin={handlePinChat}
-                    onNavigate={onMobileClose}
-                    onRename={handleRenameChat}
-                    onMove={handleMoveChat}
-                    onShare={handleShareChat}
-                    onCreateFolderForMove={handleOpenCreateFolderForMove}
-                    pendingMoveNewFolderId={pendingMoveForChat === chat.id ? pendingMoveNewFolderId : null}
-                    onPendingMoveConsumed={() => { setPendingMoveForChat(null); setPendingMoveNewFolderId(null); }}
-                    indent
-                  />
-                ))}
-              </div>
-            );
-          })}
+          {safeFolders.map((folder) => (
+            <FolderGroup
+              key={folder.id}
+              folder={folder}
+              pathname={pathname}
+              onRefresh={onRefresh}
+              onMobileClose={onMobileClose}
+              handleArchiveChat={handleArchiveChat}
+              handlePinChat={handlePinChat}
+              handleRenameChat={handleRenameChat}
+              handleMoveChat={handleMoveChat}
+              handleShareChat={handleShareChat}
+              handleOpenCreateFolderForMove={handleOpenCreateFolderForMove}
+              localFolders={localFolders}
+              pendingMoveForChat={pendingMoveForChat}
+              pendingMoveNewFolderId={pendingMoveNewFolderId}
+              setPendingMoveForChat={setPendingMoveForChat}
+              setPendingMoveNewFolderId={setPendingMoveNewFolderId}
+              setRenameFolderTarget={setRenameFolderTarget}
+              setDeleteFolderTarget={setDeleteFolderTarget}
+              setDeleteTarget={setDeleteTarget}
+              searchQuery={search}
+              globalChats={filteredChats}
+            />
+          ))}
 
           
 
