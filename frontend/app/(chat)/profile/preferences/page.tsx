@@ -1,280 +1,355 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { userPreferenceService } from "@/lib/services";
-import { Sparkles, Brain, Loader2, Plus, X, Info } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Sparkles, Plus, Eye, Edit2, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DataTable, Column } from "@/components/dashboard/data-table";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { ContextModal } from "@/components/contexts/ContextModal";
+import { contextService, folderService, userPreferenceService } from "@/lib/services";
 import { toast } from "react-toastify";
 
-const MAX_ITEMS = 10;
-const MAX_CHARS = 300;
-
-interface Preferences {
-  enableFollowUpQuestions: boolean;
-  contextMemory: string[];
-}
-
 export default function PreferencesPage() {
-  const [preferences, setPreferences] = useState<Preferences>({
-    enableFollowUpQuestions: true,
-    contextMemory: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [updatingPref, setUpdatingPref] = useState(false);
-  const [newItem, setNewItem] = useState("");
-  const [addingItem, setAddingItem] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  // ── Context state ────────────────────────────────────────────────────────
+  const [contexts, setContexts] = useState<any[]>([]);
+  const [folders, setFolders] = useState<any[]>([]);
+  const [loadingContexts, setLoadingContexts] = useState(true);
 
-  useEffect(() => {
-    userPreferenceService
-      .getPreferences()
-      .then((res) => {
-        if (res?.data?.data) {
-          setPreferences({
-            enableFollowUpQuestions: res.data.data.enableFollowUpQuestions ?? true,
-            contextMemory: res.data.data.contextMemory ?? [],
-          });
-        }
-      })
-      .catch(() => null)
-      .finally(() => setLoading(false));
+  // view dialog (read-only)
+  const [viewContext, setViewContext] = useState<any | null>(null);
+
+  // create / edit modal
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editContext, setEditContext] = useState<any | null>(null); // null = create
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // ── Preferences state ────────────────────────────────────────────────────
+  const [followUpEnabled, setFollowUpEnabled] = useState(false);
+  const [loadingPrefs, setLoadingPrefs] = useState(true);
+  const [togglingFollowUp, setTogglingFollowUp] = useState(false);
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+
+  const fetchContexts = useCallback(async () => {
+    setLoadingContexts(true);
+    try {
+      const res = await contextService.list();
+      const data = res?.data?.data?.data;
+      setContexts(Array.isArray(data) ? data : []);
+    } catch {
+      setContexts([]);
+    } finally {
+      setLoadingContexts(false);
+    }
   }, []);
 
-  const handleToggleFollowUp = async (checked: boolean) => {
-    setUpdatingPref(true);
-    setPreferences((prev) => ({ ...prev, enableFollowUpQuestions: checked }));
+  const fetchFolders = useCallback(async () => {
     try {
-      await userPreferenceService.updatePreferences({ enableFollowUpQuestions: checked });
+      const res = await folderService.list();
+      const data = res?.data?.data?.data;
+      setFolders(Array.isArray(data) ? data : []);
     } catch {
-      toast.error("Failed to update preferences.");
-      setPreferences((prev) => ({ ...prev, enableFollowUpQuestions: !checked }));
+      setFolders([]);
+    }
+  }, []);
+
+  const fetchPreferences = useCallback(async () => {
+    try {
+      const res = await userPreferenceService.getPreferences();
+      const prefs = res?.data?.data;
+      setFollowUpEnabled(prefs?.enableFollowUpQuestions ?? false);
+    } catch {
+      setFollowUpEnabled(false);
     } finally {
-      setUpdatingPref(false);
+      setLoadingPrefs(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchContexts();
+    fetchFolders();
+    fetchPreferences();
+  }, [fetchContexts, fetchFolders, fetchPreferences]);
+
+  // ── Context handlers ──────────────────────────────────────────────────────
+
+  const handleOpenCreate = () => {
+    setEditContext(null);
+    setEditModalOpen(true);
   };
 
-  const handleAddItem = async () => {
-    const trimmed = newItem.trim();
-    if (!trimmed) return;
-    if (trimmed.length > MAX_CHARS) {
-      toast.error(`Item cannot exceed ${MAX_CHARS} characters.`);
-      return;
-    }
-    if (preferences.contextMemory.length >= MAX_ITEMS) {
-      toast.error(`You can only add up to ${MAX_ITEMS} context items.`);
-      return;
-    }
-
-    const updated = [...preferences.contextMemory, trimmed];
-    setPreferences((prev) => ({ ...prev, contextMemory: updated }));
-    setNewItem("");
-    setAddingItem(true);
-
+  const handleSaveContext = async (data: any) => {
+    setIsSaving(true);
     try {
-      await userPreferenceService.updatePreferences({ contextMemory: updated });
-      toast.success("Context saved!");
+      if (editContext) {
+        await contextService.update(editContext.id, data);
+        toast.success("Context updated");
+      } else {
+        await contextService.create(data);
+        toast.success("Context created");
+      }
+      setEditModalOpen(false);
+      await fetchContexts();
     } catch {
-      toast.error("Failed to save context.");
-      setPreferences((prev) => ({
-        ...prev,
-        contextMemory: prev.contextMemory.filter((i) => i !== trimmed),
-      }));
+      toast.error("Failed to save context");
     } finally {
-      setAddingItem(false);
-      inputRef.current?.focus();
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteItem = async (index: number) => {
-    const updated = preferences.contextMemory.filter((_, i) => i !== index);
-    setPreferences((prev) => ({ ...prev, contextMemory: updated }));
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await userPreferenceService.updatePreferences({ contextMemory: updated });
+      await contextService.delete(deleteTarget.id);
+      toast.success("Context deleted");
+      setDeleteTarget(null);
+      await fetchContexts();
     } catch {
-      toast.error("Failed to remove context item.");
-      setPreferences((prev) => ({ ...prev, contextMemory: preferences.contextMemory }));
+      toast.error("Failed to delete context");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const charsLeft = MAX_CHARS - newItem.length;
-  const isAtLimit = preferences.contextMemory.length >= MAX_ITEMS;
+  // ── Preferences handlers ──────────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div className="flex justify-center p-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const handleToggleFollowUp = async (val: boolean) => {
+    setTogglingFollowUp(true);
+    try {
+      await userPreferenceService.updatePreferences({ enableFollowUpQuestions: val });
+      setFollowUpEnabled(val);
+    } catch {
+      toast.error("Failed to update preference");
+    } finally {
+      setTogglingFollowUp(false);
+    }
+  };
+
+  // ── Table columns ─────────────────────────────────────────────────────────
+
+  const getFolderName = (folderId: number) => {
+    if (!Array.isArray(folders)) return "Unknown Folder";
+    return folders.find((f) => f.id === folderId)?.name || "Unknown Folder";
+  };
+
+  const columns: Column[] = [
+    {
+      key: "title",
+      label: "Title",
+      render: (r) => (
+        <span className="font-medium max-w-[150px] truncate block" title={r.title}>
+          {r.title}
+        </span>
+      ),
+    },
+    {
+      key: "memory",
+      label: "Content Info",
+      render: (r) => (
+        <span className="max-w-[200px] truncate block text-muted-foreground text-xs" title={r.memory}>
+          {r.memory}
+        </span>
+      ),
+    },
+    {
+      key: "type",
+      label: "Type",
+      render: (r) => (
+        <div className="flex flex-col gap-1 items-start">
+          <Badge variant={r.type === "GLOBAL" ? "default" : r.type === "FOLDER" ? "secondary" : "outline"}>
+            {r.type}
+          </Badge>
+          {r.type === "FOLDER" && r.folderId && (
+            <span className="text-[10px] text-muted-foreground ml-1">
+              in {getFolderName(r.folderId)}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "isAutoSelected",
+      label: "Auto-Selected",
+      render: (r) => (
+        <Badge variant={r.isAutoSelected ? "default" : "secondary"} className="text-[10px] uppercase">
+          {r.isAutoSelected ? "Yes" : "No"}
+        </Badge>
+      ),
+    },
+    {
+      key: "createdAt",
+      label: "Created",
+      render: (r) => (
+        <span className="text-xs whitespace-nowrap">
+          {new Date(r.createdAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      className: "text-right",
+      render: (r) => (
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            title="View"
+            onClick={() => setViewContext(r)}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-blue-500"
+            title="Edit"
+            onClick={() => { setEditContext(r); setEditModalOpen(true); }}
+          >
+            <Edit2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            disabled={r.isAutoGenerated}
+            title={r.isAutoGenerated ? "Cannot delete system generated context" : "Delete"}
+            onClick={() => setDeleteTarget(r)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Preferences</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Customize your chat experience
-        </p>
-      </div>
+      {/* ── Context Memory ── */}
+      <section className="space-y-4">
+        <DataTable
+          columns={columns}
+          data={contexts}
+          title="Preferences"
+          description="Customize your chat experience and AI behaviour"
+          searchPlaceholder="Search contexts..."
+          headerActions={
+            <Button onClick={handleOpenCreate} size="sm" className="gap-2">
+              <Plus className="w-4 h-4" />
+              Create Context
+            </Button>
+          }
+        />
+      </section>
 
-      {/* ── Memory ─────────────────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Brain className="w-4 h-4 text-primary" />
-          <h2 className="text-base font-semibold">Memory</h2>
-        </div>
-
-        <Card className="border-border/30 bg-card/90 backdrop-blur-sm">
-          <CardContent className="space-y-4 pt-5">
-            {/* Description */}
-            <div className="flex gap-2.5 p-3 rounded-lg bg-primary/5 border border-primary/10">
-              <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                These facts are sent to the AI at the start of every chat - your name, role,
-                current project, etc. The AI will always know this without you having to repeat it.
-              </p>
-            </div>
-
-            {/* Item count bar */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {preferences.contextMemory.length} / {MAX_ITEMS} items
-              </span>
-              <div className="flex gap-0.5">
-                {Array.from({ length: MAX_ITEMS }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-1.5 w-4 rounded-full transition-colors ${
-                      i < preferences.contextMemory.length
-                        ? "bg-primary"
-                        : "bg-muted"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Saved items */}
-            {preferences.contextMemory.length > 0 ? (
-              <div className="space-y-2">
-                {preferences.contextMemory.map((item, index) => (
-                  <div
-                    key={index}
-                    className="group flex items-start gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/20 hover:border-border/50 transition-colors"
-                  >
-                    <span className="flex-1 text-sm leading-snug break-words">{item}</span>
-                    <button
-                      onClick={() => handleDeleteItem(index)}
-                      className="shrink-0 mt-0.5 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-                      aria-label="Remove item"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Nothing saved yet. Add your first memory below.
-                </p>
-              </div>
-            )}
-
-            {/* Add new item */}
-            {!isAtLimit ? (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={newItem}
-                      onChange={(e) => setNewItem(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && newItem.trim()) {
-                          e.preventDefault();
-                          handleAddItem();
-                        }
-                      }}
-                      placeholder='e.g. "I am a software engineer at a fintech startup"'
-                      maxLength={MAX_CHARS}
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-border/50 bg-background placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition"
-                    />
-                  </div>
-                  <button
-                    onClick={handleAddItem}
-                    disabled={!newItem.trim() || addingItem || newItem.length > MAX_CHARS}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
-                  >
-                    {addingItem ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5" />
-                    )}
-                    Add
-                  </button>
-                </div>
-                <div className="flex justify-between items-center px-0.5">
-                  <p className="text-xs text-muted-foreground/70">
-                    Tip: One fact per item works best.
-                  </p>
-                  <span
-                    className={`text-xs tabular-nums transition-colors ${
-                      newItem.length > MAX_CHARS - 20
-                        ? newItem.length >= MAX_CHARS
-                          ? "text-destructive font-medium"
-                          : "text-amber-500"
-                        : "text-muted-foreground/60"
-                    }`}
-                  >
-                    {charsLeft}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <Info className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Memory is full ({MAX_ITEMS}/{MAX_ITEMS}). Remove an item above to add a new one.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Follow-up Questions ────────────────────────────── */}
-      <div className="space-y-3">
+      {/* ── AI Suggestions ── */}
+      <section className="space-y-4">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
           <h2 className="text-base font-semibold">AI Suggestions</h2>
         </div>
 
-        <Card className="border-border/30 bg-card/90 backdrop-blur-sm">
-          <CardContent className="pt-5">
+        <Card className="border-border/30 bg-card/80 backdrop-blur-sm">
+          <CardContent className="p-5">
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-0.5">
-                <label
-                  htmlFor="followup-toggle"
-                  className="text-sm font-medium leading-none cursor-pointer"
-                >
-                  Suggested Follow-up Questions
-                </label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm font-medium">Suggested Follow-up Questions</p>
+                <p className="text-xs text-muted-foreground">
                   Automatically generate 4 context-aware questions at the end of each AI response.
                 </p>
               </div>
               <Switch
-                id="followup-toggle"
-                checked={preferences.enableFollowUpQuestions}
+                checked={followUpEnabled}
                 onCheckedChange={handleToggleFollowUp}
-                disabled={updatingPref}
+                disabled={togglingFollowUp || loadingPrefs}
+                id="follow-up-toggle"
               />
             </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
+
+      {/* ── View Dialog (read-only, matches users module pattern) ── */}
+      <Dialog open={!!viewContext} onOpenChange={() => setViewContext(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Context Details</DialogTitle>
+          </DialogHeader>
+          {viewContext && (
+            <div className="space-y-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Title: </span>
+                <span className="font-medium">{viewContext.title}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-muted-foreground">Type: </span>
+                  <Badge variant={viewContext.type === "GLOBAL" ? "default" : viewContext.type === "FOLDER" ? "secondary" : "outline"}>
+                    {viewContext.type}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Auto-Selected: </span>
+                  <Badge variant={viewContext.isAutoSelected ? "default" : "secondary"} className="text-[10px] uppercase">
+                    {viewContext.isAutoSelected ? "Yes" : "No"}
+                  </Badge>
+                </div>
+              </div>
+              {viewContext.type === "FOLDER" && viewContext.folderId && (
+                <div>
+                  <span className="text-muted-foreground">Folder: </span>
+                  <span className="font-medium">{getFolderName(viewContext.folderId)}</span>
+                </div>
+              )}
+              <div>
+                <p className="text-muted-foreground mb-1">Memory Content:</p>
+                <p className="bg-muted/40 rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap">
+                  {viewContext.memory}
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Created: {new Date(viewContext.createdAt).toLocaleString()}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create / Edit Modal ── */}
+      <ContextModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSave={handleSaveContext}
+        initialData={editContext}
+        folders={folders}
+        isSaving={isSaving}
+        mode={editContext ? "edit" : "create"}
+      />
+
+      {/* ── Delete Confirmation ── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}
+        title="Delete Context"
+        description={`Are you sure you want to delete "${deleteTarget?.title}"? This action cannot be undone.`}
+        onConfirm={handleConfirmDelete}
+        loading={isDeleting}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import prisma from "@root/prisma.js";
 import dayjs from "dayjs";
+import { createWalletTransaction } from "@/utils/walletUtils.js";
 
 // Subscription expiry check — runs daily at midnight
 const task = () => {
@@ -10,7 +11,7 @@ const task = () => {
         try {
             const expiredSubscriptions = await prisma.subscription.findMany({
                 where: {
-                    status: "ACTIVE",
+                    status: { in: ["ACTIVE", "CANCELLED"] },
                     expiresAt: { lt: new Date() },
                 },
                 include: { plan: true },
@@ -38,12 +39,35 @@ const task = () => {
 
                     console.log(`  🔄 Auto-renewed subscription ${sub.id}`);
                 } else {
-                    await prisma.subscription.update({
-                        where: { id: sub.id },
-                        data: { status: "EXPIRED" },
+                    await prisma.$transaction(async (tx) => {
+                        await tx.subscription.update({
+                            where: { id: sub.id },
+                            data: { status: "EXPIRED" },
+                        });
+
+                        const wallet = await tx.userWallet.findUnique({
+                            where: { userId: sub.userId },
+                        });
+
+                        if (wallet && wallet.tokensRemaining > 0) {
+                            const unusedTokens = wallet.tokensRemaining;
+                            await tx.userWallet.update({
+                                where: { id: wallet.id },
+                                data: { tokensRemaining: 0 },
+                            });
+
+                            await createWalletTransaction(tx, {
+                                userId: sub.userId,
+                                walletId: wallet.id,
+                                amount: unusedTokens,
+                                type: "DEBIT",
+                                referenceId: `exp_${sub.id}`,
+                                meta: { reason: "SUBSCRIPTION_EXPIRED", planId: sub.planId },
+                            });
+                        }
                     });
 
-                    console.log(`  ⏰ Expired subscription ${sub.id}`);
+                    console.log(`  ⏰ Expired subscription ${sub.id} and cleared remaining tokens.`);
                 }
             }
 

@@ -30,3 +30,50 @@ export async function createWalletTransaction(
     },
   });
 }
+
+/**
+ * Calculates adjusted token usage when the user balance is insufficient.
+ */
+export function calculateAdjustedTokens(
+  availableTokens: number,
+  billablePrompt: number,
+  billableCompletion: number,
+  tokenMultiplier: number = 1.0
+) {
+  const actualAvailable = Math.max(0, availableTokens);
+  const requestedTotal = billablePrompt + billableCompletion;
+
+  if (requestedTotal <= actualAvailable) {
+    return {
+      finalBillablePrompt: billablePrompt,
+      finalBillableCompletion: billableCompletion,
+      finalBillableTotal: requestedTotal,
+      finalRawPrompt: Math.ceil(billablePrompt / tokenMultiplier),
+      finalRawCompletion: Math.ceil(billableCompletion / tokenMultiplier),
+      finalRawTotal: Math.ceil(requestedTotal / tokenMultiplier),
+    };
+  }
+
+  // Capped at available
+  let finalBillablePrompt = billablePrompt;
+  let finalBillableCompletion = billableCompletion;
+
+  if (billablePrompt >= actualAvailable) {
+    finalBillablePrompt = actualAvailable;
+    finalBillableCompletion = 0;
+  } else {
+    finalBillablePrompt = billablePrompt;
+    finalBillableCompletion = actualAvailable - billablePrompt;
+  }
+
+  const finalBillableTotal = finalBillablePrompt + finalBillableCompletion;
+
+  return {
+    finalBillablePrompt,
+    finalBillableCompletion,
+    finalBillableTotal,
+    finalRawPrompt: Math.ceil(finalBillablePrompt / tokenMultiplier),
+    finalRawCompletion: Math.ceil(finalBillableCompletion / tokenMultiplier),
+    finalRawTotal: Math.ceil(finalBillableTotal / tokenMultiplier),
+  };
+}

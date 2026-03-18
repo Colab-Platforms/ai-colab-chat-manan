@@ -16,7 +16,27 @@ const task = () => {
 
             for (const sub of activeSubscriptions) {
                 await prisma.$transaction(async (tx) => {
-                    const wallet = await tx.userWallet.update({
+                    const wallet = await tx.userWallet.findUnique({
+                        where: { userId: sub.userId },
+                    });
+
+                    if (wallet && wallet.tokensRemaining > 0) {
+                        const unusedTokens = wallet.tokensRemaining;
+                        await tx.userWallet.update({
+                            where: { id: wallet.id },
+                            data: { tokensRemaining: 0 },
+                        });
+
+                        await createWalletTransaction(tx, {
+                            userId: sub.userId,
+                            walletId: wallet.id,
+                            amount: unusedTokens,
+                            type: "DEBIT",
+                            meta: { reason: "MONTHLY_TOKEN_RESET_CLEAR", planId: sub.planId },
+                        });
+                    }
+
+                    const updatedWallet = await tx.userWallet.update({
                         where: { userId: sub.userId },
                         data: {
                             tokensRemaining: sub.plan.tokenLimit,
@@ -28,10 +48,10 @@ const task = () => {
 
                     await createWalletTransaction(tx, {
                         userId: sub.userId,
-                        walletId: wallet.id,
+                        walletId: updatedWallet.id,
                         amount: sub.plan.tokenLimit,
                         type: "CREDIT",
-                        meta: { reason: "MONTHLY_TOKEN_RESET", planId: sub.planId },
+                        meta: { reason: "MONTHLY_TOKEN_RESET_CREDIT", planId: sub.planId },
                     });
                 });
             }

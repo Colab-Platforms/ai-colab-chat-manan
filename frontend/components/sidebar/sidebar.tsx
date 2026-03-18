@@ -326,7 +326,7 @@ interface SidebarProps {
 
 export function Sidebar({
   chats,
-  folders,
+  folders = [],
   assistants,
   searchQuery,
   onSearchChange,
@@ -359,13 +359,14 @@ export function Sidebar({
   const [pendingMoveNewFolderId, setPendingMoveNewFolderId] = useState<number | null>(null);
 
   // ─── Local folder list maintained after creation from move dialog ──────────
-  const [localFolders, setLocalFolders] = useState<FolderItem[]>(folders);
+  const safeFolders = Array.isArray(folders) ? folders : [];
+  const [localFolders, setLocalFolders] = useState<FolderItem[]>(safeFolders);
   // Keep localFolders in sync when parent refreshes (but not during an active move flow)
   useEffect(() => {
     if (!pendingMoveForChat) {
-      setLocalFolders(folders);
+      setLocalFolders(safeFolders);
     }
-  }, [folders, pendingMoveForChat]);
+  }, [safeFolders, pendingMoveForChat]);
 
   useEffect(() => {
     setSearch(searchQuery);
@@ -639,8 +640,8 @@ export function Sidebar({
         <div className="py-2 space-y-0.5">
 
 
-          {folders.length > 0 && <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-1 uppercase tracking-wider">Projects</div>}
-          {folders.map((folder) => {
+          {safeFolders.length > 0 && <div className="text-xs font-semibold text-muted-foreground px-3 py-2 mt-1 uppercase tracking-wider">Projects</div>}
+          {safeFolders.map((folder) => {
             const folderChats = filteredChats.filter((c) => c.folderId === folder.id).sort(sortByPin);
             const isExpanded = expandedFolders.has(folder.id);
 

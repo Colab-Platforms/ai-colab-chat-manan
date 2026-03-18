@@ -108,8 +108,13 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   const fetchFolders = useCallback(async () => {
     try {
       const res = await folderService.list();
-      setFolders(res.data.data?.data || []);
-    } catch { /* ignore */ }
+      const data = res.data?.data;
+      const foldersArray = Array.isArray(data?.data) ? data.data : [];
+      setFolders(foldersArray);
+    } catch (err) {
+      console.error("Failed to fetch folders:", err);
+      setFolders([]);
+    }
   }, []);
 
   const fetchAssistants = useCallback(async (pageNum = 1) => {

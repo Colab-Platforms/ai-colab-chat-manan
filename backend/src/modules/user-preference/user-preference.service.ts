@@ -18,7 +18,6 @@ class UserPreferenceService {
         data: {
           userId,
           enableFollowUpQuestions: true,
-          contextMemory: [`My name is ${user.firstName} ${user.lastName}`],
         },
       });
     }
@@ -33,9 +32,7 @@ class UserPreferenceService {
       updateData.enableFollowUpQuestions = data.enableFollowUpQuestions;
     }
 
-    if (data.contextMemory !== undefined) {
-      updateData.contextMemory = data.contextMemory;
-    }
+
 
     const preference = await prisma.userPreference.upsert({
       where: { userId },
@@ -43,7 +40,6 @@ class UserPreferenceService {
       create: {
         userId,
         enableFollowUpQuestions: data.enableFollowUpQuestions ?? true,
-        contextMemory: data.contextMemory ?? [],
       },
     });
 

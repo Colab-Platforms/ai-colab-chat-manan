@@ -103,9 +103,7 @@ export default function WalletPage() {
       label: "Type",
       sortable: true,
       render: (r: any) => {
-        const isAddition = ["RECHARGE", "REFUND", "BONUS", "CREDIT"].includes(
-          r.type,
-        );
+        const isAddition = r.type === "CREDIT";
 
         return (
           <span
@@ -125,7 +123,7 @@ export default function WalletPage() {
       label: "Amount",
       sortable: true,
       render: (r: any) => {
-        const isAddition = ["RECHARGE", "REFUND", "BONUS"].includes(r.type);
+        const isAddition = r.type === "CREDIT";
         const color = isAddition ? "text-emerald-500" : "text-rose-500";
         const sign = isAddition ? "+" : "-";
         return (

@@ -14,6 +14,7 @@ import modelRoutes from "@/modules/model/model.route.js";
 import modelProviderRoutes from "@/modules/model-provider/modelProvider.route.js";
 import userPreferenceRoutes from "@/modules/user-preference/user-preference.route.js";
 import assistantRoutes from "@/modules/assistant/assistant.route.js";
+import contextRoutes from "@/modules/context/context.route.js";
 
 const router = Router();
 
@@ -35,5 +36,6 @@ router.use("/models", modelRoutes);
 router.use("/model-providers", modelProviderRoutes);
 router.use("/preferences", userPreferenceRoutes);
 router.use("/assistants", assistantRoutes);
+router.use("/contexts", contextRoutes);
 
 export default router;

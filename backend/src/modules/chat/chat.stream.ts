@@ -4,7 +4,7 @@ import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
 import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
-import { createWalletTransaction } from "@/utils/walletUtils.js";
+import { createWalletTransaction, calculateAdjustedTokens } from "@/utils/walletUtils.js";
 import AttachmentService from "@/modules/attachment/attachment.service.js";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
@@ -575,10 +575,22 @@ export async function streamChat(req: Request, res: Response) {
       }
     }
 
-    // Prepend context memory as a system message (zero extra queries — already fetched above)
-    const contextItems = userPreference?.contextMemory || [];
-    if (contextItems.length > 0) {
-      const systemContent = `User context (personalisation — always keep in mind):\n${contextItems.map((c) => `- ${c}`).join("\n")}`;
+    const autoSelectedContexts = await prisma.contextMemory.findMany({
+      where: { userId, isAutoSelected: true, isDeleted: false },
+    });
+    const chatContextsLinks = await prisma.chatContext.findMany({
+      where: { chatId },
+      include: { context: true },
+    });
+    const customContexts = chatContextsLinks.map(link => link.context).filter(c => !c.isDeleted);
+    
+    // Merge and deduplicate
+    const allContextItems = [...autoSelectedContexts, ...customContexts];
+    const uniqueContexts = Array.from(new Map(allContextItems.map(item => [item.id, item])).values());
+    const contextStrings = uniqueContexts.map(c => c.memory);
+
+    if (contextStrings.length > 0) {
+      const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({ role: "system", content: systemContent });
     }
 
@@ -631,7 +643,7 @@ export async function streamChat(req: Request, res: Response) {
     // -----------------------------------------------------------------------
     const predefinedText = checkPredefinedResponse(
       content,
-      userPreference?.contextMemory,
+      contextStrings,
     );
     if (predefinedText) {
       // Stream word-by-word with a small delay (same feel as OpenRouter)
@@ -654,9 +666,26 @@ export async function streamChat(req: Request, res: Response) {
       const tokenMultiplierPre = model.tokenMultiplier || 1.0;
       const billablePromptPre = Math.ceil(pTokens * tokenMultiplierPre);
       const billableCompletionPre = Math.ceil(cTokens * tokenMultiplierPre);
-      const billableTotalPre = billablePromptPre + billableCompletionPre;
+
+      let finalPrompt = pTokens;
+      let finalCompletion = cTokens;
+      let finalTotal = tTokens;
 
       await prisma.$transaction(async (tx) => {
+        const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+        const availableTokens = walletRecord?.tokensRemaining || 0;
+
+        const adjusted = calculateAdjustedTokens(
+          availableTokens,
+          billablePromptPre,
+          billableCompletionPre,
+          tokenMultiplierPre
+        );
+
+        finalPrompt = adjusted.finalRawPrompt;
+        finalCompletion = adjusted.finalRawCompletion;
+        finalTotal = adjusted.finalRawTotal;
+
         await tx.message.update({
           where: { id: assistantMessage.id },
           data: { content: streamedContent },
@@ -667,9 +696,9 @@ export async function streamChat(req: Request, res: Response) {
             messageId: assistantMessage.id,
             modelId: model.id,
             content: streamedContent,
-            promptTokens: pTokens,
-            completionTokens: cTokens,
-            totalTokens: tTokens,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
             status: "COMPLETED",
             completedAt: new Date(),
           },
@@ -681,26 +710,26 @@ export async function streamChat(req: Request, res: Response) {
             chatId,
             messageId: assistantMessage.id,
             capability: (chatType || "STANDARD") as any,
-            promptTokens: pTokens,
-            completionTokens: cTokens,
-            totalTokens: tTokens,
-            billablePromptTokens: billablePromptPre,
-            billableCompletionTokens: billableCompletionPre,
-            billableTotalTokens: billableTotalPre,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
+            billablePromptTokens: adjusted.finalBillablePrompt,
+            billableCompletionTokens: adjusted.finalBillableCompletion,
+            billableTotalTokens: adjusted.finalBillableTotal,
           },
         });
         const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: billableTotalPre },
-            tokensUsed: { increment: billableTotalPre },
+            tokensRemaining: { decrement: adjusted.finalBillableTotal },
+            tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
         
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
-          amount: billableTotalPre,
+          amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${assistantMessage.id}`,
           meta: { reason: "PREDEFINED_RESPONSE", chatId, messageId: assistantMessage.id },
@@ -708,7 +737,7 @@ export async function streamChat(req: Request, res: Response) {
       });
 
       res.write(
-        `data: ${JSON.stringify({ type: "done", promptTokens: pTokens, completionTokens: cTokens, totalTokens: tTokens })}\n\n`,
+        `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
       );
       res.write("data: [DONE]\n\n");
       res.end();
@@ -910,16 +939,32 @@ export async function streamChat(req: Request, res: Response) {
       fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
-    const totalTokens = promptTokens + completionTokens;
     const tokenMultiplier = model.tokenMultiplier || 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
     );
-    const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
+
+    let finalPrompt = promptTokens;
+    let finalCompletion = completionTokens;
+    let finalTotal = promptTokens + completionTokens;
 
     // Update assistant message + create model response + deduct tokens in transaction
     await prisma.$transaction(async (tx) => {
+      const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+      const availableTokens = walletRecord?.tokensRemaining || 0;
+
+      const adjusted = calculateAdjustedTokens(
+        availableTokens,
+        billablePromptTokens,
+        billableCompletionTokens,
+        tokenMultiplier
+      );
+
+      finalPrompt = adjusted.finalRawPrompt;
+      finalCompletion = adjusted.finalRawCompletion;
+      finalTotal = adjusted.finalRawTotal;
+
       await tx.message.update({
         where: { id: assistantMessage.id },
         data: { content: fullContent },
@@ -931,15 +976,15 @@ export async function streamChat(req: Request, res: Response) {
           messageId: assistantMessage.id,
           modelId: model.id,
           content: fullContent,
-          promptTokens,
-          completionTokens,
-          totalTokens,
+          promptTokens: adjusted.finalRawPrompt,
+          completionTokens: adjusted.finalRawCompletion,
+          totalTokens: adjusted.finalRawTotal,
           status: "COMPLETED",
           completedAt: new Date(),
         },
       });
 
-      if (totalTokens > 0) {
+      if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({
           data: {
             userId,
@@ -947,27 +992,27 @@ export async function streamChat(req: Request, res: Response) {
             chatId,
             messageId: assistantMessage.id,
             capability: (chatType || "STANDARD") as any,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-            billablePromptTokens,
-            billableCompletionTokens,
-            billableTotalTokens,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
+            billablePromptTokens: adjusted.finalBillablePrompt,
+            billableCompletionTokens: adjusted.finalBillableCompletion,
+            billableTotalTokens: adjusted.finalBillableTotal,
           },
         });
 
         const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: billableTotalTokens },
-            tokensUsed: { increment: billableTotalTokens },
+            tokensRemaining: { decrement: adjusted.finalBillableTotal },
+            tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
         
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
-          amount: billableTotalTokens,
+          amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${assistantMessage.id}`,
           meta: { reason: "STREAMED_RESPONSE", chatId, messageId: assistantMessage.id },
@@ -977,7 +1022,7 @@ export async function streamChat(req: Request, res: Response) {
 
     // Send done signal with usage info
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens, completionTokens, totalTokens })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -1083,9 +1128,21 @@ export async function regenerateChat(req: Request, res: Response) {
       userPreference?.enableFollowUpQuestions !== false;
 
     // Prepend context memory as a system message
-    const contextItemsRegen = userPreference?.contextMemory || [];
-    if (contextItemsRegen.length > 0) {
-      const systemContent = `User context (personalisation — always keep in mind):\n${contextItemsRegen.map((c) => `- ${c}`).join("\n")}`;
+    const autoGenContextsRegen = await prisma.contextMemory.findMany({
+      where: { userId, isAutoSelected: true, isDeleted: false },
+    });
+    const chatLinksRegen = await prisma.chatContext.findMany({
+      where: { chatId },
+      include: { context: true },
+    });
+    const customContextsRegen = chatLinksRegen.map(link => link.context).filter(c => !c.isDeleted);
+    
+    const allContextItemsRegen = [...autoGenContextsRegen, ...customContextsRegen];
+    const uniqueContextsRegen = Array.from(new Map(allContextItemsRegen.map(item => [item.id, item])).values());
+    const contextStringsRegen = uniqueContextsRegen.map(c => c.memory);
+
+    if (contextStringsRegen.length > 0) {
+      const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({ role: "system", content: systemContent });
     }
 
@@ -1111,7 +1168,7 @@ export async function regenerateChat(req: Request, res: Response) {
     const originalContent =
       prevUserMsg?.role === "USER" ? prevUserMsg.content : "";
     const predefinedTextRegen = originalContent
-      ? checkPredefinedResponse(originalContent, userPreference?.contextMemory)
+      ? checkPredefinedResponse(originalContent, contextStringsRegen)
       : null;
     if (predefinedTextRegen) {
       const words = predefinedTextRegen.split(" ");
@@ -1132,18 +1189,35 @@ export async function regenerateChat(req: Request, res: Response) {
       const tokenMultiplierRegen = model.tokenMultiplier || 1.0;
       const billablePromptRegen = Math.ceil(pTokens * tokenMultiplierRegen);
       const billableCompletionRegen = Math.ceil(cTokens * tokenMultiplierRegen);
-      const billableTotalRegen = billablePromptRegen + billableCompletionRegen;
+
+      let finalPrompt = pTokens;
+      let finalCompletion = cTokens;
+      let finalTotal = tTokens;
 
       await prisma.$transaction(async (tx) => {
+        const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+        const availableTokens = walletRecord?.tokensRemaining || 0;
+
+        const adjusted = calculateAdjustedTokens(
+          availableTokens,
+          billablePromptRegen,
+          billableCompletionRegen,
+          tokenMultiplierRegen
+        );
+
+        finalPrompt = adjusted.finalRawPrompt;
+        finalCompletion = adjusted.finalRawCompletion;
+        finalTotal = adjusted.finalRawTotal;
+
         await tx.modelResponse.create({
           data: {
             chatId,
             messageId,
             modelId: model.id,
             content: streamedContent,
-            promptTokens: pTokens,
-            completionTokens: cTokens,
-            totalTokens: tTokens,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
             status: "COMPLETED",
             completedAt: new Date(),
           },
@@ -1155,26 +1229,26 @@ export async function regenerateChat(req: Request, res: Response) {
             chatId,
             messageId,
             capability: (chatType || "STANDARD") as any,
-            promptTokens: pTokens,
-            completionTokens: cTokens,
-            totalTokens: tTokens,
-            billablePromptTokens: billablePromptRegen,
-            billableCompletionTokens: billableCompletionRegen,
-            billableTotalTokens: billableTotalRegen,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
+            billablePromptTokens: adjusted.finalBillablePrompt,
+            billableCompletionTokens: adjusted.finalBillableCompletion,
+            billableTotalTokens: adjusted.finalBillableTotal,
           },
         });
         const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: billableTotalRegen },
-            tokensUsed: { increment: billableTotalRegen },
+            tokensRemaining: { decrement: adjusted.finalBillableTotal },
+            tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
         
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
-          amount: billableTotalRegen,
+          amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${messageId}`,
           meta: { reason: "PREDEFINED_REGENERATE", chatId, messageId },
@@ -1182,7 +1256,7 @@ export async function regenerateChat(req: Request, res: Response) {
       });
 
       res.write(
-        `data: ${JSON.stringify({ type: "done", promptTokens: pTokens, completionTokens: cTokens, totalTokens: tTokens })}\n\n`,
+        `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
       );
       res.write("data: [DONE]\n\n");
       res.end();
@@ -1346,30 +1420,46 @@ export async function regenerateChat(req: Request, res: Response) {
       fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
-    const totalTokens = promptTokens + completionTokens;
     const tokenMultiplier = model.tokenMultiplier || 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
     );
-    const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
+
+    let finalPrompt = promptTokens;
+    let finalCompletion = completionTokens;
+    let finalTotal = promptTokens + completionTokens;
 
     await prisma.$transaction(async (tx) => {
+      const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+      const availableTokens = walletRecord?.tokensRemaining || 0;
+
+      const adjusted = calculateAdjustedTokens(
+        availableTokens,
+        billablePromptTokens,
+        billableCompletionTokens,
+        tokenMultiplier
+      );
+
+      finalPrompt = adjusted.finalRawPrompt;
+      finalCompletion = adjusted.finalRawCompletion;
+      finalTotal = adjusted.finalRawTotal;
+
       await tx.modelResponse.create({
         data: {
           chatId,
           messageId,
           modelId: model.id,
           content: fullContent,
-          promptTokens,
-          completionTokens,
-          totalTokens,
+          promptTokens: adjusted.finalRawPrompt,
+          completionTokens: adjusted.finalRawCompletion,
+          totalTokens: adjusted.finalRawTotal,
           status: "COMPLETED",
           completedAt: new Date(),
         },
       });
 
-      if (totalTokens > 0) {
+      if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({
           data: {
             userId,
@@ -1377,27 +1467,27 @@ export async function regenerateChat(req: Request, res: Response) {
             chatId,
             messageId,
             capability: (chatType || "STANDARD") as any,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-            billablePromptTokens,
-            billableCompletionTokens,
-            billableTotalTokens,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
+            billablePromptTokens: adjusted.finalBillablePrompt,
+            billableCompletionTokens: adjusted.finalBillableCompletion,
+            billableTotalTokens: adjusted.finalBillableTotal,
           },
         });
 
         const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: billableTotalTokens },
-            tokensUsed: { increment: billableTotalTokens },
+            tokensRemaining: { decrement: adjusted.finalBillableTotal },
+            tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
         
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
-          amount: billableTotalTokens,
+          amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${messageId}`,
           meta: { reason: "STREAMED_REGENERATE", chatId, messageId },
@@ -1406,7 +1496,7 @@ export async function regenerateChat(req: Request, res: Response) {
     });
 
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens, completionTokens, totalTokens })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -1828,16 +1918,32 @@ export async function editAndResend(req: Request, res: Response) {
       fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
-    const totalTokens = promptTokens + completionTokens;
     const tokenMultiplier = model.tokenMultiplier || 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
     );
-    const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
+
+    let finalPrompt = promptTokens;
+    let finalCompletion = completionTokens;
+    let finalTotal = promptTokens + completionTokens;
 
     // Save response + deduct tokens
     await prisma.$transaction(async (tx) => {
+      const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+      const availableTokens = walletRecord?.tokensRemaining || 0;
+
+      const adjusted = calculateAdjustedTokens(
+        availableTokens,
+        billablePromptTokens,
+        billableCompletionTokens,
+        tokenMultiplier
+      );
+
+      finalPrompt = adjusted.finalRawPrompt;
+      finalCompletion = adjusted.finalRawCompletion;
+      finalTotal = adjusted.finalRawTotal;
+
       await tx.message.update({
         where: { id: assistantMessage.id },
         data: { content: fullContent },
@@ -1849,15 +1955,15 @@ export async function editAndResend(req: Request, res: Response) {
           messageId: assistantMessage.id,
           modelId: model.id,
           content: fullContent,
-          promptTokens,
-          completionTokens,
-          totalTokens,
+          promptTokens: adjusted.finalRawPrompt,
+          completionTokens: adjusted.finalRawCompletion,
+          totalTokens: adjusted.finalRawTotal,
           status: "COMPLETED",
           completedAt: new Date(),
         },
       });
 
-      if (totalTokens > 0) {
+      if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({
           data: {
             userId,
@@ -1865,27 +1971,36 @@ export async function editAndResend(req: Request, res: Response) {
             chatId,
             messageId: assistantMessage.id,
             capability: (chatType || "STANDARD") as any,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-            billablePromptTokens,
-            billableCompletionTokens,
-            billableTotalTokens,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
+            billablePromptTokens: adjusted.finalBillablePrompt,
+            billableCompletionTokens: adjusted.finalBillableCompletion,
+            billableTotalTokens: adjusted.finalBillableTotal,
           },
         });
 
-        await tx.userWallet.update({
+        const updatedWallet = await tx.userWallet.update({
           where: { userId },
           data: {
-            tokensRemaining: { decrement: billableTotalTokens },
-            tokensUsed: { increment: billableTotalTokens },
+            tokensRemaining: { decrement: adjusted.finalBillableTotal },
+            tokensUsed: { increment: adjusted.finalBillableTotal },
           },
+        });
+
+        await createWalletTransaction(tx, {
+          userId,
+          walletId: updatedWallet.id,
+          amount: adjusted.finalBillableTotal,
+          type: "DEBIT",
+          referenceId: `msg_${assistantMessage.id}`,
+          meta: { reason: "EDIT_RESEND", chatId, messageId: assistantMessage.id },
         });
       }
     });
 
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens, completionTokens, totalTokens })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();

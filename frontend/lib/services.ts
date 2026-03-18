@@ -132,7 +132,6 @@ export const userPreferenceService = {
   getPreferences: () => api.get("/preferences"),
   updatePreferences: (data: {
     enableFollowUpQuestions?: boolean;
-    contextMemory?: string[];
   }) => api.put("/preferences", data),
 };
 
@@ -143,4 +142,13 @@ export const assistantService = {
   update: (id: number, data: any) => api.put(`/assistants/${id}`, data),
   toggle: (id: number) => api.patch(`/assistants/${id}/toggle`),
   delete: (id: number) => api.delete(`/assistants/${id}`),
+};
+
+export const contextService = {
+  list: (params?: Record<string, string>) => api.get("/contexts", { params }),
+  getSidebar: (params?: Record<string, string>) => api.get("/contexts/sidebar", { params }),
+  getById: (id: number) => api.get(`/contexts/${id}`),
+  create: (data: any) => api.post("/contexts", data),
+  update: (id: number, data: any) => api.put(`/contexts/${id}`, data),
+  delete: (id: number) => api.delete(`/contexts/${id}`),
 };

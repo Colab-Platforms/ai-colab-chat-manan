@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Brain, Check } from "lucide-react";
-import { userPreferenceService } from "@/lib/services";
+import { userPreferenceService, contextService } from "@/lib/services";
 import { toast } from "react-toastify";
 
 const MAX_CHARS = 300;
@@ -96,20 +96,14 @@ export function SelectionContextTooltip() {
     if (!pos || pos.text.length > MAX_CHARS || saving || saved) return;
     setSaving(true);
     try {
-      const res = await userPreferenceService.getPreferences();
-      const current: string[] = res?.data?.data?.contextMemory ?? [];
+      // Create a new context memory entry
+      await contextService.create({
+        title: pos.text.substring(0, 40) + (pos.text.length > 40 ? "..." : ""),
+        memory: pos.text,
+        type: "GLOBAL",
+        isAutoSelected: true,
+      });
 
-      if (current.length >= 10) {
-        toast.error("Memory full (10/10). Remove an item first.");
-        return;
-      }
-      if (current.includes(pos.text)) {
-        toast.info("Already in memory.");
-        setSaved(true);
-        return;
-      }
-
-      await userPreferenceService.updatePreferences({ contextMemory: [...current, pos.text] });
       setSaved(true);
       toast.success("Saved to memory!");
       setTimeout(() => {
@@ -117,8 +111,9 @@ export function SelectionContextTooltip() {
         setSaved(false);
         window.getSelection()?.removeAllRanges();
       }, 1200);
-    } catch {
-      toast.error("Failed to save.");
+    } catch (error: any) {
+      const msg = error.response?.data?.error || "Failed to save.";
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
