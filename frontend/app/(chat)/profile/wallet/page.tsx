@@ -264,9 +264,7 @@ export default function WalletPage() {
                   </span>
                   <span
                     className={`text-xs uppercase px-2 py-1 rounded-md ${
-                      ["RECHARGE", "REFUND", "BONUS", "CREDIT"].includes(
-                        selectedTx.type,
-                      )
+                      selectedTx.type === "CREDIT"
                         ? "text-emerald-500 bg-emerald-500/10"
                         : "text-rose-500 bg-rose-500/10"
                     }`}
@@ -279,9 +277,9 @@ export default function WalletPage() {
                     Amount
                   </span>
                   <span
-                    className={`font-mono font-medium ${["RECHARGE", "REFUND", "BONUS"].includes(selectedTx.type) ? "text-emerald-500" : "text-rose-500"}`}
+                    className={`font-mono font-medium ${selectedTx.type === "CREDIT" ? "text-emerald-500" : "text-rose-500"}`}
                   >
-                    {["RECHARGE", "REFUND", "BONUS"].includes(selectedTx.type)
+                    {selectedTx.type === "CREDIT"
                       ? "+"
                       : "-"}
                     {Math.abs(selectedTx.amount).toLocaleString()}
