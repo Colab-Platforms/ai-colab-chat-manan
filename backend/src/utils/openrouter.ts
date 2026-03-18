@@ -35,6 +35,20 @@ export const createOpenRouterStream = async (
     });
   const allPlugins = [...builtinPlugins, ...(plugins ?? [])];
 
+  console.log("--- Sending Request to OpenRouter ---");
+  console.log(`Model: ${model}`);
+  console.log(`Chat Type: ${chatType}`);
+  console.log("Messages:");
+  messages.forEach((msg, index) => {
+    console.log(`  [${index}] ${msg.role.toUpperCase()}:`);
+    if (typeof msg.content === "string") {
+      console.log(`      ${msg.content.replace(/\n/g, "\n      ")}`);
+    } else {
+      console.log(`      ${JSON.stringify(msg.content, null, 2).replace(/\n/g, "\n      ")}`);
+    }
+  });
+  console.log("---------------------------------------");
+
   const stream = (await client.chat.completions.create(
     {
       model,

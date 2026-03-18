@@ -167,6 +167,13 @@ class MessageService {
 
     const systemInstruction =
       "Rewrite the user prompt to be clearer, more specific, and more likely to produce high-quality AI responses. Keep the same intent and language. Return only the improved prompt text with no labels, quotes, markdown, or explanations.";
+    console.log("--- Sending Enhance Prompt Request to OpenRouter ---");
+    console.log(`Model: ${model.externalId}`);
+    console.log("Messages:");
+    console.log(`  [0] SYSTEM: ${systemInstruction}`);
+    console.log(`  [1] USER: ${prompt}`);
+    console.log("--------------------------------------------------");
+
     const completion = await client.chat.completions.create({
       model: model.externalId,
       temperature: 0.4,

@@ -332,7 +332,12 @@ async function checkTokenLimitsAndSetupStream(
 
   let historyMessageCount = 0;
   for (const msg of reversedHistory) {
-    if (historyMessageCount >= 4) break;
+    const isSystem = msg.role === "system" || msg.role === "SYSTEM";
+
+    // Only apply the 4-message history window limit to non-system messages.
+    // We continue the loop because we still want to find and include system messages
+    // that were unshifted to the beginning of the history.
+    if (!isSystem && historyMessageCount >= 4) continue;
 
     const msgTokens = estimateMessageTokens([msg]) - 3; // subtracting base overhead per message loop
     if (
@@ -341,10 +346,7 @@ async function checkTokenLimitsAndSetupStream(
     ) {
       currentHistoryTokens += msgTokens;
       trimmedHistoryData.unshift(msg);
-      historyMessageCount++;
-    } else {
-      // Reached the token limit, drop the rest of the older messages
-      break;
+      if (!isSystem) historyMessageCount++;
     }
   }
 
@@ -522,9 +524,13 @@ export async function streamChat(req: Request, res: Response) {
 
     await touchChat(chatId);
 
-    // Build conversation history
+    // Build conversation history - exclude current messages to avoid duplication
     const previousMessages = await prisma.message.findMany({
-      where: { chatId, isDeleted: false, id: { not: assistantMessage.id } },
+      where: { 
+        chatId, 
+        isDeleted: false, 
+        id: { notIn: [assistantMessage.id, userMessage.id] } 
+      },
       orderBy: { createdAt: "asc" },
       include: {
         modelResponses: {
@@ -567,11 +573,14 @@ export async function streamChat(req: Request, res: Response) {
         where: { id: chat.assistantId, isActive: true, isDeleted: false },
       });
       if (chatAssistant) {
+        console.log(`[DEBUG] Adding Assistant System Prompt for: ${chatAssistant.name}`);
         conversationHistory.unshift({
           role: "system",
           content: chatAssistant.systemPrompt,
         });
         assistantTemperature = chatAssistant.temperature;
+      } else {
+        console.log(`[DEBUG] Assistant with ID ${chat.assistantId} not found or inactive`);
       }
     }
 
@@ -590,6 +599,7 @@ export async function streamChat(req: Request, res: Response) {
     const contextStrings = uniqueContexts.map(c => c.memory);
 
     if (contextStrings.length > 0) {
+      console.log(`[DEBUG] Adding User Context (${contextStrings.length} items)`);
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({ role: "system", content: systemContent });
     }
