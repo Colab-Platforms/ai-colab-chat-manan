@@ -723,9 +723,11 @@ export function ChatInput({
           {enhancedPrompt && (
             <div className="mx-2 mb-2 mt-1 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-primary">Enhanced prompt preview</p>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{enhancedPrompt}</p>
+                <div className="min-w-0 w-full">
+                  <p className="text-xs font-semibold text-primary mb-1">Enhanced prompt preview</p>
+                  <div className="max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                    <p className="whitespace-pre-wrap break-words text-sm text-foreground leading-relaxed">{enhancedPrompt}</p>
+                  </div>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
