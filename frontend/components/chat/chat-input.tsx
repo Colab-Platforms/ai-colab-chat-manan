@@ -62,6 +62,8 @@ interface ChatInputProps {
   initialPrompt?: string;
   onPromptClear?: () => void;
   draftStorageKey?: string;
+  onCapabilityChange?: (type: ChatType) => void;
+  chatType?: ChatType;
 }
 
 type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH";
@@ -238,6 +240,8 @@ export function ChatInput({
   initialPrompt,
   onPromptClear,
   draftStorageKey,
+  onCapabilityChange,
+  chatType: propChatType,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
@@ -267,7 +271,13 @@ export function ChatInput({
     // Nothing needed — content is already set by handleSpeechResult
   }, []);
   
-  // Hydrate chat type from local storage
+  useEffect(() => {
+    if (propChatType) {
+      setChatType(propChatType);
+    }
+  }, [propChatType]);
+
+  // Hydrate chat type from local storage (on mount or reset)
   useEffect(() => {
     if (forceReset) {
       setChatType("STANDARD");
@@ -289,23 +299,33 @@ export function ChatInput({
     if (persistPreference) {
       localStorage.setItem("preferredChatType", type);
     }
+    if (onCapabilityChange) {
+      onCapabilityChange(type);
+    }
 
     // Only keep models that support the new type
-    const validModels = models.filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(type));
-    
-    // Try to auto-switch to the default model for this capability
-    const defaultForType = validModels.filter(m => m.defaultForCapabilities?.includes(type));
-    if (defaultForType.length > 0) {
-      onModelChange(defaultForType.map(m => m.id));
-      return;
-    }
-    
-    // Otherwise keep valid selections, or fall back to first valid
-    const newSelectedModels = selectedModels.filter(id => validModels.some(m => m.id === id));
-    if (newSelectedModels.length === 0 && validModels.length > 0) {
-      onModelChange([validModels[0].id]);
-    } else if (newSelectedModels.length !== selectedModels.length) {
-      onModelChange(newSelectedModels);
+    const validModels = models.filter(m => {
+      // If no capabilities defined, default to only supporting STANDARD
+      if (!m.capabilities || m.capabilities.length === 0) return type === "STANDARD";
+      return m.capabilities.includes(type);
+    });
+
+    // Strategy: 
+    // 1. If currently selected models support the new capability, stay on them.
+    // 2. If not, try to pick the default model for this new capability.
+    // 3. If no default, pick the first valid model.
+
+    const allCurrentModelsCompatible = selectedModels.length > 0 && 
+                                       selectedModels.every(id => validModels.some(vm => vm.id === id));
+
+    if (!allCurrentModelsCompatible) {
+      // Must switch model as at least one selected model is incompatible
+      const defaultForType = validModels.filter(m => m.defaultForCapabilities?.includes(type));
+      if (defaultForType.length > 0) {
+        onModelChange(defaultForType.map(m => m.id));
+      } else if (validModels.length > 0) {
+        onModelChange([validModels[0].id]);
+      }
     }
   };
 
@@ -314,12 +334,14 @@ export function ChatInput({
   };
 
   useEffect(() => {
-    const inferredType = inferChatTypeFromPrompt(content);
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    const inferredType = inferChatTypeFromPrompt(trimmed);
+    
     if (inferredType !== chatType) {
       applyChatType(inferredType, false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content]);
+  }, [content, chatType]);
 
   // Automatically enforce VISION capability if image files are attached
   useEffect(() => {
@@ -413,7 +435,19 @@ export function ChatInput({
     const uploadedIds = attachments
       .filter(a => !a.uploading)
       .map(a => a.id);
-    onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, chatType, attachments.filter(a => !a.uploading));
+    
+    // Final check for capability before sending to catch any race conditions
+    let outgoingChatType = chatType;
+    if (chatType === "STANDARD") {
+      const inferred = inferChatTypeFromPrompt(content.trim());
+      if (inferred !== "STANDARD") {
+        outgoingChatType = inferred;
+        // Also update local state so UI reflects it immediately
+        applyChatType(inferred, false);
+      }
+    }
+    
+    onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, outgoingChatType, attachments.filter(a => !a.uploading));
     setContent("");
     if (resolvedDraftStorageKey) {
       localStorage.removeItem(resolvedDraftStorageKey);

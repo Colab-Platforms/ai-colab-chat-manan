@@ -46,7 +46,6 @@ export default function ChatPage() {
   const [selectedModels, setSelectedModels] = useState<number[]>([]);
   const [activeModelTabs, setActiveModelTabs] = useState<Record<number, number>>({});
   const [isSending, setIsSending] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [editVersionIndices, setEditVersionIndices] = useState<Record<number, number>>({});
   const [isNotFound, setIsNotFound] = useState(false);
@@ -57,6 +56,7 @@ export default function ChatPage() {
   const modelsRestoredRef = useRef(false);
   const streamAbortControllersRef = useRef<AbortController[]>([]);
   const stopRequestedRef = useRef(false);
+  const [chatCapability, setChatCapability] = useState<any>("STANDARD");
 
   const clearStreamAbortControllers = useCallback(() => {
     streamAbortControllersRef.current = [];
@@ -87,7 +87,6 @@ export default function ChatPage() {
       const res = await chatService.getById(chatId);
       const chat = res.data.data;
 
-      // Load assistant info if this chat has one
       if (chat.assistantId) {
         try {
           const aRes = await assistantService.getById(chat.assistantId);
@@ -114,27 +113,14 @@ export default function ChatPage() {
         return tabs;
       });
 
-      // Restore selected models from chat history (only on first load)
-      if (!modelsRestoredRef.current && !isStreamingRef.current) {
-        modelsRestoredRef.current = true;
-        const stored = localStorage.getItem(`chat_${chatId}_models`);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setSelectedModels(parsed);
-              return;
-            }
-          } catch { /* ignore */ }
+      if (!isStreamingRef.current) {
+        modelsRestoredRef.current = true; // Mark as restored as soon as we have the chat object
+        if (chat.modelIds && chat.modelIds.length > 0) {
+          setSelectedModels(chat.modelIds);
         }
-        const lastAssistantMsg = (chat.messages || [])
-          .filter((m: Message) => m.role === "ASSISTANT")
-          .pop();
-        if (lastAssistantMsg?.modelResponses?.length > 0) {
-          const usedModelIds = [...new Set(lastAssistantMsg.modelResponses.map((mr: any) => mr.model.id))] as number[];
-          if (usedModelIds.length > 0) {
-            setSelectedModels(usedModelIds);
-          }
+        if (chat.capability) {
+           localStorage.setItem("preferredChatType", chat.capability);
+           setChatCapability(chat.capability);
         }
       }
     } catch (error: any) {
@@ -158,7 +144,10 @@ export default function ChatPage() {
       setModels(activeModels);
       modelsRef.current = activeModels;
       
-      if (activeModels.length > 0 && selectedModels.length === 0) {
+      // Only apply default model logic if:
+      // 1. Models haven't been restored from DB yet (for new chats)
+      // 2. OR we have no selections yet AND we are sure we are not waiting for fetchChat
+      if (activeModels.length > 0 && selectedModels.length === 0 && !modelsRestoredRef.current) {
         const storedModelId = localStorage.getItem("preferredModelId");
         const parsedId = storedModelId ? Number(storedModelId) : null;
         
@@ -173,7 +162,6 @@ export default function ChatPage() {
         }
         setSelectedModels(resolvedModelIds);
 
-        // Fire pending first message from new-chat redirect (sessionStorage handoff)
         if (!firstMessageSent.current) {
           const raw = sessionStorage.getItem(`pending_chat_${chatId}`);
           if (raw) {
@@ -181,25 +169,34 @@ export default function ChatPage() {
             sessionStorage.removeItem(`pending_chat_${chatId}`);
             try {
               const { content, modelIds, chatType, attachmentIds, attachmentObjects } = JSON.parse(raw);
-              // Use the model IDs from the home page if valid, otherwise fall back to resolved
               const targetIds = Array.isArray(modelIds) && modelIds.length > 0 ? modelIds : resolvedModelIds;
               setSelectedModels(targetIds);
-              // Use setTimeout to ensure state has settled before sending
               setTimeout(() => sendMessage(content, attachmentIds, targetIds, chatType, attachmentObjects), 0);
             } catch { /* ignore */ }
           }
         }
       }
     } catch { /* ignore */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, selectedModels.length]);
 
-  const handleModelChange = (ids: number[]) => {
+  const handleModelChange = async (ids: number[]) => {
     setSelectedModels(ids);
+    const currentCapability = localStorage.getItem("preferredChatType") || "STANDARD";
+    try {
+      await chatService.update(chatId, { modelIds: ids, capability: currentCapability });
+    } catch { /* ignore */ }
+    
     localStorage.setItem(`chat_${chatId}_models`, JSON.stringify(ids));
     if (ids.length > 0) {
       localStorage.setItem("preferredModelId", String(ids[0]));
     }
+  };
+
+  const handleCapabilityChange = async (type: string) => {
+    setChatCapability(type);
+    try {
+      await chatService.update(chatId, { capability: type });
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -222,7 +219,6 @@ export default function ChatPage() {
     if (!shouldForceScrollFromStarred) return;
     let attempt = 0;
     const maxAttempts = 8;
-
     const scrollToBottom = () => {
       const container = document.getElementById("chat-scroll-container");
       const anchor = document.getElementById("chat-bottom-anchor");
@@ -230,13 +226,11 @@ export default function ChatPage() {
         container.scrollTop = container.scrollHeight;
       }
       anchor?.scrollIntoView({ behavior: "auto", block: "end" });
-
       if (attempt < maxAttempts) {
         attempt += 1;
         setTimeout(scrollToBottom, 80);
       }
     };
-
     scrollToBottom();
   }, [shouldForceScrollFromStarred, messages.length]);
 
@@ -273,36 +267,28 @@ export default function ChatPage() {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.message || "Failed to send message");
       }
-
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
       let buffer = "";
-
       if (reader) {
         let lastUpdate = Date.now();
-        const THROTTLE_MS = 60; // Update every 60ms to avoid React overhead on long messages
-        
+        const THROTTLE_MS = 60;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
           buffer = lines.pop() || "";
-
           for (const chunkStr of lines) {
             const line = chunkStr.trim();
             if (!line.startsWith("data: ")) continue;
             const data = line.slice(6).trim();
             if (data === "[DONE]") continue;
-
             try {
               const parsed = JSON.parse(data);
-
               if (parsed.type === "token") {
                 accumulated += parsed.content;
-                
                 const now = Date.now();
                 if (now - lastUpdate > THROTTLE_MS) {
                   lastUpdate = now;
@@ -369,8 +355,6 @@ export default function ChatPage() {
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
-    setStreamingContent("");
-
     const targetModelIds = modelIds && modelIds.length > 0 ? modelIds : [...selectedModels];
     if (targetModelIds.length === 0) {
       toast.error("Please select a model");
@@ -378,11 +362,13 @@ export default function ChatPage() {
       setIsStreaming(false);
       return;
     }
-
-    // Persist selected models
+    if (chatType) {
+      setChatCapability(chatType);
+    }
+    try {
+      await chatService.update(chatId, { modelIds: targetModelIds, capability: chatType || "STANDARD" });
+    } catch { /* ignore */ }
     localStorage.setItem(`chat_${chatId}_models`, JSON.stringify(targetModelIds));
-
-    // Optimistically add user message
     const tempUserMsgId = Date.now();
     setMessages((prev) => [...prev, {
       id: tempUserMsgId,
@@ -391,8 +377,6 @@ export default function ChatPage() {
       createdAt: new Date().toISOString(),
       attachments: attachmentObjects || [],
     }]);
-
-    // Add streaming placeholder with one response per model
     const streamingMsgId = Date.now() + 1;
     setMessages((prev) => [...prev, {
       id: streamingMsgId,
@@ -409,49 +393,27 @@ export default function ChatPage() {
       })),
     }]);
     setActiveModelTabs((prev) => ({ ...prev, [streamingMsgId]: targetModelIds[0] }));
-
     const token = localStorage.getItem("token") || "";
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-
     try {
       if (targetModelIds.length === 1) {
         const controller = createStreamAbortController();
-        // Single model: use existing /send endpoint directly (creates user+assistant msg)
-        await streamSingleModel(
-          targetModelIds[0], streamingMsgId, token, apiUrl,
-          content, chatType, 0, 0, attachmentIds, controller.signal
-        );
+        await streamSingleModel(targetModelIds[0], streamingMsgId, token, apiUrl, content, chatType, 0, 0, attachmentIds, controller.signal);
       } else {
-        // Multi model: call /prepare-multi FIRST to get IDs, then fire ALL streams at once
         const prepRes = await fetch(`${apiUrl}/chats/${chatId}/prepare-multi`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ content, attachmentIds }),
         });
-
         if (!prepRes.ok) {
           const errData = await prepRes.json().catch(() => ({}));
           throw new Error(errData.message || "Failed to prepare messages");
         }
-
         const prepData = await prepRes.json();
         const { userMessageId, assistantMessageId } = prepData.data;
-
-        // Fire ALL models simultaneously — no waiting between them!
         const responses = await Promise.allSettled(
           targetModelIds.map((mid) =>
-            streamSingleModel(
-              mid,
-              streamingMsgId,
-              token,
-              apiUrl,
-              content,
-              chatType,
-              userMessageId,
-              assistantMessageId,
-              attachmentIds,
-              createStreamAbortController().signal
-            )
+            streamSingleModel(mid, streamingMsgId, token, apiUrl, content, chatType, userMessageId, assistantMessageId, attachmentIds, createStreamAbortController().signal)
           )
         );
         responses.forEach((result, idx) => {
@@ -464,9 +426,7 @@ export default function ChatPage() {
                   ? {
                       ...msg,
                       modelResponses: msg.modelResponses?.map((mr: any) =>
-                        mr.model.id === mid
-                          ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." }
-                          : mr
+                        mr.model.id === mid ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." } : mr
                       ),
                     }
                   : msg
@@ -480,21 +440,17 @@ export default function ChatPage() {
                 ? {
                     ...msg,
                     modelResponses: msg.modelResponses?.map((mr: any) =>
-                      mr.model.id === mid
-                        ? { ...mr, status: "FAILED", content: result.reason?.message || "Failed to stream response" }
-                        : mr
+                      mr.model.id === mid ? { ...mr, status: "FAILED", content: result.reason?.message || "Failed" } : mr
                     ),
                   }
                 : msg
             )
           );
-          toast.error(`${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${result.reason?.message || "Failed to stream response"}`);
+          toast.error(`${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${result.reason?.message || "Failed"}`);
         });
       }
-
       isStreamingRef.current = false;
       await fetchChat();
-      // Dispatch refresh so sidebar title updates after first message
       window.dispatchEvent(new Event("refresh-chats"));
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
@@ -504,9 +460,7 @@ export default function ChatPage() {
               ? {
                   ...msg,
                   modelResponses: msg.modelResponses?.map((mr: any) =>
-                    mr.status === "STREAMING"
-                      ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." }
-                      : mr
+                    mr.status === "STREAMING" ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." } : mr
                   ),
                 }
               : msg
@@ -523,7 +477,6 @@ export default function ChatPage() {
       isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
-      setStreamingContent("");
       stopRequestedRef.current = false;
     }
   };
@@ -535,8 +488,6 @@ export default function ChatPage() {
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
-    setStreamingContent("");
-
     const targetMsg = messages.find(m => m.id === messageId);
     if (!targetMsg || targetMsg.role !== "ASSISTANT") {
       toast.error("Can only regenerate assistant messages");
@@ -544,7 +495,6 @@ export default function ChatPage() {
       setIsStreaming(false);
       return;
     }
-
     const streamingRespId = Date.now();
     setMessages((prev) => prev.map(msg => {
       if (msg.id === messageId) {
@@ -566,51 +516,38 @@ export default function ChatPage() {
       return msg;
     }));
     setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
-
     try {
       const token = localStorage.getItem("token");
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
       const controller = createStreamAbortController();
-
       const response = await fetch(`${apiUrl}/chats/${chatId}/messages/${messageId}/regenerate`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ modelId, chatType: localStorage.getItem("preferredChatType") || "STANDARD" }),
         signal: controller.signal,
       });
-
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.message || "Failed to regenerate message");
       }
-
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
       let buffer = "";
-
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
           buffer = lines.pop() || "";
-
           for (const chunkStr of lines) {
             const line = chunkStr.trim();
             if (!line.startsWith("data: ")) continue;
             const data = line.slice(6).trim();
             if (data === "[DONE]") continue;
-
             try {
               const parsed = JSON.parse(data);
-
               if (parsed.type === "token") {
                 accumulated += parsed.content;
                 setMessages((prev) =>
@@ -619,9 +556,7 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
-                            mr.id === streamingRespId
-                              ? { ...mr, content: accumulated, status: "STREAMING" }
-                              : mr
+                            mr.id === streamingRespId ? { ...mr, content: accumulated, status: "STREAMING" } : mr
                           ),
                         }
                       : msg
@@ -636,9 +571,7 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
-                            mr.id === streamingRespId
-                              ? { ...mr, content: errorMessage, status: "FAILED" }
-                              : mr
+                            mr.id === streamingRespId ? { ...mr, content: errorMessage, status: "FAILED" } : mr
                           ),
                         }
                       : msg
@@ -652,9 +585,7 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
-                            mr.id === streamingRespId
-                              ? { ...mr, content: accumulated, status: "COMPLETED", finishReason: parsed.finishReason }
-                              : mr
+                            mr.id === streamingRespId ? { ...mr, content: accumulated, status: "COMPLETED", finishReason: parsed.finishReason } : mr
                           ),
                         }
                       : msg
@@ -665,7 +596,6 @@ export default function ChatPage() {
           }
         }
       }
-
       isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
@@ -675,9 +605,7 @@ export default function ChatPage() {
           return {
             ...msg,
             modelResponses: msg.modelResponses?.map((mr: any) =>
-              mr.id === streamingRespId
-                ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." }
-                : mr
+              mr.id === streamingRespId ? { ...mr, status: "FAILED", content: mr.content || "Generation stopped by user." } : mr
             )
           };
         }));
@@ -687,10 +615,7 @@ export default function ChatPage() {
         toast.error(err.message || "Failed to regenerate message");
         setMessages((prev) => prev.map(msg => {
           if (msg.id === messageId) {
-            return {
-              ...msg,
-              modelResponses: msg.modelResponses?.filter((mr: any) => mr.id !== streamingRespId)
-            };
+            return { ...msg, modelResponses: msg.modelResponses?.filter((mr: any) => mr.id !== streamingRespId) };
           }
           return msg;
         }));
@@ -700,7 +625,6 @@ export default function ChatPage() {
       isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
-      setStreamingContent("");
       stopRequestedRef.current = false;
     }
   };
@@ -709,9 +633,7 @@ export default function ChatPage() {
     try {
       setMessages((prev) => prev.map(msg => ({
         ...msg,
-        modelResponses: msg.modelResponses?.map((mr: any) => 
-          mr.id === responseId ? { ...mr, isLiked } : mr
-        )
+        modelResponses: msg.modelResponses?.map((mr: any) => mr.id === responseId ? { ...mr, isLiked } : mr)
       })));
       await chatService.feedback(chatId, responseId, isLiked);
     } catch {
@@ -728,9 +650,7 @@ export default function ChatPage() {
     setMessages((prev) =>
       prev.map((msg) => ({
         ...msg,
-        modelResponses: msg.modelResponses?.map((mr: any) =>
-          mr.id === responseId ? { ...mr, isStarred } : mr
-        ),
+        modelResponses: msg.modelResponses?.map((mr: any) => mr.id === responseId ? { ...mr, isStarred } : mr),
       }))
     );
     try {
@@ -757,37 +677,26 @@ export default function ChatPage() {
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
-    setStreamingContent("");
-
-    // --- Identify Original Models ---
     const originalIdx = messages.findIndex(m => m.id === messageId);
     let pairedAssistantMsg = null;
     if (originalIdx !== -1 && originalIdx + 1 < messages.length && messages[originalIdx + 1].role === "ASSISTANT") {
       pairedAssistantMsg = messages[originalIdx + 1];
     }
     const targetModelIds = pairedAssistantMsg?.modelResponses?.map((mr: any) => mr.model.id) || [...selectedModels];
-
     if (targetModelIds.length === 0) {
       toast.error("No models found to edit with.");
       setIsSending(false);
       setIsStreaming(false);
       return;
     }
-
     const token = localStorage.getItem("token") || "";
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
     const chatType = localStorage.getItem("preferredChatType") || "STANDARD";
-
-    // --- Optimistic UI Update ---
-    // Find original message's root for version tracking
     const originalMsg = messages[originalIdx];
     const rootId = originalMsg?.editedFromId || messageId;
-    
     const tempUserMsgId = Date.now();
     const tempAssistantMsgId = Date.now() + 1;
-
     setEditVersionIndices((prev) => ({ ...prev, [rootId]: 999 }));
-
     setMessages((prev) => {
       const keptMessages = prev.filter((m, idx) => {
         if (idx <= originalIdx) return true;
@@ -798,80 +707,40 @@ export default function ChatPage() {
         }
         return false;
       });
-
       return [
         ...keptMessages,
+        { id: tempUserMsgId, role: "USER", content: newContent, createdAt: new Date().toISOString(), editedFromId: rootId },
         {
-          id: tempUserMsgId,
-          role: "USER",
-          content: newContent,
-          createdAt: new Date().toISOString(),
-          editedFromId: rootId,
-        },
-        {
-          id: tempAssistantMsgId,
-          role: "ASSISTANT",
-          content: "",
-          createdAt: new Date().toISOString(),
-          chatType,
+          id: tempAssistantMsgId, role: "ASSISTANT", content: "", createdAt: new Date().toISOString(), chatType,
           modelResponses: targetModelIds.map((mid) => ({
-            id: mid,
-            model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" },
-            content: "",
-            status: "STREAMING",
-            tokensUsed: null,
+            id: mid, model: { id: mid, name: models.find((m) => m.id === mid)?.name || "AI" }, content: "", status: "STREAMING", tokensUsed: null,
           })),
         },
       ];
     });
-    // ----------------------------
-
     try {
-      // 1. Prepare multi-model edit (soft-delete old, create new msg DB entries)
       const prepRes = await fetch(`${apiUrl}/chats/${chatId}/messages/${messageId}/edit-prepare-multi`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ content: newContent }),
       });
-
       if (!prepRes.ok) {
         const errData = await prepRes.json().catch(() => ({}));
         throw new Error(errData.message || "Failed to prepare edit");
       }
-
       const prepData = await prepRes.json();
       const userMsgId = prepData.data.userMessageId;
       const assistantMsgId = prepData.data.assistantMessageId;
-
-      // 2. Sync temp UI IDs with real DB IDs before streaming
       setMessages((prev) => prev.map(msg => {
         if (msg.id === tempUserMsgId) return { ...msg, id: userMsgId };
         if (msg.id === tempAssistantMsgId) return { ...msg, id: assistantMsgId };
         return msg;
       }));
-
-      // 3. Fire concurrent stream requests for all original models
       const responses = await Promise.allSettled(
         targetModelIds.map((mid) =>
-          streamSingleModel(
-            mid,
-            assistantMsgId,
-            token,
-            apiUrl,
-            newContent,
-            chatType,
-            userMsgId,
-            assistantMsgId,
-            undefined,
-            createStreamAbortController().signal
-          )
+          streamSingleModel(mid, assistantMsgId, token, apiUrl, newContent, chatType, userMsgId, assistantMsgId, undefined, createStreamAbortController().signal)
         )
       );
-
-      // 4. Handle any instant stream initiation failures
       responses.forEach((res, idx) => {
         if (res.status === "rejected") {
           const mid = targetModelIds[idx];
@@ -882,9 +751,7 @@ export default function ChatPage() {
                   ? {
                       ...msg,
                       modelResponses: msg.modelResponses?.map((mr: any) =>
-                        mr.model.id === mid
-                          ? { ...mr, content: mr.content || "Generation stopped by user.", status: "FAILED" }
-                          : mr
+                        mr.model.id === mid ? { ...mr, content: mr.content || "Generation stopped by user.", status: "FAILED" } : mr
                       ),
                     }
                   : msg
@@ -898,9 +765,7 @@ export default function ChatPage() {
                 ? {
                     ...msg,
                     modelResponses: msg.modelResponses?.map((mr: any) =>
-                      mr.model.id === mid
-                        ? { ...mr, content: res.reason.message || "Failed", status: "FAILED" }
-                        : mr
+                      mr.model.id === mid ? { ...mr, content: res.reason.message || "Failed", status: "FAILED" } : mr
                     ),
                   }
                 : msg
@@ -909,7 +774,6 @@ export default function ChatPage() {
           toast.error(`${models.find(m => m.id === mid)?.name || "Model"}: ${res.reason.message}`);
         }
       });
-
       isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
@@ -924,7 +788,6 @@ export default function ChatPage() {
       isStreamingRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
-      setStreamingContent("");
       stopRequestedRef.current = false;
     }
   };
@@ -936,7 +799,6 @@ export default function ChatPage() {
     setIsSending(true);
     setIsStreaming(true);
     isStreamingRef.current = true;
-
     const targetMsg = messages.find(m => m.id === messageId);
     if (!targetMsg || targetMsg.role !== "ASSISTANT") {
       toast.error("Can only continue assistant messages");
@@ -944,73 +806,54 @@ export default function ChatPage() {
       setIsStreaming(false);
       return;
     }
-
     const mr = targetMsg.modelResponses?.find((r: any) => r.model.id === modelId);
     const existingContent = mr?.content || "";
-
     setMessages((prev) => prev.map(msg => {
       if (msg.id === messageId) {
         return {
           ...msg,
-          modelResponses: msg.modelResponses?.map((r: any) => 
-            r.model.id === modelId ? { ...r, status: "STREAMING" } : r
-          )
+          modelResponses: msg.modelResponses?.map((r: any) => r.model.id === modelId ? { ...r, status: "STREAMING" } : r)
         };
       }
       return msg;
     }));
     setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
-
     try {
       const token = localStorage.getItem("token");
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
       const controller = createStreamAbortController();
-
       const response = await fetch(`${apiUrl}/chats/${chatId}/continue`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messageId, modelId }),
         signal: controller.signal,
       });
-
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.message || "Failed to continue message");
       }
-
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
       let buffer = "";
-
       if (reader) {
         let lastUpdate = Date.now();
         const THROTTLE_MS = 60;
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
           buffer = lines.pop() || "";
-
           for (const chunkStr of lines) {
             const line = chunkStr.trim();
             if (!line.startsWith("data: ")) continue;
             const data = line.slice(6).trim();
             if (data === "[DONE]") continue;
-
             try {
               const parsed = JSON.parse(data);
-
               if (parsed.type === "token") {
                 accumulated += parsed.content;
-
                 const now = Date.now();
                 if (now - lastUpdate > THROTTLE_MS) {
                   lastUpdate = now;
@@ -1020,9 +863,7 @@ export default function ChatPage() {
                         ? {
                             ...msg,
                             modelResponses: msg.modelResponses?.map((r: any) =>
-                              r.model.id === modelId
-                                ? { ...r, content: existingContent + accumulated, status: "STREAMING" }
-                                : r
+                              r.model.id === modelId ? { ...r, content: existingContent + accumulated, status: "STREAMING" } : r
                             ),
                           }
                         : msg
@@ -1037,9 +878,7 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((r: any) =>
-                            r.model.id === modelId
-                              ? { ...r, content: existingContent + accumulated, status: "FAILED" }
-                              : r
+                            r.model.id === modelId ? { ...r, content: existingContent + accumulated, status: "FAILED" } : r
                           ),
                         }
                       : msg
@@ -1053,9 +892,7 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((r: any) =>
-                            r.model.id === modelId
-                              ? { ...r, content: existingContent + accumulated, status: "COMPLETED", finishReason: parsed.finishReason }
-                              : r
+                            r.model.id === modelId ? { ...r, content: existingContent + accumulated, status: "COMPLETED", finishReason: parsed.finishReason } : r
                           ),
                         }
                       : msg
@@ -1066,19 +903,13 @@ export default function ChatPage() {
           }
         }
       }
-
       isStreamingRef.current = false;
       await fetchChat();
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
         setMessages((prev) => prev.map(msg => {
           if (msg.id !== messageId) return msg;
-          return {
-            ...msg,
-            modelResponses: msg.modelResponses?.map((r: any) =>
-              r.model.id === modelId ? { ...r, status: "FAILED" } : r
-            )
-          };
+          return { ...msg, modelResponses: msg.modelResponses?.map((r: any) => r.model.id === modelId ? { ...r, status: "FAILED" } : r) };
         }));
         isStreamingRef.current = false;
         syncChatAfterStop();
@@ -1086,12 +917,7 @@ export default function ChatPage() {
         toast.error(err.message || "Failed to continue message");
         setMessages((prev) => prev.map(msg => {
           if (msg.id === messageId) {
-             return {
-               ...msg,
-               modelResponses: msg.modelResponses?.map((r: any) =>
-                  r.model.id === modelId ? { ...r, status: "FAILED" } : r
-               )
-             };
+             return { ...msg, modelResponses: msg.modelResponses?.map((r: any) => r.model.id === modelId ? { ...r, status: "FAILED" } : r) };
           }
           return msg;
         }));
@@ -1139,6 +965,8 @@ export default function ChatPage() {
         onStopStreaming={stopStreaming}
         initialPrompt={initialPrompt}
         onPromptClear={() => setInitialPrompt("")}
+        onCapabilityChange={handleCapabilityChange}
+        chatType={chatCapability}
         draftStorageKey={`chat_draft_${chatId}`}
       />
     </div>

@@ -9,6 +9,8 @@ export const chatService = {
     title?: string;
     folderId?: number;
     assistantId?: number | null;
+    modelIds?: number[];
+    capability?: string;
   }) => api.post("/chats", data),
   list: (params?: Record<string, string>) => api.get("/chats", { params }),
   getById: (id: number) => api.get(`/chats/${id}`),
@@ -23,6 +25,8 @@ export const chatService = {
       title?: string;
       folderId?: number | null;
       assistantId?: number | null;
+      modelIds?: number[];
+      capability?: string;
     },
   ) => api.put(`/chats/${id}`, data),
   feedback: (chatId: number, responseId: number, isLiked: boolean | null) =>

@@ -36,6 +36,8 @@ class ChatService {
         userId,
         folderId: data.folderId ?? null,
         assistantId: data.assistantId ?? null,
+        modelIds: data.modelIds ?? [],
+        capability: (data.capability as any) ?? "STANDARD",
       },
     });
 
@@ -104,6 +106,83 @@ class ChatService {
 
     if (!chat) throw new ApiError("Chat not found", STATUS_CODES.NOT_FOUND);
 
+    // Heal existing chats or handle deactivated models
+    const hasNoModels = !chat.modelIds || chat.modelIds.length === 0;
+    
+    let activeModelIdsSet = new Set<number>();
+    if (!hasNoModels) {
+      const activeModels = await prisma.model.findMany({
+        where: { 
+          id: { in: chat.modelIds }, 
+          isActive: true, 
+          isDeleted: false,
+          capabilities: { has: chat.capability }
+        },
+        select: { id: true },
+      });
+      activeModelIdsSet = new Set(activeModels.map((m) => m.id));
+    }
+
+    const hasMissingModel = hasNoModels || (chat.modelIds && chat.modelIds.some((id) => !activeModelIdsSet.has(id)));
+
+    if (hasMissingModel) {
+      let updatedModelIds = (chat.modelIds || []).filter((id) => activeModelIdsSet.has(id));
+
+      if (updatedModelIds.length === 0) {
+        // 1. Try to find models from chat history (most accurate for existing chats)
+        const lastAssistantMsg = chat.messages
+          .filter((m) => m.role === "ASSISTANT")
+          .pop();
+        
+        if (lastAssistantMsg && lastAssistantMsg.modelResponses && lastAssistantMsg.modelResponses.length > 0) {
+          const historyModelIds = [...new Set(lastAssistantMsg.modelResponses.map((mr: any) => mr.model?.id))]
+            .filter((id): id is number => !!id);
+          
+          const validHistoryModels = await prisma.model.findMany({
+            where: { 
+              id: { in: historyModelIds }, 
+              isActive: true, 
+              isDeleted: false,
+              capabilities: { has: chat.capability }
+            },
+            select: { id: true },
+          });
+          updatedModelIds = validHistoryModels.map(m => m.id);
+        }
+
+        // 2. If history is empty or invalid, find the default model for the capability
+        if (updatedModelIds.length === 0) {
+          const defaultModel = await prisma.model.findFirst({
+            where: {
+              isActive: true,
+              isDeleted: false,
+              defaultForCapabilities: { has: chat.capability },
+            },
+            select: { id: true },
+          });
+
+          if (defaultModel) {
+            updatedModelIds = [defaultModel.id];
+          } else {
+            const anyActive = await prisma.model.findFirst({
+              where: { isActive: true, isDeleted: false },
+              select: { id: true },
+            });
+            if (anyActive) updatedModelIds = [anyActive.id];
+          }
+        }
+      }
+
+      // Persist the correction back to the DB
+      if (JSON.stringify(updatedModelIds) !== JSON.stringify(chat.modelIds)) {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { modelIds: updatedModelIds },
+        });
+        chat.modelIds = updatedModelIds;
+      }
+    }
+
     return chat;
   }
 
@@ -114,6 +193,8 @@ class ChatService {
       title?: string;
       folderId?: number | null;
       assistantId?: number | null;
+      modelIds?: number[];
+      capability?: string;
     },
   ) {
     const chat = await prisma.chat.findFirst({
@@ -132,7 +213,10 @@ class ChatService {
 
     const updated = await prisma.chat.update({
       where: { id: chatId },
-      data,
+      data: {
+        ...data,
+        capability: data.capability ? (data.capability as any) : undefined,
+      },
     });
 
     return updated;

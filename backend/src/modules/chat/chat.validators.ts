@@ -4,6 +4,8 @@ const createChatSchema = Joi.object({
   title: Joi.string().trim().allow(null, "").optional(),
   folderId: Joi.number().integer().positive().allow(null).optional(),
   assistantId: Joi.number().integer().positive().allow(null).optional(),
+  modelIds: Joi.array().items(Joi.number().integer().positive()).optional(),
+  capability: Joi.string().valid("STANDARD", "DEEP_RESEARCH", "IMAGE_GENERATION", "WEB_SEARCH", "VISION").optional(),
 });
 
 export const validateCreateChatSchema = (data: unknown) => {
@@ -14,6 +16,8 @@ const updateChatSchema = Joi.object({
   title: Joi.string().trim().optional(),
   folderId: Joi.number().integer().positive().allow(null).optional(),
   assistantId: Joi.number().integer().positive().allow(null).optional(),
+  modelIds: Joi.array().items(Joi.number().integer().positive()).optional(),
+  capability: Joi.string().valid("STANDARD", "DEEP_RESEARCH", "IMAGE_GENERATION", "WEB_SEARCH", "VISION").optional(),
 });
 
 export const validateUpdateChatSchema = (data: unknown) => {

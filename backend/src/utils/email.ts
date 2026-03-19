@@ -6,7 +6,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const getFromAddress = () => {
   // Try to use configured environment variables, fallback to Resend onboarding default
-  return process.env.SMTP_FROM || process.env.SMTP_USER || "onboarding@resend.dev";
+  return (
+    process.env.SMTP_FROM || process.env.SMTP_USER || "onboarding@resend.dev"
+  );
 };
 
 interface SendEmailPayload {
@@ -18,7 +20,7 @@ interface SendEmailPayload {
 
 export const sendEmail = async (payload: SendEmailPayload) => {
   const from = getFromAddress();
-  
+
   if (!process.env.RESEND_API_KEY) {
     throw new ApiError(
       "RESEND_API_KEY is not configured. Please set the RESEND_API_KEY in .env.",
@@ -36,7 +38,10 @@ export const sendEmail = async (payload: SendEmailPayload) => {
 
   if (error) {
     console.error("Resend API failed:", error);
-    throw new ApiError("Failed to send email via Resend", STATUS_CODES.SERVER_ERROR);
+    throw new ApiError(
+      "Failed to send email via Resend",
+      STATUS_CODES.SERVER_ERROR,
+    );
   }
 };
 
@@ -102,7 +107,7 @@ const renderOtpTemplate = ({
       }
       .header {
         padding: 24px;
-        background: linear-gradient(135deg, var(--primary), #7c3aed);
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
         color: #ffffff;
       }
       .app {

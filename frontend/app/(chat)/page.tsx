@@ -99,7 +99,11 @@ export default function NewChatPage() {
     setIsSending(true);
 
     try {
-      const payload: any = { title: content.substring(0, 50) };
+      const payload: any = { 
+        title: content.substring(0, 50),
+        modelIds: selectedModels,
+        capability: chatType || "STANDARD"
+      };
       if (assistant?.id) {
         payload.assistantId = assistant.id;
       }

@@ -154,6 +154,8 @@ model Chat {
   userId       Int
   folderId     Int?
   assistantId  Int?
+  modelIds     Int[]
+  capability   ModelCapability @default(STANDARD)
   messages     Message[]
   responses    ModelResponse[]
   isPinned     Boolean         @default(false)
