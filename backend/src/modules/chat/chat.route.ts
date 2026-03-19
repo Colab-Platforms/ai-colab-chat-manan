@@ -7,6 +7,7 @@ import {
   prepareMulti,
   prepareEditMulti,
   editAndResend,
+  continueChatStream,
 } from "./chat.stream.js";
 
 const router = Router();
@@ -73,6 +74,11 @@ router.post(
   "/:chatId/messages/:messageId/edit",
   auth("USER", "ADMIN", "SUPERADMIN"),
   editAndResend,
+);
+router.post(
+  "/:chatId/continue",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  continueChatStream,
 );
 
 export default router;

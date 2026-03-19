@@ -280,6 +280,9 @@ export default function ChatPage() {
       let buffer = "";
 
       if (reader) {
+        let lastUpdate = Date.now();
+        const THROTTLE_MS = 60; // Update every 60ms to avoid React overhead on long messages
+        
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -299,20 +302,25 @@ export default function ChatPage() {
 
               if (parsed.type === "token") {
                 accumulated += parsed.content;
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === streamingMsgId
-                      ? {
-                          ...msg,
-                          modelResponses: msg.modelResponses?.map((mr: any) =>
-                            mr.model.id === mid
-                              ? { ...mr, content: accumulated, status: "STREAMING" }
-                              : mr
-                          ),
-                        }
-                      : msg
-                  )
-                );
+                
+                const now = Date.now();
+                if (now - lastUpdate > THROTTLE_MS) {
+                  lastUpdate = now;
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === streamingMsgId
+                        ? {
+                            ...msg,
+                            modelResponses: msg.modelResponses?.map((mr: any) =>
+                              mr.model.id === mid
+                                ? { ...mr, content: accumulated, status: "STREAMING" }
+                                : mr
+                            ),
+                          }
+                        : msg
+                    )
+                  );
+                }
               } else if (parsed.type === "error") {
                 const errorMessage = parsed.message || "Generation failed";
                 accumulated = errorMessage;
@@ -339,7 +347,7 @@ export default function ChatPage() {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
                             mr.model.id === mid
-                              ? { ...mr, content: accumulated, status: "COMPLETED" }
+                              ? { ...mr, content: accumulated, status: "COMPLETED", finishReason: parsed.finishReason }
                               : mr
                           ),
                         }
@@ -645,7 +653,7 @@ export default function ChatPage() {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
                             mr.id === streamingRespId
-                              ? { ...mr, content: accumulated, status: "COMPLETED" }
+                              ? { ...mr, content: accumulated, status: "COMPLETED", finishReason: parsed.finishReason }
                               : mr
                           ),
                         }
@@ -921,6 +929,182 @@ export default function ChatPage() {
     }
   };
 
+  const handleContinueGeneration = async (messageId: number, modelId: number) => {
+    if (isSending) return;
+    stopRequestedRef.current = false;
+    clearStreamAbortControllers();
+    setIsSending(true);
+    setIsStreaming(true);
+    isStreamingRef.current = true;
+
+    const targetMsg = messages.find(m => m.id === messageId);
+    if (!targetMsg || targetMsg.role !== "ASSISTANT") {
+      toast.error("Can only continue assistant messages");
+      setIsSending(false);
+      setIsStreaming(false);
+      return;
+    }
+
+    const mr = targetMsg.modelResponses?.find((r: any) => r.model.id === modelId);
+    const existingContent = mr?.content || "";
+
+    setMessages((prev) => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          modelResponses: msg.modelResponses?.map((r: any) => 
+            r.model.id === modelId ? { ...r, status: "STREAMING" } : r
+          )
+        };
+      }
+      return msg;
+    }));
+    setActiveModelTabs((prev) => ({ ...prev, [messageId]: modelId }));
+
+    try {
+      const token = localStorage.getItem("token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+      const controller = createStreamAbortController();
+
+      const response = await fetch(`${apiUrl}/chats/${chatId}/continue`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ messageId, modelId }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to continue message");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let buffer = "";
+
+      if (reader) {
+        let lastUpdate = Date.now();
+        const THROTTLE_MS = 60;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const chunkStr of lines) {
+            const line = chunkStr.trim();
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.type === "token") {
+                accumulated += parsed.content;
+
+                const now = Date.now();
+                if (now - lastUpdate > THROTTLE_MS) {
+                  lastUpdate = now;
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === messageId
+                        ? {
+                            ...msg,
+                            modelResponses: msg.modelResponses?.map((r: any) =>
+                              r.model.id === modelId
+                                ? { ...r, content: existingContent + accumulated, status: "STREAMING" }
+                                : r
+                            ),
+                          }
+                        : msg
+                    )
+                  );
+                }
+              } else if (parsed.type === "error") {
+                const errorMessage = parsed.message || "Generation failed";
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === messageId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((r: any) =>
+                            r.model.id === modelId
+                              ? { ...r, content: existingContent + accumulated, status: "FAILED" }
+                              : r
+                          ),
+                        }
+                      : msg
+                  )
+                );
+                toast.error(errorMessage);
+              } else if (parsed.type === "done") {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === messageId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((r: any) =>
+                            r.model.id === modelId
+                              ? { ...r, content: existingContent + accumulated, status: "COMPLETED", finishReason: parsed.finishReason }
+                              : r
+                          ),
+                        }
+                      : msg
+                  )
+                );
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+
+      isStreamingRef.current = false;
+      await fetchChat();
+    } catch (err: any) {
+      if (isAbortError(err) || stopRequestedRef.current) {
+        setMessages((prev) => prev.map(msg => {
+          if (msg.id !== messageId) return msg;
+          return {
+            ...msg,
+            modelResponses: msg.modelResponses?.map((r: any) =>
+              r.model.id === modelId ? { ...r, status: "FAILED" } : r
+            )
+          };
+        }));
+        isStreamingRef.current = false;
+        syncChatAfterStop();
+      } else {
+        toast.error(err.message || "Failed to continue message");
+        setMessages((prev) => prev.map(msg => {
+          if (msg.id === messageId) {
+             return {
+               ...msg,
+               modelResponses: msg.modelResponses?.map((r: any) =>
+                  r.model.id === modelId ? { ...r, status: "FAILED" } : r
+               )
+             };
+          }
+          return msg;
+        }));
+      }
+    } finally {
+      clearStreamAbortControllers();
+      isStreamingRef.current = false;
+      setIsSending(false);
+      setIsStreaming(false);
+      stopRequestedRef.current = false;
+    }
+  };
+
   if (isNotFound) {
     notFound();
     return null;
@@ -939,6 +1123,7 @@ export default function ChatPage() {
         onEditVersionChange={handleEditVersionChange}
         onFollowUpClick={setInitialPrompt}
         onToggleStar={handleToggleStar}
+        onContinue={handleContinueGeneration}
         bottomAnchorId="chat-bottom-anchor"
         forceScrollToBottom={shouldForceScrollFromStarred}
         scrollContainerId="chat-scroll-container"

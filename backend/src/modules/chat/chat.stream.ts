@@ -4,7 +4,10 @@ import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
 import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
-import { createWalletTransaction, calculateAdjustedTokens } from "@/utils/walletUtils.js";
+import {
+  createWalletTransaction,
+  calculateAdjustedTokens,
+} from "@/utils/walletUtils.js";
 import AttachmentService from "@/modules/attachment/attachment.service.js";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
@@ -253,7 +256,10 @@ async function checkTokenLimitsAndSetupStream(
   let currentHistoryTokens = estimateMessageTokens([latestPrompt]);
 
   if (currentHistoryTokens + MIN_RESPONSE_TOKENS >= maxAffordableTokens) {
-    const allowedPromptTokens = Math.max(0, maxAffordableTokens - MIN_RESPONSE_TOKENS - 6 - 3);
+    const allowedPromptTokens = Math.max(
+      0,
+      maxAffordableTokens - MIN_RESPONSE_TOKENS - 6 - 3,
+    );
 
     if (allowedPromptTokens <= 0) {
       res.write(
@@ -280,7 +286,9 @@ async function checkTokenLimitsAndSetupStream(
 
     if (typeof latestPrompt.content === "string") {
       const maxChars = Math.floor(allowedPromptTokens * 2.2);
-      latestPrompt.content = latestPrompt.content.substring(0, maxChars) + "... [Truncated to fit limits]";
+      latestPrompt.content =
+        latestPrompt.content.substring(0, maxChars) +
+        "... [Truncated to fit limits]";
     } else if (Array.isArray(latestPrompt.content)) {
       let remainingTokens = allowedPromptTokens;
       const truncatedContent = [];
@@ -296,7 +304,9 @@ async function checkTokenLimitsAndSetupStream(
             if (maxChars > 0) {
               truncatedContent.push({
                 ...part,
-                text: part.text.substring(0, maxChars) + "... [Truncated to fit limits]"
+                text:
+                  part.text.substring(0, maxChars) +
+                  "... [Truncated to fit limits]",
               });
             }
             break;
@@ -308,7 +318,11 @@ async function checkTokenLimitsAndSetupStream(
           } else {
             break;
           }
-        } else if (part.type === "file" && part.file && typeof part.file.file_data === "string") {
+        } else if (
+          part.type === "file" &&
+          part.file &&
+          typeof part.file.file_data === "string"
+        ) {
           const fileTokens = Math.ceil(part.file.file_data.length / 50);
           if (fileTokens <= remainingTokens) {
             truncatedContent.push(part);
@@ -337,7 +351,7 @@ async function checkTokenLimitsAndSetupStream(
     // Only apply the 4-message history window limit to non-system messages.
     // We continue the loop because we still want to find and include system messages
     // that were unshifted to the beginning of the history.
-    if (!isSystem && historyMessageCount >= 4) continue;
+    if (!isSystem && historyMessageCount >= 6) continue;
 
     const msgTokens = estimateMessageTokens([msg]) - 3; // subtracting base overhead per message loop
     if (
@@ -352,12 +366,15 @@ async function checkTokenLimitsAndSetupStream(
 
   // Always append the latest prompt at the end so the AI responds to the current message
   if (enableFollowUpQuestions) {
-    const instruction = "\n\n---\nBased on your response, suggest 4 concise follow-up questions the user could ask next. Format them as a JSON array of strings inside a ```json block at the very end of your response.";
+    const instruction =
+      "\n\n---\nBased on your response, suggest 4 concise follow-up questions the user could ask next. Format them as a JSON array of strings inside a ```json block at the very end of your response.";
     let updatedContent = latestPrompt.content;
 
     if (Array.isArray(updatedContent)) {
       // Find the last text part and append it there, or add a new text part
-      const lastTextPart = [...updatedContent].reverse().find(p => p.type === "text");
+      const lastTextPart = [...updatedContent]
+        .reverse()
+        .find((p) => p.type === "text");
       if (lastTextPart) {
         lastTextPart.text += instruction;
       } else {
@@ -484,7 +501,12 @@ export async function streamChat(req: Request, res: Response) {
       userMessage = existing;
     } else {
       userMessage = await prisma.message.create({
-        data: { chatId, role: "USER", content: content.trim(), chatType: chatType || "STANDARD" },
+        data: {
+          chatId,
+          role: "USER",
+          content: content.trim(),
+          chatType: chatType || "STANDARD",
+        },
       });
 
       // Link any presend attachments to this new message
@@ -518,7 +540,12 @@ export async function streamChat(req: Request, res: Response) {
       assistantMessage = existing;
     } else {
       assistantMessage = await prisma.message.create({
-        data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
+        data: {
+          chatId,
+          role: "ASSISTANT",
+          content: "",
+          chatType: chatType || "STANDARD",
+        },
       });
     }
 
@@ -526,10 +553,10 @@ export async function streamChat(req: Request, res: Response) {
 
     // Build conversation history - exclude current messages to avoid duplication
     const previousMessages = await prisma.message.findMany({
-      where: { 
-        chatId, 
-        isDeleted: false, 
-        id: { notIn: [assistantMessage.id, userMessage.id] } 
+      where: {
+        chatId,
+        isDeleted: false,
+        id: { notIn: [assistantMessage.id, userMessage.id] },
       },
       orderBy: { createdAt: "asc" },
       include: {
@@ -573,7 +600,9 @@ export async function streamChat(req: Request, res: Response) {
         where: { id: chat.assistantId, isActive: true, isDeleted: false },
       });
       if (chatAssistant) {
-        console.log(`[DEBUG] Adding Assistant System Prompt for: ${chatAssistant.name}`);
+        console.log(
+          `[DEBUG] Adding Assistant System Prompt for: ${chatAssistant.name}`,
+        );
         conversationHistory.unshift({
           role: "system",
           content: [
@@ -586,7 +615,9 @@ export async function streamChat(req: Request, res: Response) {
         });
         assistantTemperature = chatAssistant.temperature;
       } else {
-        console.log(`[DEBUG] Assistant with ID ${chat.assistantId} not found or inactive`);
+        console.log(
+          `[DEBUG] Assistant with ID ${chat.assistantId} not found or inactive`,
+        );
       }
     }
 
@@ -597,15 +628,21 @@ export async function streamChat(req: Request, res: Response) {
       where: { chatId },
       include: { context: true },
     });
-    const customContexts = chatContextsLinks.map(link => link.context).filter(c => !c.isDeleted);
-    
+    const customContexts = chatContextsLinks
+      .map((link) => link.context)
+      .filter((c) => !c.isDeleted);
+
     // Merge and deduplicate
     const allContextItems = [...autoSelectedContexts, ...customContexts];
-    const uniqueContexts = Array.from(new Map(allContextItems.map(item => [item.id, item])).values());
-    const contextStrings = uniqueContexts.map(c => c.memory);
+    const uniqueContexts = Array.from(
+      new Map(allContextItems.map((item) => [item.id, item])).values(),
+    );
+    const contextStrings = uniqueContexts.map((c) => c.memory);
 
     if (contextStrings.length > 0) {
-      console.log(`[DEBUG] Adding User Context (${contextStrings.length} items)`);
+      console.log(
+        `[DEBUG] Adding User Context (${contextStrings.length} items)`,
+      );
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({
         role: "system",
@@ -666,10 +703,7 @@ export async function streamChat(req: Request, res: Response) {
     // -----------------------------------------------------------------------
     // Predefined response intercept – platform identity / greetings / about
     // -----------------------------------------------------------------------
-    const predefinedText = checkPredefinedResponse(
-      content,
-      contextStrings,
-    );
+    const predefinedText = checkPredefinedResponse(content, contextStrings);
     if (predefinedText) {
       // Stream word-by-word with a small delay (same feel as OpenRouter)
       const words = predefinedText.split(" ");
@@ -697,14 +731,16 @@ export async function streamChat(req: Request, res: Response) {
       let finalTotal = tTokens;
 
       await prisma.$transaction(async (tx) => {
-        const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+        const walletRecord = await tx.userWallet.findUnique({
+          where: { userId },
+        });
         const availableTokens = walletRecord?.tokensRemaining || 0;
 
         const adjusted = calculateAdjustedTokens(
           availableTokens,
           billablePromptPre,
           billableCompletionPre,
-          tokenMultiplierPre
+          tokenMultiplierPre,
         );
 
         finalPrompt = adjusted.finalRawPrompt;
@@ -750,14 +786,18 @@ export async function streamChat(req: Request, res: Response) {
             tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
-        
+
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${assistantMessage.id}`,
-          meta: { reason: "PREDEFINED_RESPONSE", chatId, messageId: assistantMessage.id },
+          meta: {
+            reason: "PREDEFINED_RESPONSE",
+            chatId,
+            messageId: assistantMessage.id,
+          },
         });
       });
 
@@ -775,6 +815,7 @@ export async function streamChat(req: Request, res: Response) {
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
     let selectedImageUrl: string | null = null;
+    let finishReason: string | null = null;
 
     try {
       const stream = await createOpenRouterStream({
@@ -840,6 +881,12 @@ export async function streamChat(req: Request, res: Response) {
           promptTokens = chunk.usage.prompt_tokens || 0;
           completionTokens = chunk.usage.completion_tokens || 0;
         }
+        const fr =
+          chunk.choices?.[0]?.finish_reason ||
+          chunk.choices?.[0]?.message?.finish_reason;
+        if (fr) {
+          finishReason = fr;
+        }
       }
       if (isClientAborted()) {
         const abortError = new Error("Generation aborted by client");
@@ -865,6 +912,7 @@ export async function streamChat(req: Request, res: Response) {
               completionTokens: completionTokens || 0,
               totalTokens: (promptTokens || 0) + (completionTokens || 0),
               status: "FAILED",
+              finishReason,
               completedAt: new Date(),
             },
           });
@@ -895,6 +943,7 @@ export async function streamChat(req: Request, res: Response) {
             completionTokens: completionTokens || 0,
             totalTokens: (promptTokens || 0) + (completionTokens || 0),
             status: "FAILED",
+            finishReason,
             completedAt: new Date(),
           },
         });
@@ -932,6 +981,7 @@ export async function streamChat(req: Request, res: Response) {
             completionTokens,
             totalTokens: promptTokens + completionTokens,
             status: "FAILED",
+            finishReason,
             completedAt: new Date(),
           },
         });
@@ -976,14 +1026,16 @@ export async function streamChat(req: Request, res: Response) {
 
     // Update assistant message + create model response + deduct tokens in transaction
     await prisma.$transaction(async (tx) => {
-      const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+      const walletRecord = await tx.userWallet.findUnique({
+        where: { userId },
+      });
       const availableTokens = walletRecord?.tokensRemaining || 0;
 
       const adjusted = calculateAdjustedTokens(
         availableTokens,
         billablePromptTokens,
         billableCompletionTokens,
-        tokenMultiplier
+        tokenMultiplier,
       );
 
       finalPrompt = adjusted.finalRawPrompt;
@@ -1005,6 +1057,7 @@ export async function streamChat(req: Request, res: Response) {
           completionTokens: adjusted.finalRawCompletion,
           totalTokens: adjusted.finalRawTotal,
           status: "COMPLETED",
+          finishReason,
           completedAt: new Date(),
         },
       });
@@ -1033,21 +1086,25 @@ export async function streamChat(req: Request, res: Response) {
             tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
-        
+
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${assistantMessage.id}`,
-          meta: { reason: "STREAMED_RESPONSE", chatId, messageId: assistantMessage.id },
+          meta: {
+            reason: "STREAMED_RESPONSE",
+            chatId,
+            messageId: assistantMessage.id,
+          },
         });
       }
     });
 
     // Send done signal with usage info
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -1160,11 +1217,18 @@ export async function regenerateChat(req: Request, res: Response) {
       where: { chatId },
       include: { context: true },
     });
-    const customContextsRegen = chatLinksRegen.map(link => link.context).filter(c => !c.isDeleted);
-    
-    const allContextItemsRegen = [...autoGenContextsRegen, ...customContextsRegen];
-    const uniqueContextsRegen = Array.from(new Map(allContextItemsRegen.map(item => [item.id, item])).values());
-    const contextStringsRegen = uniqueContextsRegen.map(c => c.memory);
+    const customContextsRegen = chatLinksRegen
+      .map((link) => link.context)
+      .filter((c) => !c.isDeleted);
+
+    const allContextItemsRegen = [
+      ...autoGenContextsRegen,
+      ...customContextsRegen,
+    ];
+    const uniqueContextsRegen = Array.from(
+      new Map(allContextItemsRegen.map((item) => [item.id, item])).values(),
+    );
+    const contextStringsRegen = uniqueContextsRegen.map((c) => c.memory);
 
     if (contextStringsRegen.length > 0) {
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c) => `- ${c}`).join("\n")}`;
@@ -1220,14 +1284,16 @@ export async function regenerateChat(req: Request, res: Response) {
       let finalTotal = tTokens;
 
       await prisma.$transaction(async (tx) => {
-        const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+        const walletRecord = await tx.userWallet.findUnique({
+          where: { userId },
+        });
         const availableTokens = walletRecord?.tokensRemaining || 0;
 
         const adjusted = calculateAdjustedTokens(
           availableTokens,
           billablePromptRegen,
           billableCompletionRegen,
-          tokenMultiplierRegen
+          tokenMultiplierRegen,
         );
 
         finalPrompt = adjusted.finalRawPrompt;
@@ -1269,7 +1335,7 @@ export async function regenerateChat(req: Request, res: Response) {
             tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
-        
+
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
@@ -1293,6 +1359,7 @@ export async function regenerateChat(req: Request, res: Response) {
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
     let selectedImageUrl: string | null = null;
+    let finishReason: string | null = null;
 
     try {
       const stream = await createOpenRouterStream({
@@ -1345,6 +1412,12 @@ export async function regenerateChat(req: Request, res: Response) {
           promptTokens = chunk.usage.prompt_tokens || 0;
           completionTokens = chunk.usage.completion_tokens || 0;
         }
+        const fr =
+          chunk.choices?.[0]?.finish_reason ||
+          chunk.choices?.[0]?.message?.finish_reason;
+        if (fr) {
+          finishReason = fr;
+        }
       }
       if (isClientAborted()) {
         const abortError = new Error("Generation aborted by client");
@@ -1366,6 +1439,7 @@ export async function regenerateChat(req: Request, res: Response) {
               completionTokens: completionTokens || 0,
               totalTokens: (promptTokens || 0) + (completionTokens || 0),
               status: "FAILED",
+              finishReason,
               completedAt: new Date(),
             },
           });
@@ -1387,6 +1461,7 @@ export async function regenerateChat(req: Request, res: Response) {
             completionTokens: completionTokens || 0,
             totalTokens: (promptTokens || 0) + (completionTokens || 0),
             status: "FAILED",
+            finishReason,
             completedAt: new Date(),
           },
         });
@@ -1414,6 +1489,7 @@ export async function regenerateChat(req: Request, res: Response) {
           completionTokens,
           totalTokens: promptTokens + completionTokens,
           status: "FAILED",
+          finishReason,
           completedAt: new Date(),
         },
       });
@@ -1456,14 +1532,16 @@ export async function regenerateChat(req: Request, res: Response) {
     let finalTotal = promptTokens + completionTokens;
 
     await prisma.$transaction(async (tx) => {
-      const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+      const walletRecord = await tx.userWallet.findUnique({
+        where: { userId },
+      });
       const availableTokens = walletRecord?.tokensRemaining || 0;
 
       const adjusted = calculateAdjustedTokens(
         availableTokens,
         billablePromptTokens,
         billableCompletionTokens,
-        tokenMultiplier
+        tokenMultiplier,
       );
 
       finalPrompt = adjusted.finalRawPrompt;
@@ -1480,6 +1558,7 @@ export async function regenerateChat(req: Request, res: Response) {
           completionTokens: adjusted.finalRawCompletion,
           totalTokens: adjusted.finalRawTotal,
           status: "COMPLETED",
+          finishReason,
           completedAt: new Date(),
         },
       });
@@ -1508,7 +1587,7 @@ export async function regenerateChat(req: Request, res: Response) {
             tokensUsed: { increment: adjusted.finalBillableTotal },
           },
         });
-        
+
         await createWalletTransaction(tx, {
           userId,
           walletId: updatedWallet.id,
@@ -1521,7 +1600,7 @@ export async function regenerateChat(req: Request, res: Response) {
     });
 
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -1567,7 +1646,12 @@ export async function prepareMulti(req: Request, res: Response) {
 
     // Create user message
     const userMessage = await prisma.message.create({
-      data: { chatId, role: "USER", content: content.trim(), chatType: chatType || "STANDARD" },
+      data: {
+        chatId,
+        role: "USER",
+        content: content.trim(),
+        chatType: chatType || "STANDARD",
+      },
     });
 
     if (attachmentIds && attachmentIds.length > 0) {
@@ -1585,7 +1669,12 @@ export async function prepareMulti(req: Request, res: Response) {
 
     // Create empty assistant message
     const assistantMessage = await prisma.message.create({
-      data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
+      data: {
+        chatId,
+        role: "ASSISTANT",
+        content: "",
+        chatType: chatType || "STANDARD",
+      },
     });
 
     await touchChat(chatId);
@@ -1709,7 +1798,12 @@ export async function editAndResend(req: Request, res: Response) {
 
     // Create empty assistant message
     const assistantMessage = await prisma.message.create({
-      data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
+      data: {
+        chatId,
+        role: "ASSISTANT",
+        content: "",
+        chatType: chatType || "STANDARD",
+      },
     });
 
     await touchChat(chatId);
@@ -1776,6 +1870,7 @@ export async function editAndResend(req: Request, res: Response) {
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
     let selectedImageUrl: string | null = null;
+    let finishReason: string | null = null;
 
     try {
       const stream = await createOpenRouterStream({
@@ -1828,6 +1923,12 @@ export async function editAndResend(req: Request, res: Response) {
           promptTokens = chunk.usage.prompt_tokens || 0;
           completionTokens = chunk.usage.completion_tokens || 0;
         }
+        const fr =
+          chunk.choices?.[0]?.finish_reason ||
+          chunk.choices?.[0]?.message?.finish_reason;
+        if (fr) {
+          finishReason = fr;
+        }
       }
       if (isClientAborted()) {
         const abortError = new Error("Generation aborted by client");
@@ -1853,6 +1954,7 @@ export async function editAndResend(req: Request, res: Response) {
               completionTokens: completionTokens || 0,
               totalTokens: (promptTokens || 0) + (completionTokens || 0),
               status: "FAILED",
+              finishReason,
               completedAt: new Date(),
             },
           });
@@ -1874,6 +1976,7 @@ export async function editAndResend(req: Request, res: Response) {
             completionTokens: completionTokens || 0,
             totalTokens: (promptTokens || 0) + (completionTokens || 0),
             status: "FAILED",
+            finishReason,
             completedAt: new Date(),
           },
         });
@@ -1910,6 +2013,7 @@ export async function editAndResend(req: Request, res: Response) {
             completionTokens,
             totalTokens: promptTokens + completionTokens,
             status: "FAILED",
+            finishReason,
             completedAt: new Date(),
           },
         });
@@ -1955,14 +2059,16 @@ export async function editAndResend(req: Request, res: Response) {
 
     // Save response + deduct tokens
     await prisma.$transaction(async (tx) => {
-      const walletRecord = await tx.userWallet.findUnique({ where: { userId } });
+      const walletRecord = await tx.userWallet.findUnique({
+        where: { userId },
+      });
       const availableTokens = walletRecord?.tokensRemaining || 0;
 
       const adjusted = calculateAdjustedTokens(
         availableTokens,
         billablePromptTokens,
         billableCompletionTokens,
-        tokenMultiplier
+        tokenMultiplier,
       );
 
       finalPrompt = adjusted.finalRawPrompt;
@@ -1984,6 +2090,7 @@ export async function editAndResend(req: Request, res: Response) {
           completionTokens: adjusted.finalRawCompletion,
           totalTokens: adjusted.finalRawTotal,
           status: "COMPLETED",
+          finishReason,
           completedAt: new Date(),
         },
       });
@@ -2019,13 +2126,17 @@ export async function editAndResend(req: Request, res: Response) {
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
           referenceId: `msg_${assistantMessage.id}`,
-          meta: { reason: "EDIT_RESEND", chatId, messageId: assistantMessage.id },
+          meta: {
+            reason: "EDIT_RESEND",
+            chatId,
+            messageId: assistantMessage.id,
+          },
         });
       }
     });
 
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -2051,7 +2162,10 @@ export async function prepareEditMulti(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
   const messageId = Number(req.params.messageId);
-  const { content, chatType } = req.body as { content: string; chatType?: string; };
+  const { content, chatType } = req.body as {
+    content: string;
+    chatType?: string;
+  };
 
   try {
     if (!content?.trim()) {
@@ -2120,7 +2234,12 @@ export async function prepareEditMulti(req: Request, res: Response) {
 
     // Create empty assistant message
     const assistantMessage = await prisma.message.create({
-      data: { chatId, role: "ASSISTANT", content: "", chatType: chatType || "STANDARD" },
+      data: {
+        chatId,
+        role: "ASSISTANT",
+        content: "",
+        chatType: chatType || "STANDARD",
+      },
     });
 
     await touchChat(chatId);
@@ -2138,5 +2257,335 @@ export async function prepareEditMulti(req: Request, res: Response) {
       status: false,
       message: error.message || "Internal server error",
     });
+  }
+}
+
+export async function continueChatStream(req: Request, res: Response) {
+  const userId = req.user!.id;
+  const chatId = Number(req.params.chatId);
+  const { messageId, modelId } = req.body as {
+    messageId: number;
+    modelId: number;
+  };
+  const abortController = new AbortController();
+  const isClientAborted = setupClientAbortTracking(req, res, abortController);
+
+  try {
+    if (!messageId || !modelId) {
+      res
+        .status(400)
+        .json({ status: false, message: "messageId and modelId required" });
+      return;
+    }
+
+    const chat = await prisma.chat.findFirst({
+      where: { id: chatId, userId, isDeleted: false },
+    });
+    if (!chat) {
+      res.status(404).json({ status: false, message: "Chat not found" });
+      return;
+    }
+
+    const model = await prisma.model.findFirst({
+      where: { id: modelId, isActive: true, isDeleted: false },
+      include: { modelProvider: true },
+    });
+    if (!model) {
+      res
+        .status(404)
+        .json({ status: false, message: "Model not found or inactive" });
+      return;
+    }
+
+    const wallet = await prisma.userWallet.findUnique({ where: { userId } });
+    if (!wallet || wallet.tokensRemaining <= 0) {
+      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      return;
+    }
+
+    const allMessages = await prisma.message.findMany({
+      where: { chatId, isDeleted: false },
+      orderBy: { createdAt: "asc" },
+      include: {
+        modelResponses: {
+          where: { status: "COMPLETED" },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        },
+        attachments: true,
+      },
+    });
+
+    const targetIndex = allMessages.findIndex((m) => m.id === messageId);
+    if (targetIndex === -1 || allMessages[targetIndex].role !== "ASSISTANT") {
+      res
+        .status(404)
+        .json({ status: false, message: "Target assistant message not found" });
+      return;
+    }
+    const assistantMessage = allMessages[targetIndex];
+    const modelResponse = await prisma.modelResponse.findFirst({
+      where: { messageId: assistantMessage.id, modelId, status: "COMPLETED" },
+    });
+    if (!modelResponse) {
+      res
+        .status(404)
+        .json({ status: false, message: "Previous model response not found" });
+      return;
+    }
+
+    // Assume the user message immediately preceding it is the context initiator
+    let originalUserMessageIndex = targetIndex - 1;
+    while (
+      originalUserMessageIndex >= 0 &&
+      allMessages[originalUserMessageIndex].role !== "USER"
+    ) {
+      originalUserMessageIndex--;
+    }
+
+    // We rebuild conversationHistory UP TO AND INCLUDING the original user message
+    const previousMessages = allMessages.slice(0, originalUserMessageIndex + 1);
+
+    let attachmentPlugins: any[] = [];
+
+    const conversationHistory: {
+      role: "user" | "assistant" | "system";
+      content: any;
+    }[] = [];
+
+    // Filter out contexts similarly to checkTokenLimitsAndSetupStream
+    // We'll skip some repetitive checks for brevity, but let's build standard text history
+    for (let i = 0; i < previousMessages.length; i++) {
+      const msg = previousMessages[i];
+      if (msg.role === "USER") {
+        if (
+          i === previousMessages.length - 1 &&
+          msg.attachments &&
+          msg.attachments.length > 0
+        ) {
+          const { contentParts, extraPlugins } =
+            await buildAttachmentContentParts(msg.content, msg.attachments);
+          conversationHistory.push({ role: "user", content: contentParts });
+          attachmentPlugins = extraPlugins;
+        } else {
+          conversationHistory.push({ role: "user", content: msg.content });
+        }
+      } else if (msg.role === "ASSISTANT" && msg.modelResponses[0]?.content) {
+        conversationHistory.push({
+          role: "assistant",
+          content: msg.modelResponses[0].content,
+        });
+      }
+    }
+
+    // Add Persona
+    if (chat.assistantId) {
+      const chatAssistant = await prisma.assistant.findFirst({
+        where: { id: chat.assistantId, isActive: true, isDeleted: false },
+      });
+      if (chatAssistant) {
+        conversationHistory.unshift({
+          role: "system",
+          content: [
+            {
+              type: "text",
+              text: chatAssistant.systemPrompt,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+        });
+      }
+    }
+
+    // Now push the *partial* assistant message
+    const lastContent = modelResponse.content || "";
+    const isInCodeBlock = (lastContent.match(/```/g) || []).length % 2 !== 0;
+
+    conversationHistory.push({ role: "assistant", content: lastContent });
+
+    // Push the continue prompt with context-aware instruction
+    const continueInstruction = isInCodeBlock
+      ? "Continue the code block immediately. Do NOT start with triple backticks or the language name—you are already inside the block. Just resume the raw code character-by-character."
+      : "Continue your response exactly where you left off. Do not repeat previous text and do not add any introductory framing. Just seamless continuation.";
+
+    conversationHistory.push({ role: "user", content: continueInstruction });
+
+    const tokenLimits = await checkTokenLimitsAndSetupStream(
+      res,
+      wallet,
+      model,
+      conversationHistory,
+      chatId,
+      assistantMessage.id,
+      {
+        assistantMessageId: assistantMessage.id,
+        isContinue: true,
+      },
+      false, // typically disable follow up in continuous stream until it finishes
+    );
+    if (tokenLimits === null) return;
+    const { maxCompletionTokens, trimmedHistory } = tokenLimits;
+
+    let fullContent = "";
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let finishReason: string | null = null;
+
+    try {
+      const stream = await createOpenRouterStream({
+        model: model.externalId,
+        messages: trimmedHistory,
+        chatType: "STANDARD",
+        max_tokens: maxCompletionTokens,
+        plugins: attachmentPlugins.length > 0 ? attachmentPlugins : undefined,
+        signal: abortController.signal,
+      });
+
+      for await (const chunk of stream) {
+        let delta = chunk.choices?.[0]?.delta?.content || "";
+        if (delta) {
+          fullContent += delta;
+          res.write(
+            `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
+          );
+          if (typeof (res as any).flush === "function") {
+            (res as any).flush();
+          }
+        }
+        if (chunk.usage) {
+          promptTokens = chunk.usage.prompt_tokens || 0;
+          completionTokens = chunk.usage.completion_tokens || 0;
+        }
+        const fr =
+          chunk.choices?.[0]?.finish_reason ||
+          chunk.choices?.[0]?.message?.finish_reason;
+        if (fr) finishReason = fr;
+      }
+
+      if (isClientAborted()) {
+        throw new (Error as any)("Generation aborted by client", {
+          name: "AbortError",
+        });
+      }
+    } catch (aiError: any) {
+      // Stream failed but we might have partial content
+      if (fullContent.trim()) {
+        try {
+          await prisma.message.update({
+            where: { id: assistantMessage.id },
+            data: { content: assistantMessage.content + fullContent },
+          });
+          await prisma.modelResponse.update({
+            where: { id: modelResponse.id },
+            data: {
+              content: modelResponse.content + fullContent,
+              promptTokens: modelResponse.promptTokens + promptTokens,
+              completionTokens:
+                modelResponse.completionTokens + completionTokens,
+              totalTokens:
+                modelResponse.totalTokens + (promptTokens + completionTokens),
+            },
+          });
+        } catch (e) {}
+      }
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: aiError.message || "AI request failed" })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
+    const billableCompletionTokens = Math.ceil(
+      completionTokens * tokenMultiplier,
+    );
+
+    // Update the message by combining old text + new text
+    const newCombinedText = modelResponse.content + fullContent;
+
+    await prisma.$transaction(async (tx) => {
+      const adjusted = calculateAdjustedTokens(
+        wallet.tokensRemaining,
+        billablePromptTokens,
+        billableCompletionTokens,
+        tokenMultiplier,
+      );
+
+      await tx.message.update({
+        where: { id: assistantMessage.id },
+        data: { content: assistantMessage.content + fullContent },
+      });
+
+      await tx.modelResponse.update({
+        where: { id: modelResponse.id },
+        data: {
+          content: newCombinedText,
+          promptTokens: modelResponse.promptTokens + adjusted.finalRawPrompt,
+          completionTokens:
+            modelResponse.completionTokens + adjusted.finalRawCompletion,
+          totalTokens: modelResponse.totalTokens + adjusted.finalRawTotal,
+          finishReason,
+        },
+      });
+
+      if (adjusted.finalBillableTotal > 0) {
+        await tx.usageLog.create({
+          data: {
+            userId,
+            modelId,
+            chatId,
+            messageId: assistantMessage.id,
+            promptTokens: adjusted.finalRawPrompt,
+            completionTokens: adjusted.finalRawCompletion,
+            totalTokens: adjusted.finalRawTotal,
+            billablePromptTokens: adjusted.finalBillablePrompt,
+            billableCompletionTokens: adjusted.finalBillableCompletion,
+            billableTotalTokens: adjusted.finalBillableTotal,
+          },
+        });
+        const updatedWallet = await tx.userWallet.update({
+          where: { userId },
+          data: {
+            tokensRemaining: { decrement: adjusted.finalBillableTotal },
+            tokensUsed: { increment: adjusted.finalBillableTotal },
+          },
+        });
+        await createWalletTransaction(tx, {
+          userId,
+          walletId: updatedWallet.id,
+          amount: adjusted.finalBillableTotal,
+          type: "DEBIT",
+          referenceId: `msg_${assistantMessage.id}_continue_${Date.now()}`,
+          meta: {
+            reason: "CONTINUE_RESPONSE",
+            chatId,
+            messageId: assistantMessage.id,
+          },
+        });
+      }
+    });
+
+    res.write(
+      `data: ${JSON.stringify({ type: "done", promptTokens: 0, completionTokens, totalTokens: completionTokens, finishReason })}\n\n`,
+    );
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (error: any) {
+    if (!res.headersSent) {
+      res
+        .status(500)
+        .json({
+          status: false,
+          message: error.message || "Internal server error",
+        });
+    } else {
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+    }
   }
 }

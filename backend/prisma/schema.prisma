@@ -223,6 +223,7 @@ model ModelResponse {
   completionTokens Int            @default(0)
   totalTokens      Int            @default(0)
   status           ResponseStatus @default(PENDING)
+  finishReason     String?
   isLiked          Boolean?
   isStarred        Boolean        @default(false)
   chat             Chat           @relation(fields: [chatId], references: [id])

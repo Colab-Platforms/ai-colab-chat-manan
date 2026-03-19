@@ -22,6 +22,7 @@ interface ModelResponse {
   model: { id: number; name: string };
   isLiked?: boolean | null;
   isStarred?: boolean;
+  finishReason?: string | null;
 }
 
 function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
@@ -120,12 +121,13 @@ interface MessageBubbleProps {
   onFollowUpClick?: (question: string) => void;
   sharedView?: boolean;
   onToggleStar?: (responseId: number, isStarred: boolean) => void;
+  onContinue?: (messageId: number, modelId: number) => void;
 }
 
 export const MessageBubble = React.memo(function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
-  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar
+  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar, onContinue
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
@@ -433,6 +435,8 @@ export const MessageBubble = React.memo(function MessageBubble({
                 setVersionIndices(prev => { const n = { ...prev }; delete n[mid]; return n; });
                 onRegenerate?.(msgId, mid);
               }}
+              onContinue={onContinue}
+              isLastMessage={isLastMessage}
             />
           )}
         </div>
@@ -566,6 +570,8 @@ export const MessageBubble = React.memo(function MessageBubble({
                               setVersionIndices(prev => { const n = { ...prev }; delete n[mid]; return n; });
                               onRegenerate?.(msgId, mid);
                             }}
+                            onContinue={onContinue}
+                            isLastMessage={isLastMessage}
                           />
                         </div>
                       )}
@@ -639,7 +645,7 @@ export const MessageBubble = React.memo(function MessageBubble({
 
 // ── Shared action bar ────────────────────────────────────────────────────────
 function CardActions({
-  resp, modelId, messageId, modelResps, verIdx, onVersionChange, onFeedback, onRegenerate, sharedView = false, onToggleStar,
+  resp, modelId, messageId, modelResps, verIdx, onVersionChange, onFeedback, onRegenerate, sharedView = false, onToggleStar, onContinue, isLastMessage
 }: {
   resp: ModelResponse;
   modelId: number;
@@ -651,6 +657,8 @@ function CardActions({
   onRegenerate?: (messageId: number, modelId: number) => void;
   sharedView?: boolean;
   onToggleStar?: (responseId: number, isStarred: boolean) => void;
+  onContinue?: (messageId: number, modelId: number) => void;
+  isLastMessage?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 flex-wrap">
@@ -704,6 +712,17 @@ function CardActions({
         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted/80"
           onClick={() => onRegenerate?.(messageId, modelId)}>
           <RefreshCw className="w-3.5 h-3.5" />
+        </Button>
+      )}
+      {!sharedView && isLastMessage && (
+        resp.finishReason?.toLowerCase() === "length" || 
+        resp.finishReason?.toLowerCase() === "max_tokens" || 
+        (resp as any).finish_reason?.toLowerCase() === "length" || 
+        (resp as any).finish_reason?.toLowerCase() === "max_tokens"
+      ) && (
+        <Button variant="outline" size="sm" className="h-7 text-xs rounded-full ml-1"
+          onClick={() => onContinue?.(messageId, modelId)}>
+          Continue generating
         </Button>
       )}
     </div>
@@ -868,10 +887,20 @@ function TypingIndicator({ isImageMode }: { isImageMode?: boolean }) {
     );
   }
   return (
-    <div className="flex items-center gap-1 py-1">
-      {[0, 150, 300].map((delay) => (
-        <div key={delay} className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
-      ))}
+    <div className="flex items-center gap-1 py-2">
+      <div className="relative w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent w-full animate-[shimmer_1.4s_infinite]" 
+             style={{ 
+               backgroundSize: '200% 100%',
+               animation: 'shimmer 1.5s infinite linear'
+             }} />
+      </div>
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
     </div>
   );
 }

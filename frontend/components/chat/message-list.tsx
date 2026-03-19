@@ -32,6 +32,7 @@ interface MessageListProps {
   bottomAnchorId?: string;
   forceScrollToBottom?: boolean;
   scrollContainerId?: string;
+  onContinue?: (messageId: number, modelId: number) => void;
 }
 
 /**
@@ -129,7 +130,7 @@ function processMessagesWithVersions(
 export function MessageList({
   messages, activeModelTabs, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersionIndices = {}, onEditVersionChange, onFollowUpClick,
-  showSelectionTooltip = true, sharedView = false, onToggleStar, bottomAnchorId, forceScrollToBottom = false, scrollContainerId
+  showSelectionTooltip = true, sharedView = false, onToggleStar, bottomAnchorId, forceScrollToBottom = false, scrollContainerId, onContinue
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -173,6 +174,7 @@ export function MessageList({
               onFollowUpClick={onFollowUpClick}
               sharedView={sharedView}
               onToggleStar={onToggleStar}
+              onContinue={onContinue}
             />
           ))}
           <div id={bottomAnchorId} ref={bottomRef} />
