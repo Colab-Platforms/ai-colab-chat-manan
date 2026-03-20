@@ -1047,7 +1047,7 @@ export async function streamChat(req: Request, res: Response) {
         data: { content: fullContent },
       });
 
-      await tx.modelResponse.create({
+      const mr = await tx.modelResponse.create({
         data: {
           chatId,
           messageId: assistantMessage.id,
@@ -1061,6 +1061,10 @@ export async function streamChat(req: Request, res: Response) {
           completedAt: new Date(),
         },
       });
+
+      if (mr) {
+        (res as any).modelResponseId = mr.id;
+      }
 
       if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({
@@ -1104,7 +1108,7 @@ export async function streamChat(req: Request, res: Response) {
 
     // Send done signal with usage info
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", modelResponseId: (res as any).modelResponseId, promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -1244,7 +1248,7 @@ export async function regenerateChat(req: Request, res: Response) {
       conversationHistory,
       chatId,
       messageId,
-      { userMessageId: prevMessageId },
+      { userMessageId: prevMessageId, assistantMessageId: messageId },
       enableFollowUpQuestions,
     );
     if (tokenLimits === null) return;
@@ -1548,7 +1552,7 @@ export async function regenerateChat(req: Request, res: Response) {
       finalCompletion = adjusted.finalRawCompletion;
       finalTotal = adjusted.finalRawTotal;
 
-      await tx.modelResponse.create({
+      const mr = await tx.modelResponse.create({
         data: {
           chatId,
           messageId,
@@ -1562,6 +1566,10 @@ export async function regenerateChat(req: Request, res: Response) {
           completedAt: new Date(),
         },
       });
+
+      if (mr) {
+        (res as any).modelResponseId = mr.id;
+      }
 
       if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({
@@ -1600,7 +1608,7 @@ export async function regenerateChat(req: Request, res: Response) {
     });
 
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", modelResponseId: (res as any).modelResponseId, promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();
@@ -2080,7 +2088,7 @@ export async function editAndResend(req: Request, res: Response) {
         data: { content: fullContent },
       });
 
-      await tx.modelResponse.create({
+      const mr = await tx.modelResponse.create({
         data: {
           chatId,
           messageId: assistantMessage.id,
@@ -2094,6 +2102,10 @@ export async function editAndResend(req: Request, res: Response) {
           completedAt: new Date(),
         },
       });
+
+      if (mr) {
+        (res as any).modelResponseId = mr.id;
+      }
 
       if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({
@@ -2136,7 +2148,7 @@ export async function editAndResend(req: Request, res: Response) {
     });
 
     res.write(
-      `data: ${JSON.stringify({ type: "done", promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
+      `data: ${JSON.stringify({ type: "done", modelResponseId: (res as any).modelResponseId, promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
     res.write("data: [DONE]\n\n");
     res.end();

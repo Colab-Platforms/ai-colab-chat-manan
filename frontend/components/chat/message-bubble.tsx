@@ -164,6 +164,10 @@ export const MessageBubble = React.memo(function MessageBubble({
   const [isClosing, setIsClosing] = useState(false);
   const [editText, setEditText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const startEditing = () => {
     setEditText(message.content);
@@ -279,7 +283,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   // ── User message ─────────────────────────────────────────────────────────
   if (isUser) {
     return (
-      <div className={`px-4 py-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 sm:-mb-3 ${showEdit ? "flex" : "flex justify-end"}`}>
+      <div className={`px-4 py-3 ${!isMounted ? "animate-in fade-in-0 slide-in-from-bottom-2 duration-300" : ""} sm:-mb-3 ${showEdit ? "flex" : "flex justify-end"}`}>
         <div className={showEdit ? "w-full" : "max-w-[95%] sm:max-w-[85%]"}>
           <Attachments message={message} isUser={true} />
           {showEdit ? (
@@ -380,7 +384,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   // ── Assistant: single model ───────────────────────────────────────────────
   if (!isMultiModel) {
     return (
-      <div className="px-4 py-3 w-full animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+      <div className={`px-4 py-3 w-full ${!isMounted ? "animate-in fade-in-0 slide-in-from-bottom-2 duration-300" : ""}`}>
         <div className="w-full space-y-1.5 min-w-0">
           <div className="flex items-center gap-2">
             <Bot className="w-4 h-4 text-primary/70 flex-shrink-0" />
@@ -447,7 +451,7 @@ export const MessageBubble = React.memo(function MessageBubble({
 
   // ── Assistant: multi-model ───────────────────────────────────────────────
   return (
-    <div className="px-4 py-3 w-full animate-in fade-in-0 slide-in-from-bottom-2 duration-300 min-w-0">
+    <div className={`px-4 py-3 w-full ${!isMounted ? "animate-in fade-in-0 slide-in-from-bottom-2 duration-300" : ""} min-w-0`}>
       <div className="w-full space-y-2 min-w-0">
 
         {/* Tab bar — scrollable, click jumps to card */}
@@ -625,6 +629,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   if (pMsg.id !== nMsg.id) return false;
   if (pMsg.content !== nMsg.content) return false;
   if (pMsg.sourceChatId !== nMsg.sourceChatId) return false;
+  if (pMsg.chatType !== nMsg.chatType) return false;
   
   const pResps = pMsg.modelResponses || [];
   const nResps = nMsg.modelResponses || [];
@@ -632,7 +637,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   for (let i = 0; i < pResps.length; i++) {
     const pr = pResps[i];
     const nr = nResps[i];
-    if (pr.status !== nr.status || pr.content !== nr.content || pr.isLiked !== nr.isLiked || pr.isStarred !== nr.isStarred) {
+    if (pr.id !== nr.id || pr.status !== nr.status || pr.content !== nr.content || pr.isLiked !== nr.isLiked || pr.isStarred !== nr.isStarred) {
       return false;
     }
   }

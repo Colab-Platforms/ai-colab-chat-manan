@@ -98,7 +98,20 @@ export default function ChatPage() {
 
       setMessages((prev) => {
         if (isStreamingRef.current) return prev;
-        return chat.messages || [];
+        const incoming = chat.messages || [];
+        if (prev.length === 0) return incoming;
+
+        // Perform a safe merge: match messages by ID to preserve state
+        // This is key to avoiding the "sudden reload" feeling
+        return incoming.map((bm: Message) => {
+          const existing = prev.find((pm) => pm.id === bm.id);
+          if (existing) {
+            // Merge existing client-side state with backend data
+            // We prioritize backend data but keep our stable reference
+            return { ...existing, ...bm };
+          }
+          return bm;
+        });
       });
 
       const tabs: Record<number, number> = {};
@@ -110,6 +123,9 @@ export default function ChatPage() {
       
       setActiveModelTabs((prev) => {
         if (isStreamingRef.current) return prev;
+        // Check if deep equal to avoid re-renders
+        const changed = Object.keys(tabs).some(k => tabs[Number(k)] !== prev[Number(k)]);
+        if (!changed && Object.keys(tabs).length === Object.keys(prev).length) return prev;
         return tabs;
       });
 
@@ -245,6 +261,7 @@ export default function ChatPage() {
     assistantMessageId: number,
     attachmentIds?: number[],
     signal?: AbortSignal,
+    tempUserMsgId?: number,
   ) => {
     return fetch(`${apiUrl}/chats/${chatId}/send`, {
       method: "POST",
@@ -271,6 +288,7 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       let accumulated = "";
       let buffer = "";
+      let currentMsgId = streamingMsgId;
       if (reader) {
         let lastUpdate = Date.now();
         const THROTTLE_MS = 60;
@@ -287,14 +305,32 @@ export default function ChatPage() {
             if (data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === "token") {
+              if (parsed.type === "message_id") {
+                const { userMessageId: uId, assistantMessageId: aId } = parsed;
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    if (tempUserMsgId && msg.id === tempUserMsgId) return { ...msg, id: uId };
+                    if (msg.id === currentMsgId) return { ...msg, id: aId };
+                    return msg;
+                  })
+                );
+                setActiveModelTabs((prev) => {
+                  const next = { ...prev };
+                  if (next[currentMsgId]) {
+                    next[aId] = next[currentMsgId];
+                    delete next[currentMsgId];
+                  }
+                  return next;
+                });
+                currentMsgId = aId;
+              } else if (parsed.type === "token") {
                 accumulated += parsed.content;
                 const now = Date.now();
                 if (now - lastUpdate > THROTTLE_MS) {
                   lastUpdate = now;
                   setMessages((prev) =>
                     prev.map((msg) =>
-                      msg.id === streamingMsgId
+                      msg.id === currentMsgId
                         ? {
                             ...msg,
                             modelResponses: msg.modelResponses?.map((mr: any) =>
@@ -312,7 +348,7 @@ export default function ChatPage() {
                 accumulated = errorMessage;
                 setMessages((prev) =>
                   prev.map((msg) =>
-                    msg.id === streamingMsgId
+                    msg.id === currentMsgId
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
@@ -328,12 +364,19 @@ export default function ChatPage() {
               } else if (parsed.type === "done") {
                 setMessages((prev) =>
                   prev.map((msg) =>
-                    msg.id === streamingMsgId
+                    msg.id === currentMsgId
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
                             mr.model.id === mid
-                              ? { ...mr, content: accumulated, status: "COMPLETED", finishReason: parsed.finishReason }
+                              ? { 
+                                  ...mr, 
+                                  id: parsed.modelResponseId || mr.id,
+                                  content: accumulated, 
+                                  status: "COMPLETED", 
+                                  finishReason: parsed.finishReason,
+                                  tokensUsed: parsed.totalTokens,
+                                }
                               : mr
                           ),
                         }
@@ -398,7 +441,7 @@ export default function ChatPage() {
     try {
       if (targetModelIds.length === 1) {
         const controller = createStreamAbortController();
-        await streamSingleModel(targetModelIds[0], streamingMsgId, token, apiUrl, content, chatType, 0, 0, attachmentIds, controller.signal);
+        await streamSingleModel(targetModelIds[0], streamingMsgId, token, apiUrl, content, chatType, 0, 0, attachmentIds, controller.signal, tempUserMsgId);
       } else {
         const prepRes = await fetch(`${apiUrl}/chats/${chatId}/prepare-multi`, {
           method: "POST",
@@ -411,9 +454,27 @@ export default function ChatPage() {
         }
         const prepData = await prepRes.json();
         const { userMessageId, assistantMessageId } = prepData.data;
+        
+        // Update local state with real IDs immediately
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === tempUserMsgId) return { ...msg, id: userMessageId };
+            if (msg.id === streamingMsgId) return { ...msg, id: assistantMessageId };
+            return msg;
+          })
+        );
+        setActiveModelTabs((prev) => {
+          const next = { ...prev };
+          if (next[streamingMsgId]) {
+            next[assistantMessageId] = next[streamingMsgId];
+            delete next[streamingMsgId];
+          }
+          return next;
+        });
+
         const responses = await Promise.allSettled(
           targetModelIds.map((mid) =>
-            streamSingleModel(mid, streamingMsgId, token, apiUrl, content, chatType, userMessageId, assistantMessageId, attachmentIds, createStreamAbortController().signal)
+            streamSingleModel(mid, assistantMessageId, token, apiUrl, content, chatType, userMessageId, assistantMessageId, attachmentIds, createStreamAbortController().signal)
           )
         );
         responses.forEach((result, idx) => {
@@ -450,7 +511,7 @@ export default function ChatPage() {
         });
       }
       isStreamingRef.current = false;
-      await fetchChat();
+      fetchChat(); // Perform silent background sync
       window.dispatchEvent(new Event("refresh-chats"));
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
@@ -548,7 +609,24 @@ export default function ChatPage() {
             if (data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === "token") {
+              if (parsed.type === "message_id") {
+                // In regeneration, IDs should already be stable, but we sync just in case
+                const { userMessageId: uId, assistantMessageId: aId } = parsed;
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    if (msg.id === messageId) return { ...msg, id: aId };
+                    return msg;
+                  })
+                );
+                setActiveModelTabs((prev) => {
+                  const next = { ...prev };
+                  if (next[messageId]) {
+                    next[aId] = next[messageId];
+                    if (aId !== messageId) delete next[messageId];
+                  }
+                  return next;
+                });
+              } else if (parsed.type === "token") {
                 accumulated += parsed.content;
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -585,7 +663,16 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((mr: any) =>
-                            mr.id === streamingRespId ? { ...mr, content: accumulated, status: "COMPLETED", finishReason: parsed.finishReason } : mr
+                            mr.id === streamingRespId 
+                              ? { 
+                                  ...mr, 
+                                  id: parsed.modelResponseId || mr.id,
+                                  content: accumulated, 
+                                  status: "COMPLETED", 
+                                  finishReason: parsed.finishReason,
+                                  tokensUsed: parsed.totalTokens,
+                                } 
+                              : mr
                           ),
                         }
                       : msg
@@ -597,7 +684,7 @@ export default function ChatPage() {
         }
       }
       isStreamingRef.current = false;
-      await fetchChat();
+      fetchChat(); // Perform silent background sync
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
         setMessages((prev) => prev.map(msg => {
@@ -738,7 +825,7 @@ export default function ChatPage() {
       }));
       const responses = await Promise.allSettled(
         targetModelIds.map((mid) =>
-          streamSingleModel(mid, assistantMsgId, token, apiUrl, newContent, chatType, userMsgId, assistantMsgId, undefined, createStreamAbortController().signal)
+          streamSingleModel(mid, assistantMsgId, token, apiUrl, newContent, chatType, userMsgId, assistantMsgId, undefined, createStreamAbortController().signal, tempUserMsgId)
         )
       );
       responses.forEach((res, idx) => {
@@ -775,7 +862,7 @@ export default function ChatPage() {
         }
       });
       isStreamingRef.current = false;
-      await fetchChat();
+      fetchChat(); // Perform silent background sync
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
         isStreamingRef.current = false;
@@ -852,7 +939,23 @@ export default function ChatPage() {
             if (data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === "token") {
+              if (parsed.type === "message_id") {
+                const { userMessageId: uId, assistantMessageId: aId } = parsed;
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    if (msg.id === messageId) return { ...msg, id: aId };
+                    return msg;
+                  })
+                );
+                setActiveModelTabs((prev) => {
+                  const next = { ...prev };
+                  if (next[messageId]) {
+                    next[aId] = next[messageId];
+                    if (aId !== messageId) delete next[messageId];
+                  }
+                  return next;
+                });
+              } else if (parsed.type === "token") {
                 accumulated += parsed.content;
                 const now = Date.now();
                 if (now - lastUpdate > THROTTLE_MS) {
@@ -892,7 +995,15 @@ export default function ChatPage() {
                       ? {
                           ...msg,
                           modelResponses: msg.modelResponses?.map((r: any) =>
-                            r.model.id === modelId ? { ...r, content: existingContent + accumulated, status: "COMPLETED", finishReason: parsed.finishReason } : r
+                            r.model.id === modelId 
+                              ? { 
+                                  ...r, 
+                                  content: existingContent + accumulated, 
+                                  status: "COMPLETED", 
+                                  finishReason: parsed.finishReason,
+                                  tokensUsed: (r.tokensUsed || 0) + (parsed.completionTokens || 0),
+                                } 
+                              : r
                           ),
                         }
                       : msg
@@ -904,7 +1015,7 @@ export default function ChatPage() {
         }
       }
       isStreamingRef.current = false;
-      await fetchChat();
+      fetchChat(); // Perform silent background sync
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
         setMessages((prev) => prev.map(msg => {

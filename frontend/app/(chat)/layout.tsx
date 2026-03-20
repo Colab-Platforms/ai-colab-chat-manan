@@ -95,7 +95,14 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       const fetched = result?.data || [];
 
       setChats(prev => {
-        if (pageNum === 1) return fetched;
+        if (pageNum === 1) {
+          // Merge to keep existing objects where possible
+          return fetched.map((bc: any) => {
+            const existing = prev.find(pc => pc.id === bc.id);
+            if (existing) return { ...existing, ...bc };
+            return bc;
+          });
+        }
         const exists = new Set(prev.map((c: any) => c.id));
         return [...prev, ...fetched.filter((c: any) => !exists.has(c.id))];
       });
@@ -186,10 +193,12 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     const resolveActiveAssistant = async () => {
+      // Don't clear activeAssistantId immediately; wait until we're sure
       if (pathname === "/") {
         const raw = localStorage.getItem("selectedAssistantId");
         const parsed = raw ? Number(raw) : NaN;
-        setActiveAssistantId(Number.isNaN(parsed) ? null : parsed);
+        const newId = Number.isNaN(parsed) ? null : parsed;
+        setActiveAssistantId((prev) => (prev === newId ? prev : newId));
         return;
       }
 
@@ -197,26 +206,30 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         const match = pathname.match(/^\/c\/(\d+)/);
         const chatId = match ? Number(match[1]) : NaN;
         if (Number.isNaN(chatId)) {
-          setActiveAssistantId(null);
+          setActiveAssistantId((prev) => (prev === null ? prev : null));
           return;
         }
 
+        // Try sidebar list FIRST to avoid a redundant fetch
         const listChat = chats.find((c) => c.id === chatId);
         if (listChat) {
-          setActiveAssistantId(listChat.assistantId ?? null);
+          const newId = listChat.assistantId ?? null;
+          setActiveAssistantId((prev) => (prev === newId ? prev : newId));
           return;
         }
 
+        // Only fetch if NOT in sidebar or if we need a fresh check
         try {
           const res = await chatService.getById(chatId);
-          setActiveAssistantId(res.data.data?.assistantId ?? null);
+          const newId = res.data.data?.assistantId ?? null;
+          setActiveAssistantId((prev) => (prev === newId ? prev : newId));
         } catch {
-          setActiveAssistantId(null);
+          setActiveAssistantId((prev) => (prev === null ? prev : null));
         }
         return;
       }
 
-      setActiveAssistantId(null);
+      setActiveAssistantId((prev) => (prev === null ? prev : null));
     };
 
     resolveActiveAssistant();
