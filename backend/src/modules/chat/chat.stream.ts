@@ -98,6 +98,44 @@ async function urlToBase64DataUrl(
 }
 
 /**
+ * Helper to detect image markdown and convert back to multipart image parts.
+ * Useful for history building so models can see previous generated images.
+ * Fetches the URL and converts to base64 for reliability in OpenRouter calls.
+ */
+async function detectAndConvertImages(content: string): Promise<string | any[]> {
+  if (!content) return content;
+  const imageMarkdownRegex = /!\[[^\]]*]\((https?:\/\/[^\)]+)\)/g;
+  const matches = [...content.matchAll(imageMarkdownRegex)];
+  if (matches.length === 0) return content;
+
+  const parts: any[] = [];
+  let lastIndex = 0;
+  for (const match of matches) {
+    const textBefore = content.substring(lastIndex, match.index).trim();
+    if (textBefore) parts.push({ type: "text", text: textBefore });
+
+    const imageUrl = match[1];
+    try {
+      // Determine probable mime type from extension, or default to image/webp (common for Cloudinary)
+      let mime = "image/webp";
+      if (imageUrl.toLowerCase().endsWith(".png")) mime = "image/png";
+      else if (imageUrl.toLowerCase().endsWith(".jpg") || imageUrl.toLowerCase().endsWith(".jpeg")) mime = "image/jpeg";
+      
+      const dataUrl = await urlToBase64DataUrl(imageUrl, mime);
+      parts.push({ type: "image_url", image_url: { url: dataUrl } });
+    } catch (e) {
+      console.error("Failed to fetch image for history conversion:", imageUrl, e);
+      parts.push({ type: "image_url", image_url: { url: imageUrl } });
+    }
+    
+    lastIndex = match.index! + match[0].length;
+  }
+  const textAfter = content.substring(lastIndex).trim();
+  if (textAfter) parts.push({ type: "text", text: textAfter });
+  return parts;
+}
+
+/**
  * Build the OpenRouter content-parts array for a user message that has attachments.
  * Returns:
  *   - contentParts  : array to use as message.content
@@ -212,7 +250,12 @@ async function buildAttachmentContentParts(
 
   // Text part always comes first so the model reads the user's question before files
   const finalText = textContent + extraText;
-  parts.unshift({ type: "text", text: finalText });
+  const processedText = await detectAndConvertImages(finalText);
+  if (Array.isArray(processedText)) {
+    parts.unshift(...processedText);
+  } else {
+    parts.unshift({ type: "text", text: processedText });
+  }
 
   return { contentParts: parts, extraPlugins };
 }
@@ -565,6 +608,7 @@ export async function streamChat(req: Request, res: Response) {
           take: 1,
           orderBy: { createdAt: "desc" },
         },
+        attachments: true,
       },
     });
 
@@ -574,11 +618,25 @@ export async function streamChat(req: Request, res: Response) {
     }[] = [];
     for (const msg of previousMessages) {
       if (msg.role === "USER") {
-        conversationHistory.push({ role: "user", content: msg.content });
+        if ((msg as any).attachments && (msg as any).attachments.length > 0) {
+          const { contentParts } = await buildAttachmentContentParts(
+            msg.content,
+            (msg as any).attachments,
+          );
+          conversationHistory.push({ role: "user", content: contentParts });
+        } else {
+          conversationHistory.push({ role: "user", content: msg.content });
+        }
       } else if (msg.role === "ASSISTANT" && msg.modelResponses[0]?.content) {
+        let assistantContent: string | any[] = msg.modelResponses[0].content;
+        // If image generation was used, ensure images are sent back as multipart parts
+        // so the model can see them in context and follow up/modify them.
+        if (chatType === "IMAGE_GENERATION") {
+          assistantContent = await detectAndConvertImages(assistantContent);
+        }
         conversationHistory.push({
           role: "assistant",
-          content: msg.modelResponses[0].content,
+          content: assistantContent,
         });
       }
     }
@@ -670,16 +728,73 @@ export async function streamChat(req: Request, res: Response) {
       }
     }
 
-    // If no attachments were pushed above, push the plain text version
+    // If no attachments were pushed above, push the plain (or multipart if URLs detected) version
     if (attachmentPlugins.length === 0 && (attachmentIds?.length ?? 0) === 0) {
-      conversationHistory.push({ role: "user", content: content.trim() });
+      const userContent =
+        chatType === "IMAGE_GENERATION"
+          ? await detectAndConvertImages(content.trim())
+          : content.trim();
+      conversationHistory.push({ role: "user", content: userContent });
     } else if (
       attachmentPlugins.length === 0 &&
       (attachmentIds?.length ?? 0) > 0
     ) {
-      // Attachments array was provided but all records were missing — fall back to text
-      conversationHistory.push({ role: "user", content: content.trim() });
+      // Attachments array was provided but all records were missing — fall back to text/URL detection
+      const userContent =
+        chatType === "IMAGE_GENERATION"
+          ? await detectAndConvertImages(content.trim())
+          : content.trim();
+      conversationHistory.push({ role: "user", content: userContent });
     }
+
+    // --- IMAGE GENERATION ITERATION FIX ---
+    // If we're in IMAGE_GENERATION mode, and the current user prompt doesn't have an image,
+    // we should automatically "re-attach" the last generated image from the assistant.
+    // This allows the model to see the subject it's supposed to be modifying.
+    if (chatType === "IMAGE_GENERATION") {
+      const currentTurn = conversationHistory[conversationHistory.length - 1];
+      if (currentTurn && currentTurn.role === "user") {
+        const hasImage =
+          Array.isArray(currentTurn.content) &&
+          currentTurn.content.some((p: any) => p.type === "image_url");
+
+        if (!hasImage) {
+          // Look for the last assistant image in history
+          const lastImageMsg = [...conversationHistory]
+            .reverse()
+            .find(
+              (m) =>
+                m.role === "assistant" &&
+                Array.isArray(m.content) &&
+                m.content.some((p: any) => p.type === "image_url"),
+            );
+
+          if (lastImageMsg && Array.isArray(lastImageMsg.content)) {
+            const imagePart = lastImageMsg.content.find(
+              (p: any) => p.type === "image_url",
+            );
+            if (imagePart) {
+              if (typeof currentTurn.content === "string") {
+                currentTurn.content = [
+                  { type: "text", text: currentTurn.content || content.trim() },
+                  imagePart,
+                ];
+              } else if (Array.isArray(currentTurn.content)) {
+                // Ensure text part is present
+                if (!currentTurn.content.some((p: any) => p.type === "text")) {
+                  currentTurn.content.unshift({
+                    type: "text",
+                    text: content.trim(),
+                  });
+                }
+                currentTurn.content.push(imagePart);
+              }
+            }
+          }
+        }
+      }
+    }
+    // ---------------------------------------
 
     const tokenLimits = await checkTokenLimitsAndSetupStream(
       res,
@@ -1180,6 +1295,7 @@ export async function regenerateChat(req: Request, res: Response) {
           take: 1,
           orderBy: { createdAt: "desc" },
         },
+        attachments: true,
       },
     });
 
@@ -1194,15 +1310,27 @@ export async function regenerateChat(req: Request, res: Response) {
     const previousMessages = allMessages.slice(0, targetIndex);
     const conversationHistory: {
       role: "user" | "assistant" | "system";
-      content: string;
+      content: string | any[];
     }[] = [];
     for (const msg of previousMessages) {
       if (msg.role === "USER") {
-        conversationHistory.push({ role: "user", content: msg.content });
+        if (msg.attachments && msg.attachments.length > 0) {
+          const { contentParts } = await buildAttachmentContentParts(
+            msg.content,
+            msg.attachments,
+          );
+          conversationHistory.push({ role: "user", content: contentParts });
+        } else {
+          conversationHistory.push({ role: "user", content: msg.content });
+        }
       } else if (msg.role === "ASSISTANT" && msg.modelResponses[0]?.content) {
+        let assistantContent: string | any[] = msg.modelResponses[0].content;
+        if (chatType === "IMAGE_GENERATION") {
+          assistantContent = await detectAndConvertImages(assistantContent);
+        }
         conversationHistory.push({
           role: "assistant",
-          content: msg.modelResponses[0].content,
+          content: assistantContent,
         });
       }
     }
@@ -1238,6 +1366,45 @@ export async function regenerateChat(req: Request, res: Response) {
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({ role: "system", content: systemContent });
     }
+
+    // --- IMAGE GENERATION ITERATION FIX ---
+    if (chatType === "IMAGE_GENERATION") {
+      const currentTurn = conversationHistory[conversationHistory.length - 1];
+      if (currentTurn && currentTurn.role === "user") {
+        const hasImage =
+          Array.isArray(currentTurn.content) &&
+          currentTurn.content.some((p: any) => p.type === "image_url");
+
+        if (!hasImage) {
+          // Look for the last assistant image in history
+          const lastImageMsg = [...conversationHistory]
+            .reverse()
+            .find(
+              (m) =>
+                m.role === "assistant" &&
+                Array.isArray(m.content) &&
+                m.content.some((p: any) => p.type === "image_url"),
+            );
+
+          if (lastImageMsg && Array.isArray(lastImageMsg.content)) {
+            const imagePart = lastImageMsg.content.find(
+              (p: any) => p.type === "image_url",
+            );
+            if (imagePart) {
+              if (typeof currentTurn.content === "string") {
+                currentTurn.content = [
+                  { type: "text", text: currentTurn.content },
+                  imagePart,
+                ];
+              } else if (Array.isArray(currentTurn.content)) {
+                currentTurn.content.push(imagePart);
+              }
+            }
+          }
+        }
+      }
+    }
+    // ---------------------------------------
 
     const prevMessageId =
       previousMessages[previousMessages.length - 1]?.id || 0;
@@ -2370,22 +2537,25 @@ export async function continueChatStream(req: Request, res: Response) {
     for (let i = 0; i < previousMessages.length; i++) {
       const msg = previousMessages[i];
       if (msg.role === "USER") {
-        if (
-          i === previousMessages.length - 1 &&
-          msg.attachments &&
-          msg.attachments.length > 0
-        ) {
+        if (msg.attachments && msg.attachments.length > 0) {
           const { contentParts, extraPlugins } =
-            await buildAttachmentContentParts(msg.content, msg.attachments);
+            await buildAttachmentContentParts(msg.content, msg.attachments as any);
           conversationHistory.push({ role: "user", content: contentParts });
-          attachmentPlugins = extraPlugins;
+          if (i === previousMessages.length - 1) {
+            attachmentPlugins = extraPlugins;
+          }
         } else {
           conversationHistory.push({ role: "user", content: msg.content });
         }
       } else if (msg.role === "ASSISTANT" && msg.modelResponses[0]?.content) {
+        let assistantContent: string | any[] = msg.modelResponses[0].content;
+        // Also support images in assistant responses for continuation context
+        if (chat.capability === "IMAGE_GENERATION") {
+          assistantContent = await detectAndConvertImages(assistantContent);
+        }
         conversationHistory.push({
           role: "assistant",
-          content: msg.modelResponses[0].content,
+          content: assistantContent,
         });
       }
     }
