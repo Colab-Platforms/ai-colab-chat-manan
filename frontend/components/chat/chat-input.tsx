@@ -303,29 +303,30 @@ export function ChatInput({
       onCapabilityChange(type);
     }
 
-    // Only keep models that support the new type
+    // Identify models that support the new capability
     const validModels = models.filter(m => {
-      // If no capabilities defined, default to only supporting STANDARD
       if (!m.capabilities || m.capabilities.length === 0) return type === "STANDARD";
       return m.capabilities.includes(type);
     });
 
-    // Strategy: 
-    // 1. If currently selected models support the new capability, stay on them.
-    // 2. If not, try to pick the default model for this new capability.
-    // 3. If no default, pick the first valid model.
+    // Check currently selected models for compatibility
+    const compatibleSelected = selectedModels.filter(id => validModels.some(vm => vm.id === id));
+    
+    // For specialized modes, we generally want exactly one model selected
+    const isSpecialized = type !== "STANDARD";
+    const forceSingleModel = isSpecialized;
 
-    const allCurrentModelsCompatible = selectedModels.length > 0 && 
-                                       selectedModels.every(id => validModels.some(vm => vm.id === id));
-
-    if (!allCurrentModelsCompatible) {
-      // Must switch model as at least one selected model is incompatible
-      const defaultForType = validModels.filter(m => m.defaultForCapabilities?.includes(type));
-      if (defaultForType.length > 0) {
-        onModelChange(defaultForType.map(m => m.id));
+    if (compatibleSelected.length === 0 || (forceSingleModel && compatibleSelected.length > 1)) {
+      // Switch to the best single default model for this capability
+      const defaultForType = validModels.find(m => m.defaultForCapabilities?.includes(type));
+      if (defaultForType) {
+        onModelChange([defaultForType.id]);
       } else if (validModels.length > 0) {
         onModelChange([validModels[0].id]);
       }
+    } else if (compatibleSelected.length !== selectedModels.length) {
+      // Reduce selected list to only current compatible models
+      onModelChange(compatibleSelected);
     }
   };
 
@@ -333,15 +334,22 @@ export function ChatInput({
     applyChatType(type, true);
   };
 
+  // Auto-capability detection disabled as per user request to use manual selection.
+  // Predictability is prioritized over automation.
+  /*
   useEffect(() => {
     const trimmed = content.trim();
     if (!trimmed) return;
+
+    if (!isNewChat) return;
+
     const inferredType = inferChatTypeFromPrompt(trimmed);
     
     if (inferredType !== chatType) {
       applyChatType(inferredType, false);
     }
-  }, [content, chatType]);
+  }, [content, chatType, isNewChat]);
+  */
 
   // Automatically enforce VISION capability if image files are attached
   useEffect(() => {
@@ -436,8 +444,9 @@ export function ChatInput({
       .filter(a => !a.uploading)
       .map(a => a.id);
     
-    // Final check for capability before sending to catch any race conditions
+    // Auto-capability detection disabled as per user request to be fully manual.
     let outgoingChatType = chatType;
+    /*
     if (chatType === "STANDARD") {
       const inferred = inferChatTypeFromPrompt(content.trim());
       if (inferred !== "STANDARD") {
@@ -446,6 +455,7 @@ export function ChatInput({
         applyChatType(inferred, false);
       }
     }
+    */
     
     onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, outgoingChatType, attachments.filter(a => !a.uploading));
     setContent("");
