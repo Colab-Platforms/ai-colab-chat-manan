@@ -16,7 +16,7 @@ interface Model {
   defaultForCapabilities?: string[];
 }
 
-export default function NewChatPage() {
+export function NewChatPage() {
   const router = useRouter();
 
   const [models, setModels] = useState<Model[]>([]);
@@ -165,8 +165,8 @@ export default function NewChatPage() {
                   className="px-4 py-2 text-sm bg-background/80 hover:bg-background/90 rounded-xl transition-colors text-muted-foreground hover:text-foreground border border-border/40 shadow-sm"
                 >
                   {(() => {
-                    const TopIcon = activePrompts[0].icon;
-                    return <TopIcon className={activePrompts[0].className} />;
+                     const TopIcon = activePrompts[0].icon;
+                     return <TopIcon className={activePrompts[0].className} />;
                   })()}
                   {activePrompts[0].text}
                 </button>

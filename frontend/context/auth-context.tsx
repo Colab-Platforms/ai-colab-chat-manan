@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import api from "@/lib/api";
 
 interface User {
@@ -49,7 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!storedToken) return null;
     return storedToken;
   });
-  const isLoading = false;
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
 
   const saveAuth = (userData: User, tokenData: string) => {
     setUser(userData);

@@ -25,8 +25,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "AI Colab Chat",
-  description: "AI-powered multi-model chat platform",
+  title: 'ColabPlatforms AI - Multi-Model LLM Chat Platform | Gemini, Claude, Perplexity',
+ description: 'Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more. Experience the future of AI conversation with our multichat interface.',
+  keywords: 'AI, ColabPlatforms, LLM, models, Multichat, chatbot, colab, gemini, claude, perplexity, artificial intelligence, machine learning, natural language processing, AI chat, multi-model AI, conversational AI, AI platform',
+  authors: [{ name: 'ColabPlatforms' }],
+  creator: 'ColabPlatforms',
+  publisher: 'ColabPlatforms',
+  robots: 'index, follow',
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -36,6 +41,27 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
   icons: {
     icon: "/icons/icon.svg",
+  },
+  openGraph: {
+    title: 'ColabPlatforms AI - Multi-Model LLM Chat Platform',
+    description: 'Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more.',
+    url: 'https://chat.colabplatforms.ai',
+    siteName: 'ColabPlatforms AI',
+    type: 'website',
+    images: [
+      {
+        url: 'https://cdn.shopify.com/s/files/1/0636/5226/6115/files/CP_white_logo_new.png?v=1762234933',
+        width: 1200,
+        height: 630,
+        alt: 'ColabPlatforms AI - Multi-Model LLM Chat Platform',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ColabPlatforms AI - Multi-Model LLM Chat Platform',
+    description: 'Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously.',
+    images: ['https://cdn.shopify.com/s/files/1/0636/5226/6115/files/CP_white_logo_new.png?v=1762234933'],
   },
 };
 
@@ -59,7 +85,7 @@ export default function RootLayout({
           style={{ zIndex: 99999 }}
         />
         <ThemeProvider>
-          <AuthProvider>
+          <AuthProvider>  
             {children}
             <PwaInstallPrompt />
           </AuthProvider>
