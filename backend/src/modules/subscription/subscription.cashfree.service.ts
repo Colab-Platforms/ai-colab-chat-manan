@@ -537,8 +537,9 @@ class SubscriptionCashfreeService {
       return;
     }
 
+    const planId = getCashfreePlanId(plan, billingCycle);
     const payload = {
-      plan_id: getCashfreePlanId(plan, billingCycle),
+      plan_id: planId,
       plan_name: `${plan.name}_${billingCycle}`.slice(0, 40),
       plan_type: "PERIODIC",
       plan_currency: "INR",
@@ -552,22 +553,52 @@ class SubscriptionCashfreeService {
 
     const response = await fetch(`${this.pgBaseUrl}/plans`, {
       method: "POST",
-      headers: this.getHeaders(),
+      headers: {
+        ...this.getHeaders(),
+        "x-idempotency-key": crypto.randomUUID(),
+      },
       body: JSON.stringify(payload),
     });
 
     if (response.ok) return;
 
+    const bodyText = await response.text().catch(() => "");
+
     // Treat duplicate plan-id as success (idempotent sync).
     if (response.status === 409 || response.status === 422 || response.status === 400) {
-      const bodyText = await response.text().catch(() => "");
       const lower = bodyText.toLowerCase();
       if (lower.includes("already") || lower.includes("exists") || lower.includes("duplicate")) {
         return;
       }
     }
 
-    const bodyText = await response.text().catch(() => "");
+    // Cashfree may occasionally return transient 5xx for create while persisting the plan.
+    // Verify by fetching the plan; if found, treat as success.
+    if (response.status >= 500) {
+      try {
+        const verifyResponse = await fetch(
+          `${this.pgBaseUrl}/plans/${encodeURIComponent(planId)}`,
+          {
+            method: "GET",
+            headers: this.getHeaders(),
+          },
+        );
+        if (verifyResponse.ok) {
+          this.debugLog("syncPlan recovered after create 5xx; plan exists", {
+            planId,
+            billingCycle,
+            createStatus: response.status,
+          });
+          return;
+        }
+      } catch (verifyError: any) {
+        this.debugLog("syncPlan verify existing plan failed", {
+          planId,
+          message: verifyError?.message ?? String(verifyError),
+        });
+      }
+    }
+
     throw new ApiError(
       `Cashfree plan sync failed: ${response.status}${bodyText ? ` - ${bodyText.slice(0, 300)}` : ""}`,
       STATUS_CODES.SERVER_ERROR,

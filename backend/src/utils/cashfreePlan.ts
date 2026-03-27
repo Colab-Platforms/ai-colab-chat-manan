@@ -15,6 +15,10 @@ export function toPaise(amount: unknown): number {
   return Math.round(Number(amount) * 100);
 }
 
+function normalizeInrAmount(amount: unknown): number {
+  return Number(Number(amount).toFixed(2));
+}
+
 function getCycleAmount(plan: CashfreePlanSource, billingCycle: BillingCycle): unknown {
   switch (billingCycle) {
     case "MONTHLY":
@@ -39,7 +43,9 @@ export function getCashfreePlanRecurringAmountPaise(
   plan: CashfreePlanSource,
   billingCycle: BillingCycle,
 ): number {
-  return toPaise(getCycleAmount(plan, billingCycle));
+  // NOTE: despite historical name, Cashfree PG plan APIs expect INR amount units
+  // (same as subscription create payload), not paise.
+  return normalizeInrAmount(getCycleAmount(plan, billingCycle));
 }
 
 export function getCashfreePlanIntervalType(
