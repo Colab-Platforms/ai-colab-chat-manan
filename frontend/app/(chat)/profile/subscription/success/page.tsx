@@ -8,20 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { subscriptionService } from "@/lib/services";
 
-const leftConfetti = Array.from({ length: 14 }, (_, i) => ({
-  id: i,
-  left: 6 + i * 3.4,
-  delay: (i % 6) * 0.18,
-  duration: 2.2 + (i % 4) * 0.3,
-}));
-
-const rightConfetti = Array.from({ length: 14 }, (_, i) => ({
-  id: i,
-  right: 6 + i * 3.4,
-  delay: (i % 6) * 0.2,
-  duration: 2.1 + (i % 5) * 0.25,
-}));
-
 export default function SubscriptionSuccessPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -79,6 +65,66 @@ export default function SubscriptionSuccessPage() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!isFlowAllowed || !isActive) return;
+
+    let cancelled = false;
+    let animationFrame = 0;
+    let lastBurstAt = 0;
+
+    const fireFromBottomSides = async () => {
+      const confetti = (await import("canvas-confetti")).default;
+      const duration = 3500;
+      const animationEnd = Date.now() + duration;
+
+      const defaults = {
+        startVelocity: 38,
+        spread: 65,
+        ticks: 140,
+        zIndex: 50,
+        disableForReducedMotion: true,
+      };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const launch = () => {
+        confetti({
+          ...defaults,
+          particleCount: 22,
+          angle: randomInRange(55, 75),
+          origin: { x: 0.08, y: 0.98 },
+        });
+        confetti({
+          ...defaults,
+          particleCount: 22,
+          angle: randomInRange(105, 125),
+          origin: { x: 0.92, y: 0.98 },
+        });
+      };
+
+      const frame = () => {
+        if (cancelled) return;
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) return;
+        if (Date.now() - lastBurstAt > 180) {
+          launch();
+          lastBurstAt = Date.now();
+        }
+        animationFrame = window.requestAnimationFrame(frame);
+      };
+
+      launch();
+      animationFrame = window.requestAnimationFrame(frame);
+    };
+
+    void fireFromBottomSides();
+
+    return () => {
+      cancelled = true;
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    };
+  }, [isFlowAllowed, isActive]);
+
   if (!isFlowAllowed) {
     return null;
   }
@@ -113,33 +159,6 @@ export default function SubscriptionSuccessPage() {
 
   return (
     <div className="relative overflow-hidden rounded-xl min-h-[70vh] flex items-center justify-center p-4">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-0 bottom-0 w-56 h-56">
-          {leftConfetti.map((item) => (
-            <span
-              key={`l-${item.id}`}
-              className="absolute bottom-0 block h-2.5 w-2.5 rounded-sm bg-primary/80"
-              style={{
-                left: `${item.left}%`,
-                animation: `confetti-left ${item.duration}s ease-out ${item.delay}s infinite`,
-              }}
-            />
-          ))}
-        </div>
-        <div className="absolute right-0 bottom-0 w-56 h-56">
-          {rightConfetti.map((item) => (
-            <span
-              key={`r-${item.id}`}
-              className="absolute bottom-0 block h-2.5 w-2.5 rounded-sm bg-emerald-400/80"
-              style={{
-                right: `${item.right}%`,
-                animation: `confetti-right ${item.duration}s ease-out ${item.delay}s infinite`,
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
       <Card className="w-full max-w-xl border-border/40 bg-card/90 backdrop-blur-sm">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15">
@@ -159,35 +178,6 @@ export default function SubscriptionSuccessPage() {
           </Button>
         </CardContent>
       </Card>
-
-      <style jsx>{`
-        @keyframes confetti-left {
-          0% {
-            transform: translate(0, 0) rotate(0deg);
-            opacity: 0;
-          }
-          12% {
-            opacity: 1;
-          }
-          100% {
-            transform: translate(80px, -220px) rotate(480deg);
-            opacity: 0;
-          }
-        }
-        @keyframes confetti-right {
-          0% {
-            transform: translate(0, 0) rotate(0deg);
-            opacity: 0;
-          }
-          12% {
-            opacity: 1;
-          }
-          100% {
-            transform: translate(-80px, -220px) rotate(-480deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 }

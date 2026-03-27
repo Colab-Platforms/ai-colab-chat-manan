@@ -11,6 +11,7 @@
   "dependencies": {
     "@types/react-syntax-highlighter": "^15.5.13",
     "axios": "^1.13.5",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/dom-speech-recognition": "^0.0.7",
     "@types/node": "^20",
     "@types/react": "^19",
