@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
-import { Pool } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -14,7 +13,7 @@ const poolConnectionTimeoutMs = Number(
   process.env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,
 );
 
-const pool = new Pool({
+const adapter = new PrismaPg({
   connectionString: databaseUrl,
   max: Number.isFinite(poolMax) ? poolMax : 20,
   idleTimeoutMillis: Number.isFinite(poolIdleTimeoutMs)
@@ -24,8 +23,6 @@ const pool = new Pool({
     ? poolConnectionTimeoutMs
     : 10_000,
 });
-
-const adapter = new PrismaPg(pool);
 
 if (
   process.env.NODE_ENV === "production" &&
