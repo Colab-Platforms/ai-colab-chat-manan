@@ -9,7 +9,45 @@ import { CashfreePlanSource } from "@/utils/cashfreePlan.js";
 
 class SubscriptionService {
     private cashfreeService = new SubscriptionCashfreeService();
-    private static readonly PENDING_AUTH_WINDOW_MINUTES = 30;
+    private static readonly PENDING_AUTH_WINDOW_MINUTES = Number(process.env.SUBSCRIPTION_PENDING_AUTH_WINDOW_MINUTES ?? 15);
+
+    private getPendingExpiry(createdAt: Date): Date {
+        return dayjs(createdAt)
+            .add(SubscriptionService.PENDING_AUTH_WINDOW_MINUTES, "minute")
+            .toDate();
+    }
+
+    private async expirePendingSubscriptionIfNeeded(subscription: {
+        id: number;
+        createdAt: Date;
+        cashfreeSubscriptionId: string | null;
+    }): Promise<boolean> {
+        const now = new Date();
+        const pendingExpiry = this.getPendingExpiry(subscription.createdAt);
+        const isExpired = now > pendingExpiry;
+        if (!isExpired) return false;
+
+        if (subscription.cashfreeSubscriptionId) {
+            try {
+                await this.cashfreeService.cancelSubscription(subscription.cashfreeSubscriptionId);
+            } catch (cancelError: any) {
+                console.warn(
+                    "Cashfree pending subscription cancel warning:",
+                    cancelError?.message ?? cancelError,
+                );
+            }
+        }
+
+        await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: {
+                status: "CANCELLED",
+                autoRenew: false,
+                expiresAt: now,
+            },
+        });
+        return true;
+    }
 
     async create(userId: number, data: CreateSubscriptionBody) {
         const now = new Date();
@@ -45,9 +83,7 @@ class SubscriptionService {
             const isSamePlan = existingSub.planId === plan.id;
 
             if (existingSub.status === "PENDING") {
-                const pendingExpiry = dayjs(existingSub.createdAt)
-                    .add(SubscriptionService.PENDING_AUTH_WINDOW_MINUTES, "minute")
-                    .toDate();
+                const pendingExpiry = this.getPendingExpiry(existingSub.createdAt);
                 const isExpired = now > pendingExpiry;
 
                 if (!isExpired && !data.forceRetry) {
@@ -232,6 +268,13 @@ class SubscriptionService {
             include: { plan: true },
             orderBy: { createdAt: "desc" },
         });
+        let activePendingSubscription = pendingSubscription;
+        if (activePendingSubscription) {
+            const expired = await this.expirePendingSubscriptionIfNeeded(activePendingSubscription);
+            if (expired) {
+                activePendingSubscription = null;
+            }
+        }
 
         const freePlanTaken = !!(await prisma.subscription.findFirst({
             where: {
@@ -248,24 +291,22 @@ class SubscriptionService {
         }));
 
         const pendingExpiresAt =
-            pendingSubscription
-                ? dayjs(pendingSubscription.createdAt)
-                    .add(SubscriptionService.PENDING_AUTH_WINDOW_MINUTES, "minute")
-                    .toDate()
+            activePendingSubscription
+                ? this.getPendingExpiry(activePendingSubscription.createdAt)
                 : null;
 
         const pendingAuthLink =
-            pendingSubscription?.cashfreeSubscriptionId
-                ? await this.cashfreeService.getSubscriptionAuthLink(pendingSubscription.cashfreeSubscriptionId)
+            activePendingSubscription?.cashfreeSubscriptionId
+                ? await this.cashfreeService.getSubscriptionAuthLink(activePendingSubscription.cashfreeSubscriptionId)
                 : null;
         const pendingSubscriptionSessionId =
-            pendingSubscription?.cashfreeSubscriptionId
-                ? await this.cashfreeService.getSubscriptionSessionId(pendingSubscription.cashfreeSubscriptionId)
+            activePendingSubscription?.cashfreeSubscriptionId
+                ? await this.cashfreeService.getSubscriptionSessionId(activePendingSubscription.cashfreeSubscriptionId)
                 : null;
 
         return {
             subscription: currentSubscription ?? null,
-            pendingSubscription: pendingSubscription ?? null,
+            pendingSubscription: activePendingSubscription ?? null,
             freePlanTaken,
             pendingExpiresAt,
             pendingAuthLink,

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
 import dayjs from "dayjs";
 import prisma from "@root/prisma.js";
 import { createWalletTransaction } from "@/utils/walletUtils.js";
@@ -30,8 +31,13 @@ function getWebhookPaymentId(data: any) {
   return (
     data?.cf_payment_id ??
     data?.payment_id ??
+    data?.payment?.cf_payment_id ??
+    data?.payment?.payment_id ??
+    data?.payment_details?.cf_payment_id ??
+    data?.payment_details?.payment_id ??
     data?.cf_txn_id ??
-    data?.authorization_details?.paymentId
+    data?.authorization_details?.paymentId ??
+    data?.authorization_details?.payment_id
   );
 }
 
@@ -67,59 +73,11 @@ export async function cashfreeWebhook(req: Request, res: Response) {
   if (eventType === "SUBSCRIPTION_STATUS_CHANGE") {
     const status = payloadData?.subscription_details?.subscription_status;
 
+    // Keep subscription in PENDING on mandate activation.
+    // We only activate and credit wallet on actual recurring debit
+    // (handled via SUBSCRIPTION_PAYMENT_SUCCESS below).
     if (status === "ACTIVE") {
-      await prisma.$transaction(async (tx) => {
-        await tx.subscription.updateMany({
-          where: {
-            userId: subscription.userId,
-            id: { not: subscription.id },
-            status: "ACTIVE",
-          },
-          data: {
-            status: "CANCELLED",
-            autoRenew: false,
-            expiresAt: now,
-          },
-        });
-
-        const updated = await tx.subscription.updateMany({
-          where: { id: subscription.id, status: { not: "ACTIVE" } },
-          data: {
-            status: "ACTIVE",
-            currentPeriodStart: now,
-            currentPeriodEnd: nextPeriodEnd,
-            nextBillingDate: nextPeriodEnd,
-          },
-        });
-
-        if (updated.count > 0) {
-          const wallet = await tx.userWallet.upsert({
-            where: { userId: subscription.userId },
-            create: {
-              userId: subscription.userId,
-              tokensRemaining: tokenLimit,
-              tokensUsed: 0,
-              currentPeriodStart: now,
-              currentPeriodEnd: nextPeriodEnd,
-            },
-            update: {
-              tokensRemaining: tokenLimit,
-              tokensUsed: 0,
-              currentPeriodStart: now,
-              currentPeriodEnd: nextPeriodEnd,
-            },
-          });
-
-          await createWalletTransaction(tx, {
-            userId: subscription.userId,
-            walletId: wallet.id,
-            amount: tokenLimit,
-            type: "CREDIT",
-            referenceId: "subscription_activation",
-            meta: { reason: "SUBSCRIPTION_ACTIVE" },
-          });
-        }
-      });
+      return res.status(200).json({ status: true, message: "Processed" });
     } else if (status === "CUSTOMER_CANCELLED") {
       await prisma.subscription.update({
         where: { id: subscription.id },
@@ -131,7 +89,19 @@ export async function cashfreeWebhook(req: Request, res: Response) {
   }
 
   if (eventType === "SUBSCRIPTION_PAYMENT_SUCCESS") {
-    const paymentId = getWebhookPaymentId(payloadData);
+    const paymentId =
+      getWebhookPaymentId(payloadData) ??
+      `fallback_${crypto
+        .createHash("sha256")
+        .update(
+          JSON.stringify({
+            t: req.headers["x-webhook-timestamp"] ?? "",
+            sid: subscriptionId,
+            payload: payloadData ?? null,
+          }),
+        )
+        .digest("hex")
+        .slice(0, 32)}`;
 
     await prisma.$transaction(async (tx) => {
       await tx.subscription.updateMany({

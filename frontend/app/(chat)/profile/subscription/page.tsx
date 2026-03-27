@@ -15,9 +15,12 @@ export default function SubscriptionPage() {
   const [pendingExpiresAt, setPendingExpiresAt] = useState<string | null>(null);
   const [pendingAuthLink, setPendingAuthLink] = useState<string | null>(null);
   const [pendingSubscriptionSessionId, setPendingSubscriptionSessionId] = useState<string | null>(null);
+  const [pendingCountdownMs, setPendingCountdownMs] = useState<number | null>(null);
+  const [autoCancellingPending, setAutoCancellingPending] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [cancellingPendingPayment, setCancellingPendingPayment] = useState(false);
   const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null);
   const isUsableAuthLink = (url: string | null | undefined) =>
     Boolean(url) && !String(url).includes("/subscriptions/checkout/timer");
@@ -116,6 +119,47 @@ export default function SubscriptionPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => {
+    if (!pendingExpiresAt) {
+      setPendingCountdownMs(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const expiresMs = new Date(pendingExpiresAt).getTime();
+      const remaining = Math.max(0, expiresMs - Date.now());
+      setPendingCountdownMs(remaining);
+    };
+
+    updateCountdown();
+    const id = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(id);
+  }, [pendingExpiresAt]);
+
+  useEffect(() => {
+    if (!pendingSubscription || pendingCountdownMs === null || pendingCountdownMs > 0 || autoCancellingPending) return;
+
+    const autoCancelExpiredPending = async () => {
+      setAutoCancellingPending(true);
+      try {
+        await subscriptionService.cancel();
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("pending_subscription_auth_link");
+        }
+        setPendingAuthLink(null);
+        toast.info("Pending payment expired and was auto-cancelled.");
+        await fetchData();
+      } catch {
+        // Backend also expires old pending subscriptions on /current.
+        await fetchData();
+      } finally {
+        setAutoCancellingPending(false);
+      }
+    };
+
+    void autoCancelExpiredPending();
+  }, [pendingSubscription, pendingCountdownMs, autoCancellingPending, fetchData]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("pending_subscription_auth_link");
     if (isUsableAuthLink(stored)) {
@@ -127,13 +171,14 @@ export default function SubscriptionPage() {
   }, []);
 
   const handleCancel = async () => {
-    setCancelling(true);
+    if (cancellingSubscription) return;
+    setCancellingSubscription(true);
     try {
       await subscriptionService.cancel();
       toast.success("Subscription cancelled");
       fetchData();
     } catch { toast.error("Failed to cancel"); } finally {
-      setCancelling(false);
+      setCancellingSubscription(false);
     }
   };
 
@@ -218,8 +263,8 @@ export default function SubscriptionPage() {
   };
 
   const handleCancelOlderPayment = async () => {
-    if (cancelling) return;
-    setCancelling(true);
+    if (cancellingPendingPayment || autoCancellingPending) return;
+    setCancellingPendingPayment(true);
     try {
       await subscriptionService.cancel();
       if (typeof window !== "undefined") {
@@ -232,11 +277,19 @@ export default function SubscriptionPage() {
       console.debug("[SubscriptionPage] handleCancelOlderPayment error", err?.response?.data || err);
       toast.error(err?.response?.data?.message || "Failed to cancel pending payment");
     } finally {
-      setCancelling(false);
+      setCancellingPendingPayment(false);
     }
   };
 
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+
+  const pendingCountdownLabel = (() => {
+    if (pendingCountdownMs === null) return null;
+    const totalSeconds = Math.max(0, Math.floor(pendingCountdownMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  })();
 
   return (
     <div className="space-y-6">
@@ -265,8 +318,8 @@ export default function SubscriptionPage() {
               </p>
             )}
             {subscription.status === "ACTIVE" && (
-              <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelling}>
-                {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel subscription"}
+              <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancellingSubscription}>
+                {cancellingSubscription ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel subscription"}
               </Button>
             )}
           </CardContent>
@@ -290,11 +343,17 @@ export default function SubscriptionPage() {
               <Badge variant="secondary">PENDING</Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-amber-500">
-              Waiting for payment authorization. Complete mandate setup to activate your plan.
-            </p>
-            <div className="flex flex-wrap gap-2">
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-amber-200/60 bg-amber-50/50 px-3 py-2 dark:border-amber-900/40 dark:bg-amber-950/20">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                Payment authorization pending
+              </p>
+              <p className="text-xs text-amber-700/90 dark:text-amber-300/90 mt-0.5">
+                Complete mandate setup to activate this plan.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="secondary"
@@ -307,16 +366,20 @@ export default function SubscriptionPage() {
                 size="sm"
                 variant="destructive"
                 onClick={handleCancelOlderPayment}
-                disabled={cancelling}
+                disabled={cancellingPendingPayment || autoCancellingPending}
               >
-                {cancelling ? "Cancelling..." : "Cancel older payment"}
+                {cancellingPendingPayment || autoCancellingPending ? "Cancelling..." : "Cancel payment"}
               </Button>
             </div>
             {pendingExpiresAt && (
-              <p className="text-xs text-muted-foreground">
-                Current authorization may expire around {new Date(pendingExpiresAt).toLocaleString()}.
-                You can continue or cancel this pending payment.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/25 px-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  Expires around {new Date(pendingExpiresAt).toLocaleString()}
+                </p>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  {pendingCountdownLabel ?? "--:--"} left
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>

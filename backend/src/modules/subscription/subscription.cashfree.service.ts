@@ -27,6 +27,7 @@ class SubscriptionCashfreeService {
   private getHeaders() {
     const clientId = process.env.CASHFREE_APP_ID;
     const clientSecret = process.env.CASHFREE_APP_SECRET;
+    const apiVersion = process.env.CASHFREE_API_VERSION || "2023-08-01";
 
     if (!clientId || !clientSecret) {
       throw new ApiError(
@@ -36,7 +37,7 @@ class SubscriptionCashfreeService {
     }
 
     return {
-      "x-api-version": "2023-08-01",
+      "x-api-version": apiVersion,
       "x-client-id": clientId,
       "x-client-secret": clientSecret,
       "Content-Type": "application/json",
@@ -644,8 +645,16 @@ class SubscriptionCashfreeService {
       (req.rawBody as Buffer | undefined)?.toString("utf8") ??
       JSON.stringify(req.body ?? "");
 
+    const webhookSecret = process.env.CASHFREE_WEBHOOK_SECRET || process.env.CASHFREE_APP_SECRET;
+    if (!webhookSecret) {
+      throw new ApiError(
+        "Cashfree webhook secret is not configured",
+        STATUS_CODES.SERVER_ERROR,
+      );
+    }
+
     const computed = crypto
-      .createHmac("sha256", String(process.env.CASHFREE_APP_SECRET))
+      .createHmac("sha256", String(webhookSecret))
       .update(String(timestamp) + rawBody)
       .digest("base64");
 
