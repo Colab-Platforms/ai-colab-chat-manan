@@ -32,12 +32,31 @@ export default function SubscriptionSuccessPage() {
     const startedFromCheckout =
       typeof window !== "undefined" &&
       sessionStorage.getItem("subscription_checkout_in_progress") === "1";
-    if (!startedFromCheckout) {
+    const hasCashfreeParams =
+      typeof window !== "undefined" &&
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const knownCashfreeKeys = [
+          "subscription_id",
+          "cf_subscription_id",
+          "payment_id",
+          "cf_payment_id",
+          "order_id",
+        ];
+        return knownCashfreeKeys.some((key) => params.has(key));
+      })();
+    const fromCashfreeReferrer =
+      typeof document !== "undefined" && /cashfree/i.test(document.referrer || "");
+    const canOpenSuccessPage = startedFromCheckout || hasCashfreeParams || fromCashfreeReferrer;
+
+    if (!canOpenSuccessPage) {
       router.replace("/profile/subscription");
       return;
     }
 
-    sessionStorage.removeItem("subscription_checkout_in_progress");
+    if (startedFromCheckout) {
+      sessionStorage.removeItem("subscription_checkout_in_progress");
+    }
     setIsFlowAllowed(true);
 
     let mounted = true;

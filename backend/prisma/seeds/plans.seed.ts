@@ -53,9 +53,6 @@ export async function seedPlans() {
         } else {
             upserted = await prisma.plan.create({ data: plan });
         }
-
-        // Keep remote Cashfree plan catalog in sync with local plan seeds.
-        // If credentials are missing (local-only setup), skip remote sync.
         if (process.env.CASHFREE_APP_ID && process.env.CASHFREE_APP_SECRET) {
             await cashfreeService.syncAllPlanCycles(upserted);
         }
