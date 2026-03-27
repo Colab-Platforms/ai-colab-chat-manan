@@ -3,42 +3,26 @@ import prisma from "@root/prisma.js";
 import dayjs from "dayjs";
 import { createWalletTransaction } from "@/utils/walletUtils.js";
 
-// Subscription expiry check — runs daily at midnight
 const task = () => {
     cron.schedule("0 0 * * *", async () => {
-        console.log("🔄 Running subscription expiry check...");
+        console.log("🔄 Running subscription grace-period expiry check...");
 
         try {
-            const expiredSubscriptions = await prisma.subscription.findMany({
+            const pastDueSubscriptions = await prisma.subscription.findMany({
                 where: {
-                    status: { in: ["ACTIVE", "CANCELLED"] },
-                    expiresAt: { lt: new Date() },
+                    status: "PAST_DUE",
+                    nextBillingDate: { not: null },
                 },
                 include: { plan: true },
             });
 
-            for (const sub of expiredSubscriptions) {
-                if (sub.autoRenew) {
-                    let newExpiresAt: Date;
-                    switch (sub.billingCycle) {
-                        case "MONTHLY":
-                            newExpiresAt = dayjs(sub.expiresAt).add(1, "month").toDate();
-                            break;
-                        case "QUARTERLY":
-                            newExpiresAt = dayjs(sub.expiresAt).add(3, "month").toDate();
-                            break;
-                        case "YEARLY":
-                            newExpiresAt = dayjs(sub.expiresAt).add(1, "year").toDate();
-                            break;
-                    }
+            for (const sub of pastDueSubscriptions) {
+                if (!sub.nextBillingDate) continue;
 
-                    await prisma.subscription.update({
-                        where: { id: sub.id },
-                        data: { expiresAt: newExpiresAt },
-                    });
+                const graceExpiry = dayjs(sub.nextBillingDate).add(3, "day");
+                const now = dayjs();
 
-                    console.log(`  🔄 Auto-renewed subscription ${sub.id}`);
-                } else {
+                if (now.isAfter(graceExpiry)) {
                     await prisma.$transaction(async (tx) => {
                         await tx.subscription.update({
                             where: { id: sub.id },
@@ -51,6 +35,7 @@ const task = () => {
 
                         if (wallet && wallet.tokensRemaining > 0) {
                             const unusedTokens = wallet.tokensRemaining;
+
                             await tx.userWallet.update({
                                 where: { id: wallet.id },
                                 data: { tokensRemaining: 0 },
@@ -61,19 +46,22 @@ const task = () => {
                                 walletId: wallet.id,
                                 amount: unusedTokens,
                                 type: "DEBIT",
-                                referenceId: `exp_${sub.id}`,
-                                meta: { reason: "SUBSCRIPTION_EXPIRED", planId: sub.planId },
+                                referenceId: `subscription_grace_expired_${sub.id}`,
+                                meta: {
+                                    reason: "SUBSCRIPTION_GRACE_PERIOD_EXPIRED",
+                                    planId: sub.planId,
+                                },
                             });
                         }
                     });
 
-                    console.log(`  ⏰ Expired subscription ${sub.id} and cleared remaining tokens.`);
+                    console.log(`  ⏰ Expired subscription ${sub.id} after grace period.`);
                 }
             }
 
-            console.log(`✅ Subscription expiry check completed. Processed ${expiredSubscriptions.length}`);
+            console.log(`✅ Subscription grace-period check completed. Processed ${pastDueSubscriptions.length}`);
         } catch (error) {
-            console.error("❌ Subscription expiry cron error:", error);
+            console.error("❌ Subscription grace-period cron error:", error);
         }
     });
 };

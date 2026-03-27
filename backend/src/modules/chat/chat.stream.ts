@@ -59,6 +59,68 @@ async function touchChat(chatId: number) {
   });
 }
 
+async function getDefaultContextIdsForChat(userId: number, folderId?: number | null) {
+  const globalContextsQuery = folderId
+    ? prisma.contextMemory.findMany({
+        where: { userId, type: "GLOBAL", isAutoSelected: true, isDeleted: false },
+        select: { id: true },
+      })
+    : prisma.contextMemory.findMany({
+        where: { userId, type: "GLOBAL", isDeleted: false },
+        select: { id: true },
+      });
+
+  const folderContextsQuery = folderId
+    ? prisma.contextMemory.findMany({
+        where: { userId, type: "FOLDER", folderId, isDeleted: false },
+        select: { id: true },
+      })
+    : Promise.resolve([]);
+
+  const [globalContexts, folderContexts] = await Promise.all([
+    globalContextsQuery,
+    folderContextsQuery,
+  ]);
+
+  return Array.from(
+    new Set([
+      ...globalContexts.map((ctx) => ctx.id),
+      ...folderContexts.map((ctx) => ctx.id),
+    ]),
+  );
+}
+
+async function getSelectedContextsForChat(userId: number, chatId: number) {
+  let links = await prisma.chatContext.findMany({
+    where: { chatId, context: { userId, isDeleted: false } },
+    include: { context: true },
+  });
+
+  // Backfill defaults for older chats that do not have explicit context links yet.
+  if (links.length === 0) {
+    const chat = await prisma.chat.findFirst({
+      where: { id: chatId, userId, isDeleted: false },
+      select: { folderId: true },
+    });
+
+    if (chat) {
+      const defaultIds = await getDefaultContextIdsForChat(userId, chat.folderId);
+      if (defaultIds.length > 0) {
+        await prisma.chatContext.createMany({
+          data: defaultIds.map((contextId) => ({ chatId, contextId })),
+          skipDuplicates: true,
+        });
+      }
+      links = await prisma.chatContext.findMany({
+        where: { chatId, context: { userId, isDeleted: false } },
+        include: { context: true },
+      });
+    }
+  }
+
+  return links.map((link) => link.context);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers for building OpenRouter multipart message content from attachments
 // ---------------------------------------------------------------------------
@@ -525,7 +587,7 @@ export async function streamChat(req: Request, res: Response) {
     // Check wallet
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      res.status(400).json({ status: false, message: "Token limit exceeded" });
       return;
     }
 
@@ -679,23 +741,8 @@ export async function streamChat(req: Request, res: Response) {
       }
     }
 
-    const autoSelectedContexts = await prisma.contextMemory.findMany({
-      where: { userId, isAutoSelected: true, isDeleted: false },
-    });
-    const chatContextsLinks = await prisma.chatContext.findMany({
-      where: { chatId },
-      include: { context: true },
-    });
-    const customContexts = chatContextsLinks
-      .map((link) => link.context)
-      .filter((c) => !c.isDeleted);
-
-    // Merge and deduplicate
-    const allContextItems = [...autoSelectedContexts, ...customContexts];
-    const uniqueContexts = Array.from(
-      new Map(allContextItems.map((item) => [item.id, item])).values(),
-    );
-    const contextStrings = uniqueContexts.map((c) => c.memory);
+    const selectedContexts = await getSelectedContextsForChat(userId, chatId);
+    const contextStrings = selectedContexts.map((c) => c.memory);
 
     if (contextStrings.length > 0) {
       console.log(
@@ -907,7 +954,7 @@ export async function streamChat(req: Request, res: Response) {
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
-          referenceId: `msg_${assistantMessage.id}`,
+          referenceId: `chat_usage_${assistantMessage.id}`,
           meta: {
             reason: "PREDEFINED_RESPONSE",
             chatId,
@@ -1211,7 +1258,7 @@ export async function streamChat(req: Request, res: Response) {
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
-          referenceId: `msg_${assistantMessage.id}`,
+          referenceId: `chat_usage_${assistantMessage.id}`,
           meta: {
             reason: "STREAMED_RESPONSE",
             chatId,
@@ -1282,7 +1329,7 @@ export async function regenerateChat(req: Request, res: Response) {
 
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      res.status(400).json({ status: false, message: "Token limit exceeded" });
       return;
     }
 
@@ -1342,25 +1389,8 @@ export async function regenerateChat(req: Request, res: Response) {
       userPreference?.enableFollowUpQuestions !== false;
 
     // Prepend context memory as a system message
-    const autoGenContextsRegen = await prisma.contextMemory.findMany({
-      where: { userId, isAutoSelected: true, isDeleted: false },
-    });
-    const chatLinksRegen = await prisma.chatContext.findMany({
-      where: { chatId },
-      include: { context: true },
-    });
-    const customContextsRegen = chatLinksRegen
-      .map((link) => link.context)
-      .filter((c) => !c.isDeleted);
-
-    const allContextItemsRegen = [
-      ...autoGenContextsRegen,
-      ...customContextsRegen,
-    ];
-    const uniqueContextsRegen = Array.from(
-      new Map(allContextItemsRegen.map((item) => [item.id, item])).values(),
-    );
-    const contextStringsRegen = uniqueContextsRegen.map((c) => c.memory);
+    const selectedContextsRegen = await getSelectedContextsForChat(userId, chatId);
+    const contextStringsRegen = selectedContextsRegen.map((c) => c.memory);
 
     if (contextStringsRegen.length > 0) {
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c) => `- ${c}`).join("\n")}`;
@@ -1512,7 +1542,7 @@ export async function regenerateChat(req: Request, res: Response) {
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
-          referenceId: `msg_${messageId}`,
+          referenceId: `chat_usage_${messageId}`,
           meta: { reason: "PREDEFINED_REGENERATE", chatId, messageId },
         });
       });
@@ -1768,7 +1798,7 @@ export async function regenerateChat(req: Request, res: Response) {
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
-          referenceId: `msg_${messageId}`,
+          referenceId: `chat_usage_${messageId}`,
           meta: { reason: "STREAMED_REGENERATE", chatId, messageId },
         });
       }
@@ -1927,7 +1957,7 @@ export async function editAndResend(req: Request, res: Response) {
     // Check wallet
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      res.status(400).json({ status: false, message: "Token limit exceeded" });
       return;
     }
 
@@ -2304,7 +2334,7 @@ export async function editAndResend(req: Request, res: Response) {
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
-          referenceId: `msg_${assistantMessage.id}`,
+          referenceId: `chat_usage_${assistantMessage.id}`,
           meta: {
             reason: "EDIT_RESEND",
             chatId,
@@ -2373,7 +2403,7 @@ export async function prepareEditMulti(req: Request, res: Response) {
     // Check user tokens mapping
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      res.status(400).json({ status: false, message: "Token limit exceeded" });
       return;
     }
 
@@ -2478,7 +2508,7 @@ export async function continueChatStream(req: Request, res: Response) {
 
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Insufficient tokens" });
+      res.status(400).json({ status: false, message: "Token limit exceeded" });
       return;
     }
 
@@ -2739,7 +2769,7 @@ export async function continueChatStream(req: Request, res: Response) {
           walletId: updatedWallet.id,
           amount: adjusted.finalBillableTotal,
           type: "DEBIT",
-          referenceId: `msg_${assistantMessage.id}_continue_${Date.now()}`,
+          referenceId: `chat_usage_${assistantMessage.id}_continue_${Date.now()}`,
           meta: {
             reason: "CONTINUE_RESPONSE",
             chatId,

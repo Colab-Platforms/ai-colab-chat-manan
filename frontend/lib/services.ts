@@ -31,6 +31,9 @@ export const chatService = {
   ) => api.put(`/chats/${id}`, data),
   feedback: (chatId: number, responseId: number, isLiked: boolean | null) =>
     api.post(`/chats/${chatId}/responses/${responseId}/feedback`, { isLiked }),
+  getContexts: (id: number) => api.get(`/chats/${id}/contexts`),
+  replaceContexts: (id: number, contextIds: number[]) =>
+    api.put(`/chats/${id}/contexts`, { contextIds }),
 };
 
 export const messageService = {
@@ -86,10 +89,10 @@ export const walletService = {
 };
 
 export const subscriptionService = {
-  create: (data: { planId: number; billingCycle: string }) =>
-    api.post("/subscriptions", data),
-  getCurrent: () => api.get("/subscriptions/current"),
-  cancel: () => api.patch("/subscriptions/cancel"),
+  create: (data: { planId: number; billingCycle: string; forceRetry?: boolean }) =>
+    api.post("/subscription/create", data),
+  getCurrent: () => api.get("/subscription/current"),
+  cancel: () => api.post("/subscription/cancel"),
 };
 
 export const planService = {

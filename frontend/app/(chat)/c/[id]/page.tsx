@@ -40,10 +40,27 @@ export default function ChatPage() {
   const chatId = Number(params.id);
   const [shouldForceScrollFromStarred, setShouldForceScrollFromStarred] = useState(false);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = sessionStorage.getItem(`pending_chat_${chatId}`);
+      if (!raw) return [];
+      const { content, attachmentObjects } = JSON.parse(raw);
+      return [{
+        id: -1,
+        role: "USER",
+        content,
+        createdAt: new Date().toISOString(),
+        attachments: attachmentObjects || [],
+      }];
+    } catch {
+      return [];
+    }
+  });
   const [models, setModels] = useState<Model[]>([]);
   const modelsRef = useRef<Model[]>([]);
   const [selectedModels, setSelectedModels] = useState<number[]>([]);
+  const selectedModelsRef = useRef<number[]>([]);
   const [activeModelTabs, setActiveModelTabs] = useState<Record<number, number>>({});
   const [isSending, setIsSending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -53,10 +70,16 @@ export default function ChatPage() {
   const [assistant, setAssistant] = useState<{ id: number; name: string; description?: string | null; icon: string } | null>(null);
   const firstMessageSent = useRef(false);
   const isStreamingRef = useRef(false);
+  const fetchChatInFlightRef = useRef<Promise<void> | null>(null);
+  const lastFetchChatAtRef = useRef(0);
   const modelsRestoredRef = useRef(false);
   const streamAbortControllersRef = useRef<AbortController[]>([]);
   const stopRequestedRef = useRef(false);
   const [chatCapability, setChatCapability] = useState<any>("STANDARD");
+
+  useEffect(() => {
+    selectedModelsRef.current = selectedModels;
+  }, [selectedModels]);
 
   const clearStreamAbortControllers = useCallback(() => {
     streamAbortControllersRef.current = [];
@@ -82,7 +105,17 @@ export default function ChatPage() {
     toast.info("Generation stopped");
   }, []);
 
-  const fetchChat = useCallback(async () => {
+  const fetchChat = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastFetchChatAtRef.current < 1200) {
+      return;
+    }
+    if (!force && fetchChatInFlightRef.current) {
+      await fetchChatInFlightRef.current;
+      return;
+    }
+
+    const run = async () => {
     try {
       const res = await chatService.getById(chatId);
       const chat = res.data.data;
@@ -99,15 +132,13 @@ export default function ChatPage() {
       setMessages((prev) => {
         if (isStreamingRef.current) return prev;
         const incoming = chat.messages || [];
-        if (prev.length === 0) return incoming;
+        if (incoming.length === 0) return prev;
+        const cleanPrev = prev.filter(m => m.id !== -1);
+        if (cleanPrev.length === 0) return incoming;
 
-        // Perform a safe merge: match messages by ID to preserve state
-        // This is key to avoiding the "sudden reload" feeling
         return incoming.map((bm: Message) => {
-          const existing = prev.find((pm) => pm.id === bm.id);
+          const existing = cleanPrev.find((pm) => pm.id === bm.id);
           if (existing) {
-            // Merge existing client-side state with backend data
-            // We prioritize backend data but keep our stable reference
             return { ...existing, ...bm };
           }
           return bm;
@@ -144,18 +175,50 @@ export default function ChatPage() {
         setIsNotFound(true);
       }
     }
+    };
+
+    lastFetchChatAtRef.current = now;
+    const p = run().finally(() => {
+      if (fetchChatInFlightRef.current === p) {
+        fetchChatInFlightRef.current = null;
+      }
+    });
+    fetchChatInFlightRef.current = p;
+    await p;
   }, [chatId]);
 
   const syncChatAfterStop = useCallback(() => {
     window.setTimeout(() => {
-      fetchChat();
+      fetchChat(true);
     }, 500);
   }, [fetchChat]);
 
   const fetchModels = useCallback(async () => {
     try {
-      const res = await modelService.list({ pageSize: "100" });
-      const allModels = res.data.data?.data || [];
+      const modelsCacheKey = "models_cache_v1";
+      const modelsCacheTtlMs = 60_000;
+      const cachedRaw = sessionStorage.getItem(modelsCacheKey);
+      let allModels: any[] = [];
+      if (cachedRaw) {
+        try {
+          const cached = JSON.parse(cachedRaw);
+          if (
+            cached &&
+            Array.isArray(cached.data) &&
+            typeof cached.ts === "number" &&
+            Date.now() - cached.ts < modelsCacheTtlMs
+          ) {
+            allModels = cached.data;
+          }
+        } catch {
+          // ignore malformed cache
+        }
+      }
+      if (allModels.length === 0) {
+        const res = await modelService.list({ pageSize: "100" });
+        allModels = res.data.data?.data || [];
+        sessionStorage.setItem(modelsCacheKey, JSON.stringify({ ts: Date.now(), data: allModels }));
+      }
       const activeModels = allModels.filter((m: any) => m.isActive);
       setModels(activeModels);
       modelsRef.current = activeModels;
@@ -163,7 +226,7 @@ export default function ChatPage() {
       // Only apply default model logic if:
       // 1. Models haven't been restored from DB yet (for new chats)
       // 2. OR we have no selections yet AND we are sure we are not waiting for fetchChat
-      if (activeModels.length > 0 && selectedModels.length === 0 && !modelsRestoredRef.current) {
+      if (activeModels.length > 0 && selectedModelsRef.current.length === 0 && !modelsRestoredRef.current) {
         const storedModelId = localStorage.getItem("preferredModelId");
         const parsedId = storedModelId ? Number(storedModelId) : null;
         
@@ -187,13 +250,36 @@ export default function ChatPage() {
               const { content, modelIds, chatType, attachmentIds, attachmentObjects } = JSON.parse(raw);
               const targetIds = Array.isArray(modelIds) && modelIds.length > 0 ? modelIds : resolvedModelIds;
               setSelectedModels(targetIds);
-              setTimeout(() => sendMessage(content, attachmentIds, targetIds, chatType, attachmentObjects), 0);
+              void (async () => {
+                const pendingCtx = localStorage.getItem("pending_new_chat_context_ids");
+                if (pendingCtx) {
+                  try {
+                    const parsed = JSON.parse(pendingCtx);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      const contextIds = parsed
+                        .map((id: unknown) => Number(id))
+                        .filter((id: number) => !Number.isNaN(id));
+                      if (contextIds.length > 0) {
+                        try {
+                          await chatService.replaceContexts(chatId, contextIds);
+                          localStorage.removeItem("pending_new_chat_context_ids");
+                        } catch {
+                          /* still send; stream may apply default contexts */
+                        }
+                      }
+                    }
+                  } catch {
+                    /* ignore malformed localStorage */
+                  }
+                }
+                sendMessage(content, attachmentIds, targetIds, chatType, attachmentObjects);
+              })();
             } catch { /* ignore */ }
           }
         }
       }
     } catch { /* ignore */ }
-  }, [chatId, selectedModels.length]);
+  }, [chatId]);
 
   const handleModelChange = async (ids: number[]) => {
     setSelectedModels(ids);
@@ -202,7 +288,6 @@ export default function ChatPage() {
       await chatService.update(chatId, { modelIds: ids, capability: currentCapability });
     } catch { /* ignore */ }
     
-    localStorage.setItem(`chat_${chatId}_models`, JSON.stringify(ids));
     if (ids.length > 0) {
       localStorage.setItem("preferredModelId", String(ids[0]));
     }
@@ -228,7 +313,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     fetchModels();
-    fetchChat();
+    fetchChat(true);
   }, [fetchModels, fetchChat]);
 
   useEffect(() => {
@@ -408,12 +493,12 @@ export default function ChatPage() {
     if (chatType) {
       setChatCapability(chatType);
     }
-    try {
-      await chatService.update(chatId, { modelIds: targetModelIds, capability: chatType || "STANDARD" });
-    } catch { /* ignore */ }
-    localStorage.setItem(`chat_${chatId}_models`, JSON.stringify(targetModelIds));
+    // Do not block streaming on metadata update.
+    chatService
+      .update(chatId, { modelIds: targetModelIds, capability: chatType || "STANDARD" })
+      .catch(() => { /* ignore */ });
     const tempUserMsgId = Date.now();
-    setMessages((prev) => [...prev, {
+    setMessages((prev) => [...prev.filter(m => m.id !== -1), {
       id: tempUserMsgId,
       role: "USER",
       content,
@@ -511,8 +596,15 @@ export default function ChatPage() {
         });
       }
       isStreamingRef.current = false;
-      fetchChat(); // Perform silent background sync
-      window.dispatchEvent(new Event("refresh-chats"));
+      // Defer full chat sync so send/stream path stays responsive.
+      window.setTimeout(() => {
+        fetchChat(true);
+      }, 2000);
+      window.dispatchEvent(
+        new CustomEvent("refresh-chats", {
+          detail: { immediate: false, refreshFolders: false },
+        }),
+      );
     } catch (err: any) {
       if (isAbortError(err) || stopRequestedRef.current) {
         setMessages((prev) =>

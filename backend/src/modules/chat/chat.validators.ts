@@ -31,3 +31,11 @@ const feedbackSchema = Joi.object({
 export const validateFeedbackSchema = (data: unknown) => {
   return feedbackSchema.validate(data, { abortEarly: false });
 };
+
+const updateChatContextsSchema = Joi.object({
+  contextIds: Joi.array().items(Joi.number().integer().positive()).required(),
+});
+
+export const validateUpdateChatContextsSchema = (data: unknown) => {
+  return updateChatContextsSchema.validate(data, { abortEarly: false });
+};

@@ -1,4 +1,5 @@
 import prisma from "@root/prisma";
+import SubscriptionCashfreeService from "@/modules/subscription/subscription.cashfree.service.js";
 
 const PLANS = [
     {
@@ -6,37 +7,57 @@ const PLANS = [
         monthlyPrice: 0,
         quarterlyPrice: 0,
         yearlyPrice: 0,
-        tokenLimit: 10000,
+        tokenLimit: 50000,
         features: {
-            maxModels: 1,
-            attachments: false,
+            maxModels: -1,
+            attachments: true,
             support: "community",
         },
     },
     {
         name: "Pro",
-        monthlyPrice: 19.99,
-        quarterlyPrice: 49.99,
-        yearlyPrice: 179.99,
-        tokenLimit: 500000,
+        monthlyPrice: 1499,
+        quarterlyPrice: 4497,
+        yearlyPrice: 17988,
+        tokenLimit: 1000000,
         features: {
             maxModels: -1,
             attachments: true,
             support: "priority",
         },
     },
+    {
+        name: "Pro Plus",
+        monthlyPrice: 2799,
+        quarterlyPrice: 8397,
+        yearlyPrice: 33588,
+        tokenLimit: 2000000,
+        features: {
+            maxModels: -1,
+            attachments: true,
+            support: "priority_plus",
+        },
+    },
 ];
 
 export async function seedPlans() {
     console.log("📋 Seeding plans...");
+    const cashfreeService = new SubscriptionCashfreeService();
 
     for (const plan of PLANS) {
         const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
 
+        let upserted: any;
         if (existing) {
-            await prisma.plan.update({ where: { id: existing.id }, data: plan });
+            upserted = await prisma.plan.update({ where: { id: existing.id }, data: plan });
         } else {
-            await prisma.plan.create({ data: plan });
+            upserted = await prisma.plan.create({ data: plan });
+        }
+
+        // Keep remote Cashfree plan catalog in sync with local plan seeds.
+        // If credentials are missing (local-only setup), skip remote sync.
+        if (process.env.CASHFREE_APP_ID && process.env.CASHFREE_APP_SECRET) {
+            await cashfreeService.syncAllPlanCycles(upserted);
         }
     }
 

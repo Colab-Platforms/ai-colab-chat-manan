@@ -381,25 +381,34 @@ model Plan {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
-  EXPIRED
+  PAST_DUE
   CANCELLED
+  EXPIRED
   TRIAL
 }
 
 model Subscription {
-  id           Int                @id @default(autoincrement())
-  userId       Int
-  planId       Int
-  status       SubscriptionStatus
-  billingCycle SubscriptionCycle
-  autoRenew    Boolean            @default(true)
-  startedAt    DateTime
-  expiresAt    DateTime?
-  user         User               @relation(fields: [userId], references: [id])
-  plan         Plan               @relation(fields: [planId], references: [id])
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id                     Int                @id @default(autoincrement())
+  userId                 Int
+  planId                 Int
+  status                 SubscriptionStatus
+  billingCycle           SubscriptionCycle
+  autoRenew              Boolean            @default(true)
+  startedAt              DateTime
+  expiresAt              DateTime?
+  cashfreeSubscriptionId String?            @unique
+  cashfreeCustomerId     String?
+  mandateId              String?
+  lastPaymentId          String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  nextBillingDate        DateTime?
+  user                   User               @relation(fields: [userId], references: [id])
+  plan                   Plan               @relation(fields: [planId], references: [id])
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   @@index([userId])
   @@index([status])

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
@@ -11,6 +12,15 @@ import { Loader2, Eye, Pencil, Trash2, Plus, Save } from "lucide-react";
 import { toast } from "react-toastify";
 
 export default function PlansAdminPage() {
+  const defaultFeatures = { maxModels: -1, attachments: true };
+  const defaultForm = {
+    name: "",
+    monthlyPrice: 0,
+    quarterlyPrice: 0,
+    yearlyPrice: 0,
+    tokenLimit: 10000,
+    features: JSON.stringify(defaultFeatures, null, 2),
+  };
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,7 +33,7 @@ export default function PlansAdminPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", monthlyPrice: 0, quarterlyPrice: 0, yearlyPrice: 0, tokenLimit: 10000 });
+  const [form, setForm] = useState(defaultForm);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const handleFilterChange = (key: string, value: string) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
 
@@ -46,14 +56,41 @@ export default function PlansAdminPage() {
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
   useEffect(() => { setPage(1); }, [search, sort, pageSize, activeFilters]);
 
-  const openCreate = () => { setForm({ name: "", monthlyPrice: 0, quarterlyPrice: 0, yearlyPrice: 0, tokenLimit: 10000 }); setEditPlan({ _isNew: true }); };
-  const openEdit = (p: any) => { setForm({ name: p.name, monthlyPrice: p.monthlyPrice, quarterlyPrice: p.quarterlyPrice, yearlyPrice: p.yearlyPrice, tokenLimit: p.tokenLimit }); setEditPlan(p); };
+  const openCreate = () => { setForm(defaultForm); setEditPlan({ _isNew: true }); };
+  const openEdit = (p: any) => {
+    setForm({
+      name: p.name,
+      monthlyPrice: p.monthlyPrice,
+      quarterlyPrice: p.quarterlyPrice,
+      yearlyPrice: p.yearlyPrice,
+      tokenLimit: p.tokenLimit,
+      features: JSON.stringify(p.features ?? defaultFeatures, null, 2),
+    });
+    setEditPlan(p);
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (editPlan._isNew) { await planService.create(form); toast.success("Plan created"); }
-      else { await planService.update(editPlan.id, form); toast.success("Plan updated"); }
+      let parsedFeatures: Record<string, unknown> = {};
+      try {
+        parsedFeatures = JSON.parse(form.features || "{}");
+      } catch {
+        toast.error("Features must be valid JSON");
+        return;
+      }
+
+      const payload = {
+        name: form.name,
+        monthlyPrice: form.monthlyPrice,
+        quarterlyPrice: form.quarterlyPrice,
+        yearlyPrice: form.yearlyPrice,
+        tokenLimit: form.tokenLimit,
+        features: parsedFeatures,
+      };
+
+      if (editPlan._isNew) { await planService.create(payload); toast.success("Plan created"); }
+      else { await planService.update(editPlan.id, payload); toast.success("Plan updated"); }
       setEditPlan(null); fetchPlans();
     } catch { toast.error("Failed to save"); } finally { setSaving(false); }
   };
@@ -67,7 +104,7 @@ export default function PlansAdminPage() {
 
   const columns: Column[] = [
     { key: "name", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: "monthlyPrice", label: "Monthly", sortable: true, render: (r) => r.monthlyPrice === 0 ? "Free" : `$${r.monthlyPrice}` },
+    { key: "monthlyPrice", label: "Monthly", sortable: true, render: (r) => r.monthlyPrice === 0 ? "Free" : `₹${r.monthlyPrice}` },
     { key: "tokenLimit", label: "Token Limit", sortable: true, render: (r) => `${(r.tokenLimit / 1000).toFixed(0)}k` },
     { key: "models", label: "Models", render: (r) => r.features?.maxModels === -1 ? "∞" : r.features?.maxModels },
     {
@@ -103,9 +140,9 @@ export default function PlansAdminPage() {
           {viewPlan && (
             <div className="space-y-2 text-sm">
               <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{viewPlan.name}</span></div>
-              <div><span className="text-muted-foreground">Monthly:</span> ${viewPlan.monthlyPrice}</div>
-              <div><span className="text-muted-foreground">Quarterly:</span> ${viewPlan.quarterlyPrice}</div>
-              <div><span className="text-muted-foreground">Yearly:</span> ${viewPlan.yearlyPrice}</div>
+              <div><span className="text-muted-foreground">Monthly:</span> ₹{viewPlan.monthlyPrice}</div>
+              <div><span className="text-muted-foreground">Quarterly:</span> ₹{viewPlan.quarterlyPrice}</div>
+              <div><span className="text-muted-foreground">Yearly:</span> ₹{viewPlan.yearlyPrice}</div>
               <div><span className="text-muted-foreground">Token Limit:</span> {viewPlan.tokenLimit?.toLocaleString()}</div>
               <div><span className="text-muted-foreground">Features:</span> <pre className="mt-1 text-xs bg-muted p-2 rounded">{JSON.stringify(viewPlan.features, null, 2)}</pre></div>
             </div>
@@ -120,11 +157,20 @@ export default function PlansAdminPage() {
           <div className="space-y-3">
             <div className="space-y-1"><label className="text-sm font-medium">Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1"><label className="text-xs font-medium">Monthly $</label><Input type="number" step="0.01" value={form.monthlyPrice} onChange={(e) => setForm({ ...form, monthlyPrice: parseFloat(e.target.value) || 0 })} /></div>
-              <div className="space-y-1"><label className="text-xs font-medium">Quarterly $</label><Input type="number" step="0.01" value={form.quarterlyPrice} onChange={(e) => setForm({ ...form, quarterlyPrice: parseFloat(e.target.value) || 0 })} /></div>
-              <div className="space-y-1"><label className="text-xs font-medium">Yearly $</label><Input type="number" step="0.01" value={form.yearlyPrice} onChange={(e) => setForm({ ...form, yearlyPrice: parseFloat(e.target.value) || 0 })} /></div>
+              <div className="space-y-1"><label className="text-xs font-medium">Monthly (INR ₹)</label><Input type="number" step="0.01" value={form.monthlyPrice} onChange={(e) => setForm({ ...form, monthlyPrice: parseFloat(e.target.value) || 0 })} /></div>
+              <div className="space-y-1"><label className="text-xs font-medium">Quarterly (INR ₹)</label><Input type="number" step="0.01" value={form.quarterlyPrice} onChange={(e) => setForm({ ...form, quarterlyPrice: parseFloat(e.target.value) || 0 })} /></div>
+              <div className="space-y-1"><label className="text-xs font-medium">Yearly (INR ₹)</label><Input type="number" step="0.01" value={form.yearlyPrice} onChange={(e) => setForm({ ...form, yearlyPrice: parseFloat(e.target.value) || 0 })} /></div>
             </div>
             <div className="space-y-1"><label className="text-sm font-medium">Token Limit</label><Input type="number" value={form.tokenLimit} onChange={(e) => setForm({ ...form, tokenLimit: parseInt(e.target.value) || 0 })} /></div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Features (JSON)</label>
+              <Textarea
+                value={form.features}
+                onChange={(e) => setForm({ ...form, features: e.target.value })}
+                rows={7}
+                placeholder={`{\n  "maxModels": -1,\n  "attachments": true\n}`}
+              />
+            </div>
           </div>
           <DialogFooter><Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {editPlan?._isNew ? "Create" : "Save"}</Button></DialogFooter>
         </DialogContent>

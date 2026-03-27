@@ -43,6 +43,10 @@ class ModelResponseService {
         );
       }
 
+      if (wallet.tokensRemaining <= 0) {
+        throw new ApiError("Token limit exceeded", STATUS_CODES.BAD_REQUEST);
+      }
+
       if (wallet.tokensRemaining < billableTotalTokens) {
         throw new ApiError("Insufficient tokens", STATUS_CODES.BAD_REQUEST);
       }
@@ -89,7 +93,7 @@ class ModelResponseService {
         walletId: updatedWallet.id,
         amount: billableTotalTokens,
         type: "DEBIT",
-        referenceId: `msg_${data.messageId}`,
+        referenceId: `chat_usage_${data.messageId}`,
         meta: { reason: "MODEL_RESPONSE_COMPLETE", chatId: data.chatId, messageId: data.messageId },
       });
 

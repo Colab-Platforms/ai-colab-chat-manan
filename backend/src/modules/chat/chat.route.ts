@@ -24,6 +24,16 @@ router.get(
   auth("USER", "ADMIN", "SUPERADMIN"),
   chatController.getChatById,
 );
+router.get(
+  "/:id/contexts",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  chatController.getChatContexts,
+);
+router.put(
+  "/:id/contexts",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  chatController.replaceChatContexts,
+);
 router.patch(
   "/:id/archive",
   auth("USER", "ADMIN", "SUPERADMIN"),

@@ -51,8 +51,30 @@ export function NewChatPage() {
       }
       setAssistant(ast);
 
-      const res = await modelService.list({ pageSize: "100" });
-      const allModels = res.data.data?.data || [];
+      const modelsCacheKey = "models_cache_v1";
+      const modelsCacheTtlMs = 60_000;
+      const cachedRaw = sessionStorage.getItem(modelsCacheKey);
+      let allModels: any[] = [];
+      if (cachedRaw) {
+        try {
+          const cached = JSON.parse(cachedRaw);
+          if (
+            cached &&
+            Array.isArray(cached.data) &&
+            typeof cached.ts === "number" &&
+            Date.now() - cached.ts < modelsCacheTtlMs
+          ) {
+            allModels = cached.data;
+          }
+        } catch {
+          // ignore malformed cache
+        }
+      }
+      if (allModels.length === 0) {
+        const res = await modelService.list({ pageSize: "100" });
+        allModels = res.data.data?.data || [];
+        sessionStorage.setItem(modelsCacheKey, JSON.stringify({ ts: Date.now(), data: allModels }));
+      }
       const activeModels = allModels.filter((m: any) => m.isActive);
       setModels(activeModels);
       
@@ -99,17 +121,28 @@ export function NewChatPage() {
     setIsSending(true);
 
     try {
+      // Optional folder-scoped new chat support.
+      const rawPendingFolderId = localStorage.getItem("pending_new_chat_folder_id");
+      const pendingFolderId = rawPendingFolderId ? Number(rawPendingFolderId) : null;
+      const validPendingFolderId = pendingFolderId && !Number.isNaN(pendingFolderId) ? pendingFolderId : null;
+
       const payload: any = { 
         title: content.substring(0, 50),
         modelIds: selectedModels,
-        capability: chatType || "STANDARD"
+        capability: chatType || "STANDARD",
       };
+      if (validPendingFolderId) {
+        payload.folderId = validPendingFolderId;
+      }
       if (assistant?.id) {
         payload.assistantId = assistant.id;
       }
       const chatRes = await chatService.create(payload);
       const chatId = chatRes.data.data.id;
-      window.dispatchEvent(new Event('refresh-chats'));
+      localStorage.removeItem("pending_new_chat_folder_id");
+      // Context IDs stay in localStorage; chat page applies them right before the first
+      // pending message so navigation is not blocked on replaceContexts.
+      window.dispatchEvent(new CustomEvent("refresh-chats", { detail: { immediate: true } }));
       // Store pending first message in sessionStorage — never in URL params
       sessionStorage.setItem(
         `pending_chat_${chatId}`,

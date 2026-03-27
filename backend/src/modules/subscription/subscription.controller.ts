@@ -14,7 +14,16 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
             return;
         }
         const result = await subscriptionService.create(req.user!.id, value);
-        sendResponse(res, true, result, "Subscription created successfully", STATUS_CODES.CREATED);
+        sendResponse(
+            res,
+            true,
+            {
+                auth_link: (result as any)?.auth_link ?? null,
+                subscription_session_id: (result as any)?.subscription_session_id ?? null,
+            },
+            "Subscription created successfully",
+            STATUS_CODES.CREATED,
+        );
     } catch (error: any) {
         console.error("Create subscription error", error);
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);

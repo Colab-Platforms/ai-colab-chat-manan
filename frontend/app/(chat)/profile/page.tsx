@@ -18,7 +18,7 @@ export default function DashboardPage() {
       subscriptionService.getCurrent().catch(() => null),
     ]).then(([w, s]) => {
       setWallet(w?.data?.data || null);
-      setSubscription(s?.data?.data || null);
+      setSubscription(s?.data?.data?.subscription ?? s?.data?.data ?? null);
       setLoading(false);
     });
   }, []);

@@ -6,6 +6,7 @@ import {
   validateCreateChatSchema,
   validateUpdateChatSchema,
   validateFeedbackSchema,
+  validateUpdateChatContextsSchema,
 } from "./chat.validators.js";
 
 const chatService = new ChatService();
@@ -264,6 +265,69 @@ export const feedback = async (req: Request, res: Response): Promise<void> => {
     );
   } catch (error: any) {
     console.error("Feedback error", error);
+    sendResponse(
+      res,
+      false,
+      null,
+      error.message,
+      error.statusCode ?? STATUS_CODES.SERVER_ERROR,
+    );
+  }
+};
+
+export const getChatContexts = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const result = await chatService.getContexts(
+      req.user!.id,
+      parseInt(req.params.id as string),
+    );
+    sendResponse(
+      res,
+      true,
+      result,
+      "Chat contexts fetched successfully",
+      STATUS_CODES.OK,
+    );
+  } catch (error: any) {
+    console.error("Get chat contexts error", error);
+    sendResponse(
+      res,
+      false,
+      null,
+      error.message,
+      error.statusCode ?? STATUS_CODES.SERVER_ERROR,
+    );
+  }
+};
+
+export const replaceChatContexts = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { error, value } = validateUpdateChatContextsSchema(req.body);
+    if (error) {
+      sendResponse(res, false, error, error.message, STATUS_CODES.BAD_REQUEST);
+      return;
+    }
+
+    const result = await chatService.replaceContexts(
+      req.user!.id,
+      parseInt(req.params.id as string),
+      value.contextIds,
+    );
+    sendResponse(
+      res,
+      true,
+      result,
+      "Chat contexts updated successfully",
+      STATUS_CODES.OK,
+    );
+  } catch (error: any) {
+    console.error("Replace chat contexts error", error);
     sendResponse(
       res,
       false,

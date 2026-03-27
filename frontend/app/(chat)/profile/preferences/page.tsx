@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ContextModal } from "@/components/contexts/ContextModal";
+import { ContextViewDialog } from "@/components/contexts/ContextViewDialog";
 import { contextService, folderService, userPreferenceService } from "@/lib/services";
 import { toast } from "react-toastify";
 
@@ -165,7 +165,7 @@ export default function PreferencesPage() {
       render: (r) => (
         <div className="flex flex-col gap-1 items-start">
           <Badge variant={r.type === "GLOBAL" ? "default" : r.type === "FOLDER" ? "secondary" : "outline"}>
-            {r.type}
+            {r.type === "CUSTOM" ? "CHAT" : r.type}
           </Badge>
           {r.type === "FOLDER" && r.folderId && (
             <span className="text-[10px] text-muted-foreground ml-1">
@@ -180,7 +180,7 @@ export default function PreferencesPage() {
       label: "Auto-Selected",
       render: (r) => (
         <Badge variant={r.isAutoSelected ? "default" : "secondary"} className="text-[10px] uppercase">
-          {r.isAutoSelected ? "Yes" : "No"}
+          {r.type === "GLOBAL" ? (r.isAutoSelected ? "Yes" : "No") : "N/A"}
         </Badge>
       ),
     },
@@ -284,51 +284,12 @@ export default function PreferencesPage() {
         </Card>
       </section>
 
-      {/* ── View Dialog (read-only, matches users module pattern) ── */}
-      <Dialog open={!!viewContext} onOpenChange={() => setViewContext(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Context Details</DialogTitle>
-          </DialogHeader>
-          {viewContext && (
-            <div className="space-y-3 text-sm">
-              <div>
-                <span className="text-muted-foreground">Title: </span>
-                <span className="font-medium">{viewContext.title}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-muted-foreground">Type: </span>
-                  <Badge variant={viewContext.type === "GLOBAL" ? "default" : viewContext.type === "FOLDER" ? "secondary" : "outline"}>
-                    {viewContext.type}
-                  </Badge>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Auto-Selected: </span>
-                  <Badge variant={viewContext.isAutoSelected ? "default" : "secondary"} className="text-[10px] uppercase">
-                    {viewContext.isAutoSelected ? "Yes" : "No"}
-                  </Badge>
-                </div>
-              </div>
-              {viewContext.type === "FOLDER" && viewContext.folderId && (
-                <div>
-                  <span className="text-muted-foreground">Folder: </span>
-                  <span className="font-medium">{getFolderName(viewContext.folderId)}</span>
-                </div>
-              )}
-              <div>
-                <p className="text-muted-foreground mb-1">Memory Content:</p>
-                <p className="bg-muted/40 rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap">
-                  {viewContext.memory}
-                </p>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Created: {new Date(viewContext.createdAt).toLocaleString()}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ContextViewDialog
+        open={!!viewContext}
+        onOpenChange={(open) => !open && setViewContext(null)}
+        context={viewContext}
+        getFolderName={getFolderName}
+      />
 
       {/* ── Create / Edit Modal ── */}
       <ContextModal

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, startTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Sidebar } from "@/components/sidebar/sidebar";
@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/context/theme-context";
+import { setRouteUiFromPathname } from "@/lib/route-ui-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Chat {
@@ -52,6 +53,16 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
+
+  const layoutRenderCountRef = useRef(0);
+  layoutRenderCountRef.current += 1;
+  if (process.env.NODE_ENV === "development") {
+    console.debug("[ChatLayoutView render]", { count: layoutRenderCountRef.current, pathname });
+  }
+
+  useEffect(() => {
+    setRouteUiFromPathname(pathname);
+  }, [pathname]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -66,6 +77,24 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   const [activeAssistantTheme, setActiveAssistantTheme] = useState<Assistant | null>(
     null,
   );
+  const chatsRef = useRef<Chat[]>([]);
+  const chatAssistantCacheRef = useRef<Map<number, number | null>>(new Map());
+  const chatAssistantInflightRef = useRef<Map<number, Promise<number | null>>>(new Map());
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
+
+  const chatSearchRef = useRef(chatSearch);
+  chatSearchRef.current = chatSearch;
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const assistantsPageRef = useRef(assistantsPage);
+  assistantsPageRef.current = assistantsPage;
+  const assistantsHasMoreRef = useRef(assistantsHasMore);
+  assistantsHasMoreRef.current = assistantsHasMore;
 
   // Hydrate sidebar collapsed state from localStorage
   useEffect(() => {
@@ -73,35 +102,46 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     if (saved === "true") setSidebarCollapsed(true);
   }, []);
 
-  const toggleSidebarCollapsed = () => {
+  const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem("sidebarCollapsed", String(next));
       return next;
     });
-  };
+  }, []);
 
   const isProfileRoute = pathname.startsWith("/profile");
 
-  const fetchChats = useCallback(async (pageNum = 1, searchTerm = chatSearch) => {
+  const fetchChats = useCallback(async (pageNum = 1, searchTerm?: string) => {
+    const effectiveSearch = searchTerm ?? chatSearchRef.current;
     try {
       const res = await chatService.list({
         page: pageNum.toString(),
         pageSize: "6",
         isArchived: "false",
-        ...(searchTerm ? { search: searchTerm } : { folderId: "null" }),
+        ...(effectiveSearch ? { search: effectiveSearch } : { folderId: "null" }),
       });
       const result = res.data.data;
       const fetched = result?.data || [];
 
       setChats(prev => {
         if (pageNum === 1) {
-          // Merge to keep existing objects where possible
-          return fetched.map((bc: any) => {
-            const existing = prev.find(pc => pc.id === bc.id);
-            if (existing) return { ...existing, ...bc };
-            return bc;
+          const merged = fetched.map((bc: any) => {
+            const existing = prev.find((pc: any) => pc.id === bc.id);
+            if (!existing) return bc;
+            if (existing.title === bc.title &&
+                existing.folderId === bc.folderId &&
+                existing.isPinned === bc.isPinned &&
+                existing.isArchived === bc.isArchived &&
+                existing.assistantId === bc.assistantId) {
+              return existing;
+            }
+            return { ...existing, ...bc };
           });
+          if (prev.length === merged.length && merged.every((m: any, i: number) => prev[i] === m)) {
+            return prev;
+          }
+          return merged;
         }
         const exists = new Set(prev.map((c: any) => c.id));
         return [...prev, ...fetched.filter((c: any) => !exists.has(c.id))];
@@ -110,14 +150,20 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       setPage(pageNum);
       setHasMore(Boolean(result?.hasNextPage));
     } catch { /* ignore */ }
-  }, [chatSearch]);
+  }, []);
 
   const fetchFolders = useCallback(async () => {
     try {
       const res = await folderService.list();
       const data = res.data?.data;
       const foldersArray = Array.isArray(data?.data) ? data.data : [];
-      setFolders(foldersArray);
+      setFolders((prev: Folder[]) => {
+        if (prev.length === foldersArray.length &&
+            prev.every((f: Folder, i: number) => f.id === foldersArray[i]?.id && f.name === foldersArray[i]?.name)) {
+          return prev;
+        }
+        return foldersArray;
+      });
     } catch (err) {
       console.error("Failed to fetch folders:", err);
       setFolders([]);
@@ -134,7 +180,16 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       const result = res.data.data;
       const fetched = result?.data || [];
 
-      setAssistants((prev) => (pageNum === 1 ? fetched : [...prev, ...fetched]));
+      setAssistants((prev) => {
+        if (pageNum === 1) {
+          if (prev.length === fetched.length &&
+              prev.every((a: any, i: number) => a.id === fetched[i]?.id && a.name === fetched[i]?.name && a.isActive === fetched[i]?.isActive)) {
+            return prev;
+          }
+          return fetched;
+        }
+        return [...prev, ...fetched];
+      });
       setAssistantsPage(pageNum);
       setAssistantsHasMore(Boolean(result?.hasNextPage));
     } catch { /* ignore */ }
@@ -148,17 +203,60 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      fetchChats(1, chatSearch);
       fetchFolders();
       fetchAssistants(1);
     }
-  }, [user, fetchChats, fetchFolders, fetchAssistants, chatSearch]);
+  }, [user, fetchFolders, fetchAssistants]);
 
   useEffect(() => {
-    const handleRefresh = () => fetchChats(1);
-    window.addEventListener("refresh-chats", handleRefresh);
-    return () => window.removeEventListener("refresh-chats", handleRefresh);
-  }, [fetchChats]);
+    if (user) {
+      fetchChats(1);
+    }
+  }, [user, fetchChats, chatSearch]);
+
+  const chatListRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const runChatListRefresh = useCallback(
+    (immediate: boolean) => {
+      const run = () => {
+        startTransition(() => {
+          fetchChats(1);
+        });
+      };
+      if (immediate) {
+        if (chatListRefreshTimerRef.current) {
+          clearTimeout(chatListRefreshTimerRef.current);
+          chatListRefreshTimerRef.current = null;
+        }
+        run();
+        return;
+      }
+      if (chatListRefreshTimerRef.current) {
+        clearTimeout(chatListRefreshTimerRef.current);
+      }
+      chatListRefreshTimerRef.current = setTimeout(() => {
+        chatListRefreshTimerRef.current = null;
+        run();
+      }, 450);
+    },
+    [fetchChats],
+  );
+
+  useEffect(() => {
+    const handleRefresh = (e: Event) => {
+      const ce = e as CustomEvent<{ immediate?: boolean }>;
+      const immediate = Boolean(ce.detail?.immediate);
+      runChatListRefresh(immediate);
+    };
+    window.addEventListener("refresh-chats", handleRefresh as EventListener);
+    return () => {
+      window.removeEventListener("refresh-chats", handleRefresh as EventListener);
+      if (chatListRefreshTimerRef.current) {
+        clearTimeout(chatListRefreshTimerRef.current);
+        chatListRefreshTimerRef.current = null;
+      }
+    };
+  }, [runChatListRefresh]);
 
   useEffect(() => {
     const handleRefreshAssistants = () => fetchAssistants(1);
@@ -170,12 +268,16 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleAssistantSelected = (evt: Event) => {
       const customEvt = evt as CustomEvent<{ assistant?: Assistant }>;
-      const assistant = customEvt.detail?.assistant;
+      const assistant = customEvt.detail?.assistant ?? null;
       const raw = localStorage.getItem("selectedAssistantId");
       const parsed = raw ? Number(raw) : NaN;
-      setActiveAssistantId(Number.isNaN(parsed) ? null : parsed);
+      const nextId = Number.isNaN(parsed) ? null : parsed;
+
+      setActiveAssistantId((prev) => (prev === nextId ? prev : nextId));
       if (assistant) {
-        setActiveAssistantTheme(assistant);
+        setActiveAssistantTheme((prev) => (prev?.id === assistant.id ? prev : assistant));
+      } else {
+        setActiveAssistantTheme((prev) => (prev === null ? prev : null));
       }
     };
     window.addEventListener("assistant-selected", handleAssistantSelected);
@@ -183,79 +285,110 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       window.removeEventListener("assistant-selected", handleAssistantSelected);
   }, []);
 
-  useEffect(() => {
-    if (!isProfileRoute && user) {
-      fetchAssistants(1);
-    }
-  }, [pathname, isProfileRoute, user, fetchAssistants]);
+  const activeAssistantIdRef = useRef(activeAssistantId);
+  activeAssistantIdRef.current = activeAssistantId;
+  const assistantsRef = useRef(assistants);
+  assistantsRef.current = assistants;
 
   useEffect(() => {
-    fetchChats(1, chatSearch);
-  }, [chatSearch, fetchChats]);
+    let cancelled = false;
 
-  useEffect(() => {
-    const resolveActiveAssistant = async () => {
-      if (pathname === "/") {
+    const resolveAndApply = async () => {
+      let newId: number | null = null;
+
+      if (pathname === "/" || pathname === "/new") {
         const raw = localStorage.getItem("selectedAssistantId");
         const parsed = raw ? Number(raw) : NaN;
-        const newId = Number.isNaN(parsed) ? null : parsed;
-        setActiveAssistantId((prev) => (prev === newId ? prev : newId));
-        return;
-      }
-
-      if (pathname.startsWith("/c/")) {
+        newId = Number.isNaN(parsed) ? null : parsed;
+      } else if (pathname.startsWith("/c/")) {
         const match = pathname.match(/^\/c\/(\d+)/);
         const chatId = match ? Number(match[1]) : NaN;
-        if (Number.isNaN(chatId)) {
-          setActiveAssistantId((prev) => (prev === null ? prev : null));
-          return;
+        if (!Number.isNaN(chatId)) {
+          const listChat = chatsRef.current.find((c) => c.id === chatId);
+          if (listChat) {
+            newId = listChat.assistantId ?? null;
+            chatAssistantCacheRef.current.set(chatId, newId);
+          } else {
+            const cached = chatAssistantCacheRef.current.get(chatId);
+            if (cached !== undefined) {
+              newId = cached;
+            } else {
+              try {
+                const inflight = chatAssistantInflightRef.current.get(chatId);
+                const fetchPromise =
+                  inflight ??
+                  chatService
+                    .getById(chatId)
+                    .then((res) => res.data.data?.assistantId ?? null)
+                    .catch(() => null)
+                    .finally(() => chatAssistantInflightRef.current.delete(chatId));
+                if (!inflight) chatAssistantInflightRef.current.set(chatId, fetchPromise);
+                newId = await fetchPromise;
+                chatAssistantCacheRef.current.set(chatId, newId);
+              } catch {
+                newId = null;
+              }
+            }
+          }
         }
-
-        const listChat = chats.find((c) => c.id === chatId);
-        if (listChat) {
-          const newId = listChat.assistantId ?? null;
-          setActiveAssistantId((prev) => (prev === newId ? prev : newId));
-          return;
-        }
-
-        try {
-          const res = await chatService.getById(chatId);
-          const newId = res.data.data?.assistantId ?? null;
-          setActiveAssistantId((prev) => (prev === newId ? prev : newId));
-        } catch {
-          setActiveAssistantId((prev) => (prev === null ? prev : null));
-        }
-        return;
       }
 
-      setActiveAssistantId((prev) => (prev === null ? prev : null));
+      if (cancelled) return;
+      if (newId === activeAssistantIdRef.current) return;
+
+      let newTheme: Assistant | null = null;
+      if (newId) {
+        const listMatch = assistantsRef.current.find((a) => a.id === newId);
+        if (listMatch) {
+          newTheme = listMatch;
+        } else {
+          try {
+            const res = await assistantService.getById(newId);
+            newTheme = res.data.data || null;
+          } catch {
+            newTheme = null;
+          }
+        }
+      }
+
+      if (cancelled) return;
+      setActiveAssistantId(newId);
+      setActiveAssistantTheme(newTheme);
     };
 
-    resolveActiveAssistant();
-  }, [pathname, chats]);
+    resolveAndApply();
+    return () => { cancelled = true; };
+  }, [pathname]);
 
   useEffect(() => {
-    if (!activeAssistantId) {
-      setActiveAssistantTheme(null);
-      return;
-    }
-
-    const listMatch = assistants.find((a) => a.id === activeAssistantId);
+    const id = activeAssistantIdRef.current;
+    if (!id) return;
+    const listMatch = assistants.find((a) => a.id === id);
     if (listMatch) {
-      setActiveAssistantTheme(listMatch);
-      return;
+      setActiveAssistantTheme((prev) => (prev?.id === listMatch.id ? prev : listMatch));
     }
+  }, [assistants]);
 
-    assistantService
-      .getById(activeAssistantId)
-      .then((res) => setActiveAssistantTheme(res.data.data || null))
-      .catch(() => setActiveAssistantTheme(null));
-  }, [activeAssistantId, assistants]);
-
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     router.replace("/");
-  };
+  }, [logout, router]);
+
+  /** Folders + chat list — assistants are refreshed only via dedicated events. */
+  const handleSidebarRefresh = useCallback(() => {
+    fetchFolders();
+    runChatListRefresh(true);
+  }, [fetchFolders, runChatListRefresh]);
+
+  const handleMobileClose = useCallback(() => setMobileOpen(false), []);
+
+  const handleLoadMoreChats = useCallback(() => {
+    if (hasMoreRef.current) fetchChats(pageRef.current + 1);
+  }, [fetchChats]);
+
+  const handleLoadMoreAssistants = useCallback(() => {
+    if (assistantsHasMoreRef.current) fetchAssistants(assistantsPageRef.current + 1);
+  }, [fetchAssistants]);
 
   if (isLoading) {
     return (
@@ -282,15 +415,14 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       chats={chats}
       folders={folders}
       assistants={assistants}
-      onRefresh={() => { fetchChats(1, chatSearch); fetchFolders(); fetchAssistants(1); window.dispatchEvent(new Event("refresh-chats")); }}
-      onMobileClose={() => setMobileOpen(false)}
-      onLogout={handleLogout}
+      onRefresh={handleSidebarRefresh}
+      onMobileClose={handleMobileClose}
       hasMore={hasMore}
-      onLoadMore={() => { if (hasMore) fetchChats(page + 1, chatSearch); }}
+      onLoadMore={handleLoadMoreChats}
       searchQuery={chatSearch}
       onSearchChange={setChatSearch}
       assistantsHasMore={assistantsHasMore}
-      onLoadMoreAssistants={() => { if (assistantsHasMore) fetchAssistants(assistantsPage + 1); }}
+      onLoadMoreAssistants={handleLoadMoreAssistants}
       collapsed={sidebarCollapsed}
       onToggleCollapse={toggleSidebarCollapsed}
     />
@@ -331,9 +463,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       style={dynamicBackgroundStyle}
     >
       <aside
-        className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-all duration-300 ease-in-out ${
+        className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-[width] duration-300 ease-in-out ${
           sidebarCollapsed ? "w-[64px]" : "w-[280px]"
         }`}
+        style={{ contain: "layout style paint", willChange: "transform" }}
       >
         {sidebarContent}
       </aside>
@@ -390,13 +523,17 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <aside className={`
-        md:hidden fixed z-50 h-full w-[280px] flex-shrink-0 border-r border-border/40
-        bg-background flex flex-col transition-all duration-300 ease-in-out
-        ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
-      `}>
-        {sidebarContent}
-      </aside>
+      {mobileOpen && (
+        <aside
+          className={`
+            md:hidden fixed z-50 h-full w-[280px] flex-shrink-0 border-r border-border/40
+            bg-background flex flex-col transition-all duration-300 ease-in-out translate-x-0
+          `}
+          style={{ contain: "layout style paint" }}
+        >
+          {sidebarContent}
+        </aside>
+      )}
 
       <main className="flex-1 flex flex-col min-w-0 md:pt-0 pt-14">
         {children}

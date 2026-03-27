@@ -4,11 +4,20 @@ import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreatePlanBody, UpdatePlanBody } from "./plan.types.js";
 import { getPaginationOptions, formatPaginationResponse } from "@/utils/paginationUtils.js";
 import { buildPrismaQuery } from "prisma-qb";
+import SubscriptionCashfreeService from "@/modules/subscription/subscription.cashfree.service.js";
 
 class PlanService {
+    private cashfreeService = new SubscriptionCashfreeService();
+
     async create(data: CreatePlanBody) {
         const plan = await prisma.plan.create({ data });
-        return plan;
+        try {
+            await this.cashfreeService.syncAllPlanCycles(plan as any);
+            return plan;
+        } catch (error) {
+            await prisma.plan.delete({ where: { id: plan.id } });
+            throw error;
+        }
     }
 
     async list(query: any) {
@@ -59,6 +68,26 @@ class PlanService {
             where: { id: planId },
             data,
         });
+
+        try {
+            await this.cashfreeService.syncAllPlanCycles(updated as any);
+        } catch (error) {
+            // Roll back local update if Cashfree sync fails.
+            await prisma.plan.update({
+                where: { id: planId },
+                data: {
+                    name: plan.name,
+                    monthlyPrice: plan.monthlyPrice,
+                    quarterlyPrice: plan.quarterlyPrice,
+                    yearlyPrice: plan.yearlyPrice,
+                    tokenLimit: plan.tokenLimit,
+                    features: (plan.features ?? {}) as any,
+                    isActive: plan.isActive,
+                },
+            });
+            throw error;
+        }
+
         return updated;
     }
 

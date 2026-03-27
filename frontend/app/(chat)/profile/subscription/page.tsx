@@ -10,9 +10,66 @@ import { toast } from "react-toastify";
 
 export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<any>(null);
+  const [pendingSubscription, setPendingSubscription] = useState<any>(null);
+  const [freePlanTaken, setFreePlanTaken] = useState(false);
+  const [pendingExpiresAt, setPendingExpiresAt] = useState<string | null>(null);
+  const [pendingAuthLink, setPendingAuthLink] = useState<string | null>(null);
+  const [pendingSubscriptionSessionId, setPendingSubscriptionSessionId] = useState<string | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null);
+  const isUsableAuthLink = (url: string | null | undefined) =>
+    Boolean(url) && !String(url).includes("/subscriptions/checkout/timer");
+  const markCheckoutFlowStart = () => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("subscription_checkout_in_progress", "1");
+  };
+
+  const loadCashfreeSdk = async () => {
+    if (typeof window === "undefined") return null;
+    if ((window as any).Cashfree) return (window as any).Cashfree;
+
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector('script[data-cashfree-sdk="true"]') as HTMLScriptElement | null;
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Cashfree SDK failed to load")), { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+      script.async = true;
+      script.setAttribute("data-cashfree-sdk", "true");
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Cashfree SDK failed to load"));
+      document.head.appendChild(script);
+    });
+
+    return (window as any).Cashfree ?? null;
+  };
+
+  const openSubscriptionCheckout = async (sessionId: string) => {
+    const Cashfree = await loadCashfreeSdk();
+    if (!Cashfree) {
+      toast.error("Failed to load Cashfree checkout");
+      return;
+    }
+
+    const mode = String(process.env.NEXT_PUBLIC_CASHFREE_MODE || "production").toLowerCase() === "sandbox"
+      ? "sandbox"
+      : "production";
+    const cashfree = Cashfree({ mode });
+    const result = await cashfree.subscriptionsCheckout({
+      subsSessionId: sessionId,
+      // Keep checkout in same tab so browser back returns here.
+      redirectTarget: "_self",
+    });
+
+    if (result?.error) {
+      toast.error(result.error?.message || "Failed to open payment checkout");
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -20,7 +77,37 @@ export default function SubscriptionPage() {
         subscriptionService.getCurrent().catch(() => null),
         planService.list(),
       ]);
-      setSubscription(subRes?.data.data || null);
+      console.debug("[SubscriptionPage] fetchData responses", {
+        subRes: subRes?.data,
+        planCount: planRes?.data?.data?.data?.length ?? 0,
+      });
+      const subData = subRes?.data?.data;
+      if (subData && typeof subData === "object" && "subscription" in subData) {
+        setSubscription((subData as any).subscription ?? null);
+        setPendingSubscription((subData as any).pendingSubscription ?? null);
+        setFreePlanTaken(Boolean((subData as any).freePlanTaken));
+        setPendingExpiresAt((subData as any).pendingExpiresAt ?? null);
+        setPendingSubscriptionSessionId((subData as any).pendingSubscriptionSessionId ?? null);
+        if ((subData as any).pendingAuthLink && isUsableAuthLink((subData as any).pendingAuthLink)) {
+          setPendingAuthLink((subData as any).pendingAuthLink);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("pending_subscription_auth_link", (subData as any).pendingAuthLink);
+          }
+        } else if (typeof window !== "undefined") {
+          localStorage.removeItem("pending_subscription_auth_link");
+          setPendingAuthLink(null);
+        }
+      } else {
+        setSubscription(subData ?? null);
+        setPendingSubscription(null);
+        setFreePlanTaken(false);
+        setPendingExpiresAt(null);
+        setPendingSubscriptionSessionId(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("pending_subscription_auth_link");
+          setPendingAuthLink(null);
+        }
+      }
       setPlans(planRes.data.data?.data || []);
     } catch { /* ignore */ } finally {
       setLoading(false);
@@ -28,6 +115,16 @@ export default function SubscriptionPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("pending_subscription_auth_link");
+    if (isUsableAuthLink(stored)) {
+      setPendingAuthLink(stored);
+    } else {
+      localStorage.removeItem("pending_subscription_auth_link");
+      setPendingAuthLink(null);
+    }
+  }, []);
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -41,11 +138,102 @@ export default function SubscriptionPage() {
   };
 
   const handleSubscribe = async (planId: number) => {
+    if (subscribingPlanId !== null) return;
+    setSubscribingPlanId(planId);
     try {
-      await subscriptionService.create({ planId, billingCycle: "MONTHLY" });
+      console.debug("[SubscriptionPage] handleSubscribe request", { planId });
+      const res = await subscriptionService.create({
+        planId,
+        billingCycle: "MONTHLY",
+      });
+      console.debug("[SubscriptionPage] handleSubscribe response", res?.data);
+
+      const auth_link = res?.data?.data?.auth_link;
+      const subscriptionSessionId = res?.data?.data?.subscription_session_id;
+      const selectedPlan = plans.find((p: any) => p.id === planId);
+      const isPaidPlan = Number(selectedPlan?.monthlyPrice ?? 0) > 0;
+
+      if (isPaidPlan && subscriptionSessionId) {
+        markCheckoutFlowStart();
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("pending_subscription_auth_link");
+          setPendingAuthLink(null);
+        }
+        await openSubscriptionCheckout(subscriptionSessionId);
+        await fetchData();
+        return;
+      }
+
+      if (isUsableAuthLink(auth_link)) {
+        console.debug("[SubscriptionPage] redirecting with auth_link", { auth_link });
+        markCheckoutFlowStart();
+        if (typeof window !== "undefined") {
+          localStorage.setItem("pending_subscription_auth_link", auth_link);
+          setPendingAuthLink(auth_link);
+        }
+        toast.success("Redirecting to Cashfree authorization...");
+        window.location.href = auth_link;
+        return;
+      }
+
+      if (isPaidPlan) {
+        console.debug("[SubscriptionPage] paid plan but no auth_link", { planId, isPaidPlan });
+        toast.info("Subscription initiated. Use Continue payment to complete authorization.");
+        await fetchData();
+        return;
+      }
+
+      // Free plan activates immediately (no Cashfree redirect).
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pending_subscription_auth_link");
+        setPendingAuthLink(null);
+      }
       toast.success("Subscribed successfully!");
       fetchData();
-    } catch { toast.error("Failed to subscribe"); }
+    } catch (err: any) {
+      console.debug("[SubscriptionPage] handleSubscribe error", err?.response?.data || err);
+      toast.error(err?.response?.data?.message || "Failed to subscribe");
+    }
+    finally {
+      setSubscribingPlanId(null);
+    }
+  };
+
+  const handleContinuePending = () => {
+    console.debug("[SubscriptionPage] handleContinuePending", {
+      pendingAuthLink,
+      hasLink: Boolean(pendingAuthLink),
+    });
+    if (pendingSubscriptionSessionId) {
+      markCheckoutFlowStart();
+      void openSubscriptionCheckout(pendingSubscriptionSessionId);
+      return;
+    }
+    if (!isUsableAuthLink(pendingAuthLink)) {
+      toast.error("No valid pending payment link found");
+      return;
+    }
+    markCheckoutFlowStart();
+    window.location.href = pendingAuthLink as string;
+  };
+
+  const handleCancelOlderPayment = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      await subscriptionService.cancel();
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pending_subscription_auth_link");
+      }
+      setPendingAuthLink(null);
+      toast.success("Older pending payment cancelled");
+      await fetchData();
+    } catch (err: any) {
+      console.debug("[SubscriptionPage] handleCancelOlderPayment error", err?.response?.data || err);
+      toast.error(err?.response?.data?.message || "Failed to cancel pending payment");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -57,7 +245,7 @@ export default function SubscriptionPage() {
         <p className="text-muted-foreground text-sm mt-1">Manage your plan and billing</p>
       </div>
 
-      {subscription && (
+      {subscription ? (
         <Card className="bg-card/90 backdrop-blur-sm border-border/30">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -71,13 +259,64 @@ export default function SubscriptionPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Expires: {new Date(subscription.expiresAt).toLocaleDateString()}
-            </p>
+            {subscription.expiresAt && (
+              <p className="text-sm text-muted-foreground">
+                Expires: {new Date(subscription.expiresAt).toLocaleDateString()}
+              </p>
+            )}
             {subscription.status === "ACTIVE" && (
-              <Button variant="destructive" size="sm" onClick={handleCancel} disabled>
+              <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelling}>
                 {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel subscription"}
               </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-card/90 backdrop-blur-sm border-border/30">
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">No active plans</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingSubscription && (
+        <Card className="bg-card/90 backdrop-blur-sm border-border/30">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>{pendingSubscription.plan?.name} Plan</CardTitle>
+                <CardDescription>{pendingSubscription.billingCycle} billing</CardDescription>
+              </div>
+              <Badge variant="secondary">PENDING</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-amber-500">
+              Waiting for payment authorization. Complete mandate setup to activate your plan.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleContinuePending}
+                disabled={subscribingPlanId !== null}
+              >
+                Continue payment
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleCancelOlderPayment}
+                disabled={cancelling}
+              >
+                {cancelling ? "Cancelling..." : "Cancel older payment"}
+              </Button>
+            </div>
+            {pendingExpiresAt && (
+              <p className="text-xs text-muted-foreground">
+                Current authorization may expire around {new Date(pendingExpiresAt).toLocaleString()}.
+                You can continue or cancel this pending payment.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -95,7 +334,7 @@ export default function SubscriptionPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-lg">{plan.name}</h3>
                   <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                    {plan.monthlyPrice === 0 ? "Free" : `$${plan.monthlyPrice}/mo`}
+                    {plan.monthlyPrice === 0 ? "Free" : `₹${plan.monthlyPrice}/mo`}
                   </span>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
@@ -103,13 +342,41 @@ export default function SubscriptionPage() {
                   <p>🤖 {plan.features?.maxModels === -1 ? "Unlimited" : plan.features?.maxModels} model{plan.features?.maxModels !== 1 ? "s" : ""}</p>
                   {plan.features?.attachments && <p>📎 File attachments</p>}
                 </div>
-                {(!subscription || subscription.planId !== plan.id) ? (
-                  <Button size="sm" className="w-full" onClick={() => handleSubscribe(plan.id)} disabled>
-                    {plan.monthlyPrice === 0 ? "Start Free" : "Subscribe"}
-                  </Button>
-                ) : (
-                  <Badge className="w-full justify-center">Current plan</Badge>
-                )}
+                {(() => {
+                  const isCurrentPlan = !!subscription && subscription.planId === plan.id;
+                  const isFreePlan = Number(plan.monthlyPrice) === 0;
+                  const isAlreadyTakenFree = isFreePlan && freePlanTaken && !isCurrentPlan;
+                  const currentMonthlyPrice = Number(subscription?.plan?.monthlyPrice ?? 0);
+                  const planMonthlyPrice = Number(plan.monthlyPrice ?? 0);
+                  const hasCurrentPlan = Boolean(subscription);
+                  const isUpgrade = hasCurrentPlan && planMonthlyPrice > currentMonthlyPrice;
+
+                  if (isCurrentPlan) {
+                    return <Badge className="w-full justify-center">Current plan</Badge>;
+                  }
+
+                  if (isAlreadyTakenFree) {
+                    return <Badge variant="secondary" className="w-full justify-center">Already taken</Badge>;
+                  }
+
+                  return (
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={() => handleSubscribe(plan.id)}
+                    >
+                      {subscribingPlanId === plan.id
+                        ? "Starting..."
+                        : isFreePlan
+                          ? "Start Free"
+                          : isUpgrade
+                            ? "Upgrade"
+                            : hasCurrentPlan
+                              ? "Change plan"
+                              : "Subscribe"}
+                    </Button>
+                  );
+                })()}
               </div>
             ))}
           </div>

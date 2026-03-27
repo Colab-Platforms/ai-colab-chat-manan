@@ -4,9 +4,23 @@ import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import { CreateSubscriptionBody } from "./subscription.types.js";
 import { createWalletTransaction } from "@/utils/walletUtils.js";
+import SubscriptionCashfreeService from "./subscription.cashfree.service.js";
+import { CashfreePlanSource } from "@/utils/cashfreePlan.js";
 
 class SubscriptionService {
+    private cashfreeService = new SubscriptionCashfreeService();
+    private static readonly PENDING_AUTH_WINDOW_MINUTES = 30;
+
     async create(userId: number, data: CreateSubscriptionBody) {
+        const now = new Date();
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+        }
+
         const plan = await prisma.plan.findFirst({
             where: { id: data.planId, isActive: true, isDeleted: false },
         });
@@ -16,103 +30,282 @@ class SubscriptionService {
         }
 
         const existingSub = await prisma.subscription.findFirst({
-            where: { userId, status: "ACTIVE" },
-        });
-
-        if (existingSub) {
-            throw new ApiError("You already have an active subscription", STATUS_CODES.CONFLICT);
-        }
-
-        const now = new Date();
-        let expiresAt: Date;
-
-        switch (data.billingCycle) {
-            case "MONTHLY":
-                expiresAt = dayjs(now).add(1, "month").toDate();
-                break;
-            case "QUARTERLY":
-                expiresAt = dayjs(now).add(3, "month").toDate();
-                break;
-            case "YEARLY":
-                expiresAt = dayjs(now).add(1, "year").toDate();
-                break;
-        }
-
-        const result = await prisma.$transaction(async (tx) => {
-            const subscription = await tx.subscription.create({
-                data: {
-                    userId,
-                    planId: data.planId,
-                    billingCycle: data.billingCycle,
-                    status: "ACTIVE",
-                    autoRenew: true,
-                    startedAt: now,
-                    expiresAt,
-                },
-            });
-
-            const wallet = await tx.userWallet.upsert({
-                where: { userId },
-                create: {
-                    userId,
-                    tokensRemaining: plan.tokenLimit,
-                    tokensUsed: 0,
-                    currentPeriodStart: now,
-                    currentPeriodEnd: dayjs(now).add(1, "month").toDate(),
-                },
-                update: {
-                    tokensRemaining: plan.tokenLimit,
-                    tokensUsed: 0,
-                    currentPeriodStart: now,
-                    currentPeriodEnd: dayjs(now).add(1, "month").toDate(),
-                },
-            });
-
-            await createWalletTransaction(tx, {
-                userId,
-                walletId: wallet.id,
-                amount: plan.tokenLimit,
-                type: "CREDIT",
-                referenceId: `sub_${subscription.id}`,
-                meta: { reason: "SUBSCRIPTION_CREATION", planId: plan.id, planName: plan.name },
-            });
-
-            return subscription;
-        });
-
-        return result;
-    }
-
-    async getCurrent(userId: number) {
-        const subscription = await prisma.subscription.findFirst({
-            where: { userId, status: { in: ["ACTIVE", "TRIAL"] } },
+            where: { userId, status: { in: ["ACTIVE", "PENDING"] } },
             include: { plan: true },
             orderBy: { createdAt: "desc" },
         });
 
-        if (!subscription) {
-            throw new ApiError("No active subscription found", STATUS_CODES.NOT_FOUND);
+        if (existingSub) {
+            const existingIsFree =
+                Number(existingSub.plan.monthlyPrice) === 0 ||
+                existingSub.plan.name.trim().toLowerCase() === "free";
+            const targetIsPaid =
+                Number(plan.monthlyPrice) > 0 &&
+                plan.name.trim().toLowerCase() !== "free";
+            const isSamePlan = existingSub.planId === plan.id;
+
+            if (existingSub.status === "PENDING") {
+                const pendingExpiry = dayjs(existingSub.createdAt)
+                    .add(SubscriptionService.PENDING_AUTH_WINDOW_MINUTES, "minute")
+                    .toDate();
+                const isExpired = now > pendingExpiry;
+
+                if (!isExpired && !data.forceRetry) {
+                    throw new ApiError(
+                        "You already have a pending subscription authorization",
+                        STATUS_CODES.CONFLICT,
+                    );
+                }
+
+                if (existingSub.cashfreeSubscriptionId) {
+                    try {
+                        await this.cashfreeService.cancelSubscription(existingSub.cashfreeSubscriptionId);
+                    } catch (cancelError: any) {
+                        console.warn(
+                            "Cashfree pending subscription cancel warning:",
+                            cancelError?.message ?? cancelError,
+                        );
+                    }
+                }
+
+                await prisma.subscription.update({
+                    where: { id: existingSub.id },
+                    data: {
+                        status: "CANCELLED",
+                        autoRenew: false,
+                        expiresAt: now,
+                    },
+                });
+            }
+
+            // Allow switching/upgrading from an existing ACTIVE plan to a different paid plan.
+            // Keep current ACTIVE plan until the new mandate is successfully activated by webhook.
+            if (existingSub.status === "ACTIVE") {
+                if (isSamePlan) {
+                    throw new ApiError("You are already on this plan", STATUS_CODES.CONFLICT);
+                }
+
+                if (existingIsFree && targetIsPaid) {
+                    // Allowed: Free -> Paid
+                } else if (!existingIsFree && targetIsPaid) {
+                    // Allowed: Paid -> Paid (upgrade/downgrade switch)
+                } else {
+                    throw new ApiError("Plan switch is only supported for paid plans", STATUS_CODES.CONFLICT);
+                }
+            }
         }
 
-        return subscription;
+        // Free plans: immediately activate and credit wallet (no Cashfree integration).
+        if (Number(plan.monthlyPrice) === 0) {
+            const freePlanAlreadyUsed = await prisma.subscription.findFirst({
+                where: {
+                    plan: {
+                        isDeleted: false,
+                        OR: [
+                            { name: { equals: "free", mode: "insensitive" } },
+                            { monthlyPrice: 0 },
+                        ],
+                    },
+                    user: {
+                        email: user.email,
+                    },
+                },
+                select: { id: true },
+            });
+
+            if (freePlanAlreadyUsed) {
+                throw new ApiError(
+                    "Free plan can only be availed once",
+                    STATUS_CODES.CONFLICT,
+                );
+            }
+
+            return prisma.$transaction(async (tx) => {
+                const subscription = await tx.subscription.create({
+                    data: {
+                        userId,
+                        planId: data.planId,
+                        billingCycle: data.billingCycle,
+                        status: "ACTIVE",
+                        autoRenew: false,
+                        startedAt: now,
+                        expiresAt: addCycle(now, data.billingCycle),
+                    },
+                });
+
+                const wallet = await tx.userWallet.upsert({
+                    where: { userId },
+                    create: {
+                        userId,
+                        tokensRemaining: plan.tokenLimit,
+                        tokensUsed: 0,
+                        currentPeriodStart: now,
+                        currentPeriodEnd: addCycle(now, data.billingCycle),
+                    },
+                    update: {
+                        tokensRemaining: plan.tokenLimit,
+                        tokensUsed: 0,
+                        currentPeriodStart: now,
+                        currentPeriodEnd: addCycle(now, data.billingCycle),
+                    },
+                });
+
+                await createWalletTransaction(tx, {
+                    userId,
+                    walletId: wallet.id,
+                    amount: plan.tokenLimit,
+                    type: "CREDIT",
+                    referenceId: "free_subscription_activation",
+                    meta: { reason: "FREE_PLAN_ACTIVATION", planId: plan.id, planName: plan.name },
+                });
+
+                return { subscription, auth_link: null };
+            });
+        }
+
+        // Paid plans: create local subscription in PENDING state.
+        // Wallet is zeroed until Cashfree sends SUBSCRIPTION_STATUS_CHANGE (ACTIVE) webhook.
+        // Use API-safe identifiers (alphanumeric + underscore).
+        const cashfreeSubscriptionId = `sub_${userId}_${Date.now()}`;
+
+        const subscription = await prisma.subscription.create({
+            data: {
+                userId,
+                planId: data.planId,
+                billingCycle: data.billingCycle,
+                status: "PENDING",
+                autoRenew: true,
+                startedAt: now,
+                cashfreeSubscriptionId,
+            },
+        });
+
+        try {
+            // Best-effort sync. Subscription creation should not fail only because
+            // Cashfree plan-sync endpoint is temporarily failing.
+            try {
+                await this.cashfreeService.syncPlan(
+                    plan as unknown as CashfreePlanSource,
+                    data.billingCycle,
+                );
+            } catch (syncError: any) {
+                console.warn("Cashfree plan sync warning:", syncError?.message ?? syncError);
+            }
+
+            const { auth_link, subscription_session_id } = await this.cashfreeService.createSubscription(
+                user,
+                plan as unknown as CashfreePlanSource,
+                data.billingCycle,
+                cashfreeSubscriptionId,
+            );
+
+            return { subscription, auth_link, subscription_session_id };
+        } catch (e: any) {
+            await prisma.subscription.update({
+                where: { id: subscription.id },
+                data: {
+                    status: "CANCELLED",
+                    autoRenew: false,
+                },
+            });
+            throw e;
+        }
+    }
+
+    async getCurrent(userId: number) {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+        });
+
+        if (!user) {
+            throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+        }
+
+        const currentSubscription = await prisma.subscription.findFirst({
+            where: { userId, status: { in: ["ACTIVE", "TRIAL"] } },
+            include: { plan: true },
+            orderBy: { createdAt: "desc" },
+        });
+        const pendingSubscription = await prisma.subscription.findFirst({
+            where: { userId, status: "PENDING" },
+            include: { plan: true },
+            orderBy: { createdAt: "desc" },
+        });
+
+        const freePlanTaken = !!(await prisma.subscription.findFirst({
+            where: {
+                user: { email: user.email },
+                plan: {
+                    isDeleted: false,
+                    OR: [
+                        { name: { equals: "free", mode: "insensitive" } },
+                        { monthlyPrice: 0 },
+                    ],
+                },
+            },
+            select: { id: true },
+        }));
+
+        const pendingExpiresAt =
+            pendingSubscription
+                ? dayjs(pendingSubscription.createdAt)
+                    .add(SubscriptionService.PENDING_AUTH_WINDOW_MINUTES, "minute")
+                    .toDate()
+                : null;
+
+        const pendingAuthLink =
+            pendingSubscription?.cashfreeSubscriptionId
+                ? await this.cashfreeService.getSubscriptionAuthLink(pendingSubscription.cashfreeSubscriptionId)
+                : null;
+        const pendingSubscriptionSessionId =
+            pendingSubscription?.cashfreeSubscriptionId
+                ? await this.cashfreeService.getSubscriptionSessionId(pendingSubscription.cashfreeSubscriptionId)
+                : null;
+
+        return {
+            subscription: currentSubscription ?? null,
+            pendingSubscription: pendingSubscription ?? null,
+            freePlanTaken,
+            pendingExpiresAt,
+            pendingAuthLink,
+            pendingSubscriptionSessionId,
+        };
     }
 
     async cancel(userId: number) {
         const subscription = await prisma.subscription.findFirst({
-            where: { userId, status: "ACTIVE" },
+            where: { userId, status: { in: ["ACTIVE", "PAST_DUE", "PENDING"] } },
+            orderBy: { createdAt: "desc" },
         });
 
         if (!subscription) {
-            throw new ApiError("No active subscription found", STATUS_CODES.NOT_FOUND);
+            throw new ApiError("No active or pending subscription found", STATUS_CODES.NOT_FOUND);
         }
 
-        const updated = await prisma.subscription.update({
+        // If cashfreeSubscriptionId exists, cancel on Cashfree first.
+        if (subscription.cashfreeSubscriptionId) {
+            await this.cashfreeService.cancelSubscription(subscription.cashfreeSubscriptionId);
+        }
+
+        return prisma.subscription.update({
             where: { id: subscription.id },
             data: { status: "CANCELLED", autoRenew: false },
         });
-
-        return updated;
     }
 }
 
 export default SubscriptionService;
+
+function addCycle(now: Date, cycle: "MONTHLY" | "QUARTERLY" | "YEARLY"): Date {
+    switch (cycle) {
+        case "MONTHLY":
+            return dayjs(now).add(1, "month").toDate();
+        case "QUARTERLY":
+            return dayjs(now).add(3, "month").toDate();
+        case "YEARLY":
+            return dayjs(now).add(1, "year").toDate();
+    }
+}
+
+// Intentionally no helpers below - the payment/user details come from DB.

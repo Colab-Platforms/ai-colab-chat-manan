@@ -8,6 +8,7 @@ import {
   formatPaginationResponse,
 } from "@/utils/paginationUtils.js";
 import { estimateTokenCount } from "@/utils/tokenCounter.js";
+import { createWalletTransaction } from "@/utils/walletUtils.js";
 import { buildPrismaQuery } from "prisma-qb";
 
 class MessageService {
@@ -202,6 +203,10 @@ class MessageService {
     );
     const billableTotalTokens = billablePromptTokens + billableCompletionTokens;
 
+    if (wallet.tokensRemaining <= 0) {
+      throw new ApiError("Token limit exceeded", STATUS_CODES.BAD_REQUEST);
+    }
+
     if (wallet.tokensRemaining < billableTotalTokens) {
       throw new ApiError("Insufficient tokens", STATUS_CODES.BAD_REQUEST);
     }
@@ -221,11 +226,23 @@ class MessageService {
         },
       });
 
-      await tx.userWallet.update({
+      const updatedWallet = await tx.userWallet.update({
         where: { userId },
         data: {
           tokensRemaining: { decrement: billableTotalTokens },
           tokensUsed: { increment: billableTotalTokens },
+        },
+      });
+
+      await createWalletTransaction(tx, {
+        userId,
+        walletId: updatedWallet.id,
+        amount: billableTotalTokens,
+        type: "DEBIT",
+        referenceId: `chat_usage_enhance_prompt`,
+        meta: {
+          reason: "ENHANCE_PROMPT_USAGE",
+          modelId: model.id,
         },
       });
     });

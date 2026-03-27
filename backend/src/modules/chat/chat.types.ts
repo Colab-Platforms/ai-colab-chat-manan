@@ -5,3 +5,7 @@ export interface CreateChatBody {
   modelIds?: number[];
   capability?: string;
 }
+
+export interface UpdateChatContextsBody {
+  contextIds: number[];
+}
