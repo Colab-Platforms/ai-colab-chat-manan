@@ -44,8 +44,8 @@ class SubscriptionCashfreeService {
     };
   }
 
-  private debugLog(label: string, data?: unknown) {
-    console.log(`[Cashfree][Subscription] ${label}`, data ?? "");
+  private debugLog(_label: string, _data?: unknown) {
+    // console.log(`[Cashfree][Subscription] ${label}`, data ?? "");
   }
 
   private toIntervalType(billingCycle: BillingCycle): "MONTH" | "QUARTER" | "YEAR" {
