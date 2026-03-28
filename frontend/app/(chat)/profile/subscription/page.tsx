@@ -349,7 +349,7 @@ export default function SubscriptionPage() {
                 Payment authorization pending
               </p>
               <p className="text-xs text-amber-700/90 dark:text-amber-300/90 mt-0.5">
-                Complete mandate setup to activate this plan.
+                A ₹2 mandate auth debit may be made and refunded. Your actual plan amount is charged right after authorization.
               </p>
             </div>
 

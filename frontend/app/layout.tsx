@@ -4,6 +4,7 @@ import "./globals.css";
 import "react-toastify/dist/ReactToastify.css";
 import { ThemeProvider } from "@/context/theme-context";
 import { AuthProvider } from "@/context/auth-context";
+import { ChatRootShell } from "@/components/chat/chat-root-shell";
 import { ToastContainer } from "react-toastify";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { PwaInstallPrompt } from "@/components/pwa/install-prompt";
@@ -85,8 +86,8 @@ export default function RootLayout({
           style={{ zIndex: 99999 }}
         />
         <ThemeProvider>
-          <AuthProvider>  
-            {children}
+          <AuthProvider>
+            <ChatRootShell>{children}</ChatRootShell>
             <PwaInstallPrompt />
           </AuthProvider>
         </ThemeProvider>

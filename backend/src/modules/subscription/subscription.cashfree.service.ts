@@ -13,6 +13,9 @@ import {
 class SubscriptionCashfreeService {
   private readonly subscriptionsBaseUrl: string;
   private readonly pgBaseUrl: string;
+  private static readonly AUTHORIZATION_AMOUNT_INR = Number(
+    process.env.CASHFREE_AUTHORIZATION_AMOUNT_INR ?? 1,
+  );
 
   constructor() {
     this.subscriptionsBaseUrl =
@@ -303,6 +306,10 @@ class SubscriptionCashfreeService {
       "/api/v2/subscriptions/nonSeamless/subscription",
     );
     const returnUrl = this.getHttpsReturnUrl();
+    const authorizationAmount = Math.min(
+      recurringAmount,
+      SubscriptionCashfreeService.AUTHORIZATION_AMOUNT_INR,
+    );
 
     const payload = isLegacySubscriptionEndpoint
       ? {
@@ -311,7 +318,7 @@ class SubscriptionCashfreeService {
           customerPhone: normalizedPhone,
           customerEmail: user.email,
           ...(returnUrl ? { returnUrl } : {}),
-          authAmount: Math.min(recurringAmount, 5),
+          authAmount: authorizationAmount,
           planInfo: {
             type: "PERIODIC",
             planName: plan.name,
@@ -349,7 +356,7 @@ class SubscriptionCashfreeService {
             notification_channel: ["EMAIL"],
           },
           authorization_details: {
-            authorization_amount: Math.min(recurringAmount, 5),
+            authorization_amount: authorizationAmount,
             authorization_amount_refund: true,
           },
         };
@@ -628,6 +635,60 @@ class SubscriptionCashfreeService {
         STATUS_CODES.SERVER_ERROR,
       );
     }
+  }
+
+  async triggerFirstCharge(subscriptionId: string): Promise<boolean> {
+    const endpoint = `${this.pgBaseUrl}/subscriptions/pay`;
+    const paymentId = `initial_charge_${subscriptionId}`;
+    const payloads = [
+      {
+        subscription_id: subscriptionId,
+        payment_id: paymentId,
+        payment_type: "CHARGE",
+      },
+      {
+        subscription_id: subscriptionId,
+        payment_id: paymentId,
+        payment_type: "RECURRING",
+      },
+      {
+        subscription_id: subscriptionId,
+        payment_id: paymentId,
+      },
+    ];
+
+    for (const payload of payloads) {
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            ...this.getHeaders(),
+            "x-idempotency-key": paymentId,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const bodyText = await response.text().catch(() => "");
+        this.debugLog("triggerFirstCharge response", {
+          endpoint,
+          status: response.status,
+          ok: response.ok,
+          payload,
+          body: bodyText.slice(0, 500),
+        });
+
+        if (response.ok) {
+          return true;
+        }
+      } catch (error: any) {
+        this.debugLog("triggerFirstCharge error", {
+          payload,
+          message: error?.message ?? String(error),
+        });
+      }
+    }
+
+    return false;
   }
 
   verifyWebhookSignature(req: any) {

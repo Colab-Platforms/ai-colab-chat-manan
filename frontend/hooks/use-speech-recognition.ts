@@ -30,9 +30,6 @@ export function useSpeechRecognition() {
     const isAndroid = /Android/i.test(navigator.userAgent);
 
     const recognition = new SpeechRecognition();
-    // Android Chrome has a known bug where continuous=true causes it to append
-    // the accumulated transcript from the beginning of the session into every new result.
-    // Setting continuous=false and manually accumulating the transcript across auto-restarts fixes it.
     recognition.continuous = !isAndroid;
     recognition.interimResults = true;
     recognition.lang = "en-IN";
@@ -68,7 +65,6 @@ export function useSpeechRecognition() {
     };
 
     recognition.onend = () => {
-      // Auto-restart if we are still meant to be listening
       if (isListeningRef.current) {
         try {
           recognition.start();

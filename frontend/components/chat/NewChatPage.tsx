@@ -139,10 +139,15 @@ export function NewChatPage() {
       }
       const chatRes = await chatService.create(payload);
       const chatId = chatRes.data.data.id;
+      const createdInFolder = Boolean(validPendingFolderId);
       localStorage.removeItem("pending_new_chat_folder_id");
       // Context IDs stay in localStorage; chat page applies them right before the first
       // pending message so navigation is not blocked on replaceContexts.
-      window.dispatchEvent(new CustomEvent("refresh-chats", { detail: { immediate: true } }));
+      window.dispatchEvent(
+        new CustomEvent("refresh-chats", {
+          detail: { immediate: true, refreshFolders: createdInFolder },
+        }),
+      );
       // Store pending first message in sessionStorage — never in URL params
       sessionStorage.setItem(
         `pending_chat_${chatId}`,

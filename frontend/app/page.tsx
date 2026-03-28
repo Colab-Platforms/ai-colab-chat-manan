@@ -1,9 +1,36 @@
 "use client";
 
+import { Suspense, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { LandingPage } from "@/components/landing/LandingPage";
 import { NewChatPage } from "@/components/chat/NewChatPage";
-import { ChatLayoutView } from "@/components/chat/ChatLayoutView";
+
+function HomeFolderScopeSync() {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const rawFolderId = searchParams.get("folderId");
+    const prevFolderId = localStorage.getItem("pending_new_chat_folder_id");
+    const nextFolderId = rawFolderId && rawFolderId.trim() !== "" ? rawFolderId : null;
+
+    if (nextFolderId) {
+      localStorage.setItem("pending_new_chat_folder_id", nextFolderId);
+    } else {
+      localStorage.removeItem("pending_new_chat_folder_id");
+    }
+
+    if ((prevFolderId ?? null) === nextFolderId) return;
+
+    window.dispatchEvent(
+      new CustomEvent("pending-new-chat-folder-updated", {
+        detail: { folderId: nextFolderId ? Number(nextFolderId) : null },
+      }),
+    );
+  }, [searchParams]);
+
+  return null;
+}
 
 export default function Home() {
   const { user, isLoading } = useAuth();
@@ -18,12 +45,14 @@ export default function Home() {
 
   if (user) {
     return (
-      <ChatLayoutView>
+      <>
+        <Suspense fallback={null}>
+          <HomeFolderScopeSync />
+        </Suspense>
         <NewChatPage />
-      </ChatLayoutView>
+      </>
     );
   }
 
   return <LandingPage />;
 }
-

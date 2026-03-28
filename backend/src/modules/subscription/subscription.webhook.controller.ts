@@ -41,6 +41,24 @@ function getWebhookPaymentId(data: any) {
   );
 }
 
+function getWebhookPaymentType(data: any): string | null {
+  const value =
+    data?.payment_type ??
+    data?.payment?.payment_type ??
+    data?.payment_details?.payment_type ??
+    data?.authorization_details?.payment_type ??
+    null;
+  if (!value) return null;
+  return String(value).trim().toUpperCase();
+}
+
+function isMandateAuthorizationPayment(data: any, paymentId: string | null): boolean {
+  const paymentType = getWebhookPaymentType(data);
+  if (paymentType === "AUTH" || paymentType === "AUTHORIZATION") return true;
+  if (paymentId && paymentId.toLowerCase().startsWith("auth_")) return true;
+  return false;
+}
+
 export async function cashfreeWebhook(req: Request, res: Response) {
   try {
     cashfreeService.verifyWebhookSignature(req as any);
@@ -74,9 +92,16 @@ export async function cashfreeWebhook(req: Request, res: Response) {
     const status = payloadData?.subscription_details?.subscription_status;
 
     // Keep subscription in PENDING on mandate activation.
-    // We only activate and credit wallet on actual recurring debit
+    // We only activate and credit wallet on actual debit success
     // (handled via SUBSCRIPTION_PAYMENT_SUCCESS below).
     if (status === "ACTIVE") {
+      // Mandate is authorized. Trigger first debit immediately so user can be
+      // activated quickly after auth.
+      try {
+        await cashfreeService.triggerFirstCharge(subscriptionId);
+      } catch {
+        // Best effort only. Subscription remains pending until payment success webhook arrives.
+      }
       return res.status(200).json({ status: true, message: "Processed" });
     } else if (status === "CUSTOMER_CANCELLED") {
       await prisma.subscription.update({
@@ -102,6 +127,10 @@ export async function cashfreeWebhook(req: Request, res: Response) {
         )
         .digest("hex")
         .slice(0, 32)}`;
+    if (isMandateAuthorizationPayment(payloadData, paymentId)) {
+      // Ignore mandate-auth debit success. Keep subscription pending until first actual recurring debit.
+      return res.status(200).json({ status: true, message: "Ignored auth payment success" });
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.subscription.updateMany({

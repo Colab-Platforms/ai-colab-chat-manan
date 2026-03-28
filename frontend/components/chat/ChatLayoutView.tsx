@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef, startTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
-import { Sidebar } from "@/components/sidebar/sidebar";
 import { Button } from "@/components/ui/button";
 import { Menu, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { chatService, folderService, assistantService } from "@/lib/services";
@@ -17,6 +16,7 @@ import {
 import { useTheme } from "@/context/theme-context";
 import { setRouteUiFromPathname } from "@/lib/route-ui-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Sidebar } from "../sidebar/sidebar";
 
 interface Chat {
   id: number;
@@ -377,8 +377,12 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   /** Folders + chat list — assistants are refreshed only via dedicated events. */
   const handleSidebarRefresh = useCallback(() => {
     fetchFolders();
-    runChatListRefresh(true);
-  }, [fetchFolders, runChatListRefresh]);
+    window.dispatchEvent(
+      new CustomEvent("refresh-chats", {
+        detail: { immediate: true, refreshFolders: true },
+      }),
+    );
+  }, [fetchFolders]);
 
   const handleMobileClose = useCallback(() => setMobileOpen(false), []);
 

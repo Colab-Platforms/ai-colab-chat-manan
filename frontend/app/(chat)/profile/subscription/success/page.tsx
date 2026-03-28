@@ -46,22 +46,42 @@ export default function SubscriptionSuccessPage() {
     setIsFlowAllowed(true);
 
     let mounted = true;
-    subscriptionService
-      .getCurrent()
-      .then((res) => {
+    let intervalId: number | null = null;
+    const startedAt = Date.now();
+    const POLL_TIMEOUT_MS = 60_000;
+    const POLL_INTERVAL_MS = 2_500;
+
+    const checkCurrentStatus = async () => {
+      try {
+        const res = await subscriptionService.getCurrent();
         if (!mounted) return;
         const current = res?.data?.data?.subscription;
-        setIsActive(Boolean(current && ["ACTIVE", "TRIAL"].includes(String(current.status))));
-      })
-      .catch(() => {
+        const active = Boolean(current && ["ACTIVE", "TRIAL"].includes(String(current.status)));
+        setIsActive(active);
+        if (active && intervalId) {
+          window.clearInterval(intervalId);
+          intervalId = null;
+        }
+      } catch {
         if (!mounted) return;
         setIsActive(false);
-      })
-      .finally(() => {
+      } finally {
         if (mounted) setLoading(false);
-      });
+        if (Date.now() - startedAt > POLL_TIMEOUT_MS && intervalId) {
+          window.clearInterval(intervalId);
+          intervalId = null;
+        }
+      }
+    };
+
+    void checkCurrentStatus();
+    intervalId = window.setInterval(() => {
+      void checkCurrentStatus();
+    }, POLL_INTERVAL_MS);
+
     return () => {
       mounted = false;
+      if (intervalId) window.clearInterval(intervalId);
     };
   }, [router]);
 
