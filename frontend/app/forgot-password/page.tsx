@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, KeyRound, Loader2, Eye, EyeOff } from "lucide-react";
+import { Mail, KeyRound, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -104,14 +104,14 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
       <Card className="w-full mx-3 max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto">
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
             <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
           </div>
-          <CardTitle className="text-2xl font-bold">
+          <CardTitle className="text-2xl font-bold text-[#861043]">
             {step === "request" ? "Forgot password" : "Reset password"}
           </CardTitle>
           <CardDescription className="-mt-3">
@@ -132,7 +132,7 @@ export default function ForgotPasswordPage() {
                   className="h-11"
                 />
               </div>
-              <Button type="submit" className="w-full h-11 font-medium" disabled={loading}>
+              <Button type="submit" className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send OTP"}
               </Button>
             </form>
@@ -188,18 +188,25 @@ export default function ForgotPasswordPage() {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset password"}
               </Button>
               <Button type="button" variant="outline" className="w-full h-11" disabled={resendLoading || timer > 0} onClick={handleResendOtp}>
-                {resendLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : timer > 0 ? `Resend OTP in ${timer}s` : "Resend OTP"}
+                {resendLoading ? <Loader2 className="w-4 h-4 animate-spin bg-[#861043] hover:bg-[#861043] text-white" /> : timer > 0 ? `Resend OTP in ${timer}s` : "Resend OTP"}
               </Button>
             </form>
           )}
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Back to{" "}
-            <Link href="/login" className="text-primary hover:underline font-medium">
+            <Link href="/login" className="text-primary hover:text-[#861043] font-medium">
               Sign in
             </Link>
           </div>
         </CardContent>
       </Card>
+
+      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-[#861043] transition-colors">
+        <ArrowLeft className="w-4 h-4 " />
+        <Link href="/" className=" font-medium">
+          Back to Home
+        </Link>
+      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, Loader2, Eye, EyeOff, MailCheck } from "lucide-react";
+import { UserPlus, Loader2, Eye, EyeOff, MailCheck, ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
 import Image from "next/image";
 
@@ -110,14 +110,14 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
       <Card className="w-full mx-3 max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto">
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
             <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
           </div>
-          <CardTitle className="text-2xl font-bold">
+          <CardTitle className="text-2xl font-bold text-[#861043]">
             {step === "register" ? "Create account" : "Verify email"}
           </CardTitle>
           <CardDescription className="-mt-3">
@@ -183,7 +183,7 @@ export default function RegisterPage() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full h-11 font-medium" disabled={loading}>
+              <Button type="submit" className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create account"}
               </Button>
             </form>
@@ -224,12 +224,19 @@ export default function RegisterPage() {
           )}
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:underline font-medium">
+            <Link href="/login" className="text-primary hover:text-[#861043] font-medium">
               Sign in
             </Link>
           </div>
         </CardContent>
       </Card>
+
+      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-[#861043] transition-colors">
+        <ArrowLeft className="w-4 h-4 " />
+        <Link href="/" className=" font-medium">
+          Back to Home
+        </Link>
+      </div>
     </div>
   );
 }

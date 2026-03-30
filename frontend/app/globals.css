@@ -171,3 +171,7 @@
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--primary) 30%, transparent) transparent;
 }
+
+html {
+  scroll-behavior: smooth;
+}

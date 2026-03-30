@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, Loader2, Eye, EyeOff, MailCheck } from "lucide-react";
+import { MessageSquare, Loader2, Eye, EyeOff, MailCheck, ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
 import Image from "next/image";
 
@@ -123,14 +123,17 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
+
+      
+
       <Card className="w-full mx-3 max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto">
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
             <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
           </div>
-          <CardTitle className="text-2xl font-bold">
+          <CardTitle className="text-2xl font-bold text-[#861043]">
             {step === "login" ? "Welcome back" : "Verify email"}
           </CardTitle>
           <CardDescription className="-mt-3">
@@ -183,7 +186,7 @@ export default function LoginPage() {
               </div>
               <Button
                 type="submit"
-                className="w-full h-11 font-medium"
+                className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white"
                 disabled={loading}
               >
                 {loading ? (
@@ -197,7 +200,7 @@ export default function LoginPage() {
                 <div className="text-right text-sm">
                   <Link
                     href="/forgot-password"
-                    className="text-primary hover:underline font-medium"
+                    className="text-primary hover:text-[#861043] font-medium"
                   >
                     Forgot password?
                   </Link>
@@ -206,7 +209,7 @@ export default function LoginPage() {
                   Don&apos;t have an account?{" "}
                   <Link
                     href="/register"
-                    className="text-primary hover:underline font-medium"
+                    className="text-primary hover:text-[#861043] font-medium"
                   >
                     Sign up
                   </Link>
@@ -283,6 +286,14 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-[#861043] transition-colors">
+        <ArrowLeft className="w-4 h-4 " />
+        <Link href="/" className=" font-medium">
+          Back to Home
+        </Link>
+      </div>
+
     </div>
   );
 }
