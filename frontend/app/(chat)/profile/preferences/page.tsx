@@ -48,6 +48,7 @@ export default function PreferencesPage() {
     type: "GLOBAL" | "FOLDER" | "CUSTOM";
     folderId: string;
     isAutoSelected: boolean;
+    existingContextId?: number | null;
   } | null>(null);
   const [contextInitialData, setContextInitialData] = useState<any | null>(null);
 
@@ -148,7 +149,10 @@ export default function PreferencesPage() {
     folderId: string;
     isAutoSelected: boolean;
   }) => {
-    setPendingContextDraft(draft);
+    setPendingContextDraft({
+      ...draft,
+      existingContextId: editContext?.id ?? null,
+    });
     setEditModalOpen(false);
     setCreateFolderOpen(true);
   };
@@ -182,14 +186,26 @@ export default function PreferencesPage() {
       if (pendingContextDraft && createdId) {
         const draft = pendingContextDraft;
         setPendingContextDraft(null);
-        setContextInitialData({
+        const baseInitialData = {
           title: draft.title,
           memory: draft.memory,
-          type: "FOLDER",
+          type: "FOLDER" as const,
           folderId: createdId,
           isAutoSelected: draft.isAutoSelected,
-        });
-        setEditContext(null);
+        };
+
+        if (draft.existingContextId) {
+          const existing = contexts.find((c) => c.id === draft.existingContextId) || {
+            id: draft.existingContextId,
+          };
+          const nextContext = { ...existing, ...baseInitialData };
+          setContextInitialData(nextContext);
+          setEditContext(nextContext);
+        } else {
+          setContextInitialData(baseInitialData);
+          setEditContext(null);
+        }
+
         setEditModalOpen(true);
       }
     } catch {

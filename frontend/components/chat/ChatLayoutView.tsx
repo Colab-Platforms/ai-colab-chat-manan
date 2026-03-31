@@ -208,6 +208,22 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     }
   }, [user, fetchFolders, fetchAssistants]);
 
+  // When navigating back from settings/profile (or any non-chat route)
+  // to a chat route, re-fetch sidebar data so changes made in settings
+  // are reflected immediately.
+  useEffect(() => {
+    if (!user) return;
+    const onChatRoute =
+      !pathname.startsWith("/profile") &&
+      !pathname.startsWith("/login") &&
+      !pathname.startsWith("/register") &&
+      !pathname.startsWith("/forgot-password");
+    if (!onChatRoute) return;
+    fetchFolders();
+    fetchChats(1);
+    fetchAssistants(1);
+  }, [user, pathname, fetchFolders, fetchChats, fetchAssistants]);
+
   useEffect(() => {
     if (user) {
       fetchChats(1);

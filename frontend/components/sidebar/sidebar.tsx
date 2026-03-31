@@ -657,32 +657,40 @@ function SidebarInner({
       </Dialog>
 
       <Dialog open={!!deleteFolderTarget} onOpenChange={(open) => !open && setDeleteFolderTarget(null)}>
-        <DialogContent>
+        <DialogContent className="w-[94vw] max-w-[calc(100vw-2rem)] sm:max-w-[720px] p-6">
           <DialogHeader>
             <DialogTitle>Delete Project</DialogTitle>
           </DialogHeader>
-          <div className="py-3 text-sm text-muted-foreground">
-            What would you like to do with the chats inside this project?
+          <div className="py-3 text-sm text-muted-foreground text-center sm:text-left">
+            What would you like to do with the chats and contexts inside this project?
           </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setDeleteFolderTarget(null)} disabled={deleting} className="sm:mr-auto">
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between sm:flex-nowrap">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteFolderTarget(null)}
+              disabled={deleting}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-between sm:flex-nowrap">
             <Button
               variant="outline"
               onClick={() => handleDeleteFolder(false)}
               disabled={deleting}
-              className="border-primary/40 text-primary hover:bg-primary/5"
+              className="w-full sm:w-auto border-primary/40 text-primary hover:bg-primary/5 text-xs sm:text-sm"
             >
-              {deleting ? "Moving..." : "Move chats out"}
+              {deleting ? "Moving..." : "Move chats & contexts out"}
             </Button>
             <Button
               variant="destructive"
               onClick={() => handleDeleteFolder(true)}
               disabled={deleting}
+              className="w-full sm:w-auto text-xs sm:text-sm"
             >
-              {deleting ? "Deleting..." : "Delete chats too"}
+              {deleting ? "Deleting..." : "Delete chats & contexts"}
             </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
