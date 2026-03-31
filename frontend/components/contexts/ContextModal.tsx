@@ -59,7 +59,7 @@ export function ContextModal({
   const [memory, setMemory] = useState("");
   const [type, setType] = useState<"GLOBAL" | "FOLDER" | "CUSTOM">("GLOBAL");
   const [folderId, setFolderId] = useState<string>("none");
-  const [isAutoSelected, setIsAutoSelected] = useState(true);
+  const [isAutoSelected, setIsAutoSelected] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -68,22 +68,16 @@ export function ContextModal({
         setMemory(initialData.memory || "");
         setType(initialData.type || "GLOBAL");
         setFolderId(initialData.folderId ? String(initialData.folderId) : "none");
-        setIsAutoSelected(initialData.isAutoSelected ?? true);
+        setIsAutoSelected(initialData.isAutoSelected ?? false);
       } else {
         setTitle("");
         setMemory("");
         setType("GLOBAL");
         setFolderId("none");
-        setIsAutoSelected(true);
+        setIsAutoSelected(false);
       }
     }
   }, [isOpen, initialData]);
-
-  useEffect(() => {
-    if (type === "GLOBAL") {
-      setIsAutoSelected(true);
-    }
-  }, [type]);
 
   const handleSave = () => {
     if (isLockedEdit) return; // System-generated contexts can't be edited.
@@ -94,7 +88,7 @@ export function ContextModal({
       memory: memory.trim(),
       type,
       folderId: type === "FOLDER" && folderId !== "none" ? Number(folderId) : null,
-      isAutoSelected: type === "GLOBAL" ? true : isAutoSelected,
+      isAutoSelected,
     });
   };
 
