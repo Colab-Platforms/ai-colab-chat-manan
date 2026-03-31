@@ -41,9 +41,9 @@ const mainLinks = [
 ];
 
 const legalLinks = [
-  { href: "/privacy", label: "Privacy Policy" },
-  { href: "/terms", label: "Terms of Service" },
-  { href: "/cookies", label: "Cookie Policy" },
+  { href: "#", label: "Privacy Policy" },
+  { href: "#", label: "Terms of Service" },
+  { href: "#", label: "Cookie Policy" },
 ];
 
 export function Footer() {

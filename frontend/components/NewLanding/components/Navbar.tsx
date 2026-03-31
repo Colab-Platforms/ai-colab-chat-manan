@@ -3,15 +3,30 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Moon, Sun } from "lucide-react";
-import { motion, useScroll, useMotionValueEvent } from "framer-motion";
+import { Menu, Moon, Sun, X } from "lucide-react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValueEvent,
+  useScroll,
+} from "framer-motion";
 
 import { Button } from "../../ui/button";
+import { useTheme } from "@/context/theme-context";
 import { EASE } from "./motionVariants";
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { toggleTheme } = useTheme();
   const { scrollY } = useScroll();
+  const navLinks = [
+    { href: "#features", label: "Features" },
+    { href: "#models", label: "Models" },
+    { href: "#pricing", label: "Pricing" },
+    { href: "#testimonials", label: "Testimonials" },
+    { href: "#faq", label: "FAQs" },
+  ];
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     if (latest > 50) {
@@ -30,9 +45,9 @@ export function Navbar() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: EASE }}
     >
-      <div 
+      <div
         className={`mx-auto flex h-14 flex-col justify-center transition-all duration-300 ease-in-out ${
-          isScrolled 
+          isScrolled
             ? "container max-w-6xl px-6 rounded-full border border-gray-200/50 dark:border-gray-800/50 bg-white/70 dark:bg-black/50 backdrop-blur-md shadow-sm max-md:max-w-[95%]"
             : "container px-5 bg-transparent"
         }`}
@@ -45,7 +60,7 @@ export function Navbar() {
               width={100}
               height={100}
               className={`h-auto dark:hidden transition-all duration-300 ${
-                isScrolled ? "w-18" : "w-[100px]"
+                isScrolled ? "w-[70px] sm:w-[76px]" : "w-[78px] sm:w-[86px]"
               }`}
             />
             <Image
@@ -54,56 +69,87 @@ export function Navbar() {
               width={100}
               height={100}
               className={`h-auto hidden dark:block transition-all duration-300 ${
-                isScrolled ? "w-18" : "w-[100px]"
+                isScrolled ? "w-[70px] sm:w-[76px]" : "w-[78px] sm:w-[86px]"
               }`}
             />
           </Link>
-          <div className="hidden md:flex">
+          <div className="hidden lg:flex">
             <ul className="flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-300">
-              <li>
-                <Link href="#features" className="hover:text-[#861043] dark:hover:text-pink-400 transition">
-                  Features
-                </Link>
-              </li>
-              <li>
-                <Link href="#models" className="hover:text-[#861043] dark:hover:text-pink-400 transition">
-                  Models
-                </Link>
-              </li>
-              <li>
-                <Link href="#pricing" className="hover:text-[#861043] dark:hover:text-pink-400 transition">
-                  Pricing
-                </Link>
-              </li>
-              <li>
-                <Link href="#testimonials" className="hover:text-[#861043] dark:hover:text-pink-400 transition">
-                  Testimonials
-                </Link>
-              </li>
-              <li>
-                <Link href="#faq" className="hover:text-[#861043] dark:hover:text-pink-400 transition">
-                  FAQs
-                </Link>
-              </li>
+              {navLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="hover:text-[#861043] dark:hover:text-pink-400 transition"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
           <div className="flex items-center gap-4">
             <button
-              onClick={() => document.body.classList.toggle("dark")}
+              onClick={toggleTheme}
               className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle Theme"
             >
               <Moon className="w-5 h-5 text-gray-800 dark:hidden" />
               <Sun className="w-5 h-5 text-gray-200 hidden dark:block" />
             </button>
-            <Link href="/login">
+            <Link href="/login" className="hidden lg:block">
               <Button className="rounded-full bg-[#861043] hover:bg-[#530929] text-white px-6 transition-all duration-300">
                 Log in
               </Button>
             </Link>
+            <Link href="/login" className="lg:hidden">
+              <Button className="rounded-full bg-[#861043] hover:bg-[#530929] text-white px-4 py-2 h-9 text-sm transition-all duration-300">
+                Log in
+              </Button>
+            </Link>
+            <button
+              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              className="inline-flex lg:hidden p-2 rounded-full hover:bg-gray-200/80 dark:hover:bg-gray-800/80 transition-colors"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-nav-menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-5 h-5 text-gray-800 dark:text-gray-200" />
+              ) : (
+                <Menu className="w-5 h-5 text-gray-800 dark:text-gray-200" />
+              )}
+            </button>
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {isMobileMenuOpen ? (
+          <motion.div
+            id="mobile-nav-menu"
+            initial={{ opacity: 0, y: -12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.985 }}
+            transition={{ duration: 0.2, ease: EASE }}
+            className="mx-auto mt-2 w-[95%] max-w-6xl lg:hidden"
+          >
+            <div className="rounded-[28px] border border-gray-200/60 dark:border-gray-800/60 bg-white/85 dark:bg-black/70 backdrop-blur-md shadow-sm p-3">
+              <ul className="space-y-1">
+                {navLinks.map((link) => (
+                  <li key={`mobile-${link.href}`}>
+                    <Link
+                      href={link.href}
+                      className="block rounded-2xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100/80 dark:hover:bg-gray-900/70 hover:text-[#861043] dark:hover:text-pink-400 transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </motion.nav>
   );
 }

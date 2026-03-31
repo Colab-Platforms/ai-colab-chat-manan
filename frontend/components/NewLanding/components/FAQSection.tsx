@@ -13,7 +13,7 @@ const faqs = [
   {
     question: "How does the Token Wallet work?",
     answer:
-      "The Token Wallet gives you a unified balance that works across all models. You top up once and use tokens on any model — no separate subscriptions or API keys needed. The dashboard shows a real-time breakdown of your usage per model so you always know where your tokens go.",
+      "The Token Wallet gives you a unified balance that works across all models. Tokens are allocated through your active plan, and you can use them on any supported model without separate API keys. The dashboard shows a real-time breakdown of usage per model so you always know where your tokens go.",
   },
   {
     question: "What is a Rolling Context Window?",
@@ -21,24 +21,24 @@ const faqs = [
       "A Rolling Context Window automatically manages message history so your conversation always fits within the model's token limit. Instead of hitting a hard cutoff, older messages are gracefully trimmed while keeping the most recent and relevant context intact.",
   },
   {
-    question: "Can multiple team members use the same account?",
+    question: "How do plans and billing work?",
     answer:
-      "Yes. The platform supports collaborative workspaces where your entire team can participate in shared chat sessions, view the same AI context, and build on each other's conversations in real time.",
+      "The platform currently uses fixed monthly plans. New users can start with the Free plan for the first month, then choose a paid plan to continue with higher limits and features.",
   },
   {
     question: "Is there a free trial?",
     answer:
-      "Yes — new users receive a complimentary token allocation to explore all features without a credit card. Once your trial tokens are used, you can top up the wallet to continue at any time.",
+      "New users can use the Free plan for their first month. After that, you can continue on a paid plan based on your usage needs.",
   },
   {
-    question: "How is my data kept private?",
+    question: "What happens after my first month on the Free plan?",
     answer:
-      "Your conversations are encrypted in transit and at rest. We do not use your chat data to train any AI models, and you can delete your history at any time from your account settings.",
+      "After your first month, you can move to a paid plan to keep using the platform without interruption. Plan details are shown in the pricing section.",
   },
   {
     question: "Can I install the platform as an app on my device?",
     answer:
-      "Yes — the platform is a Progressive Web App (PWA). You can install it directly from your browser on desktop and mobile for a native-app experience, complete with offline support for recent conversations.",
+      "Yes — you can install it from your browser as a Progressive Web App (PWA) on desktop and mobile. An active internet connection is required for chat features.",
   },
 ];
 

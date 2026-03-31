@@ -3,8 +3,10 @@
 import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
-import { LandingPage } from "@/components/landing/LandingPage";
+import { useTheme } from "@/context/theme-context";
+import { NewLandingPage } from "@/components/NewLanding/LandingPage";
 import { NewChatPage } from "@/components/chat/NewChatPage";
+import { HoverBlurSurface } from "@/components/NewLanding/components/HoverBlurSurface";
 
 function HomeFolderScopeSync() {
   const searchParams = useSearchParams();
@@ -34,11 +36,27 @@ function HomeFolderScopeSync() {
 
 export default function Home() {
   const { user, isLoading } = useAuth();
+  const { theme } = useTheme();
 
   if (isLoading) {
+    const ringBase =
+      theme === "dark"
+        ? "border-[#f2bfdc]/25"
+        : "border-[#861043]/20";
+
+    const ringTop =
+      theme === "dark"
+        ? "border-t-[#f2bfdc]"
+        : "border-t-[#861043]";
+
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="relative h-9 w-9">
+          <div className={`absolute inset-0 rounded-full border-2 ${ringBase}`} />
+          <div
+            className={`absolute inset-0 rounded-full border-2 border-transparent ${ringTop} animate-spin`}
+          />
+        </div>
       </div>
     );
   }
@@ -54,5 +72,5 @@ export default function Home() {
     );
   }
 
-  return <LandingPage />;
+  return <NewLandingPage />;
 }

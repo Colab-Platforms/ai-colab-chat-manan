@@ -3,10 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { CircleCheck, Loader2, Sparkles } from "lucide-react";
-import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { planService } from "@/lib/services";
 import { ScrollReveal } from "./ScrollReveal";
 
 // ─────────────────────────────────────────────────────
@@ -167,136 +167,99 @@ export function PricingCard({
 export function PricingSection() {
   const [plans, setPlans] = React.useState<PlanTier[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [plansError, setPlansError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/plans`
-        );
-        // API shape: { status: true, data: { data: [...plans], ... } }
-        if (response.data.status) {
-          const outer = response.data.data;
-          // Support both paginated ({ data: [...] }) and plain array responses
-          const planList: any[] = Array.isArray(outer)
-            ? outer
-            : Array.isArray(outer?.data)
-            ? outer.data
-            : outer?.records ?? [];
-
-          const parsed = planList
-            .filter((plan: any) => plan.isActive && !plan.isDeleted)
-            .sort(
-              (a: any, b: any) =>
-                Number(a.monthlyPrice) - Number(b.monthlyPrice)
-            )
-            .map((plan: any) => {
-              const features: string[] = [];
-
-              if (
-                plan.features &&
-                typeof plan.features === "object" &&
-                !Array.isArray(plan.features)
-              ) {
-                if (plan.features.maxModels === -1)
-                  features.push("Unlimited AI Models");
-                else if (plan.features.maxModels)
-                  features.push(`${plan.features.maxModels} AI Models`);
-
-                if (plan.features.attachments)
-                  features.push("File Uploads & Attachments");
-
-                if (plan.features.support) {
-                  const raw = plan.features.support as string;
-                  // "priority_plus" → "Priority Plus Support"
-                  const label = raw
-                    .split("_")
-                    .map(
-                      (w: string) => w.charAt(0).toUpperCase() + w.slice(1)
-                    )
-                    .join(" ");
-                  features.push(`${label} Support`);
-                }
-              } else if (Array.isArray(plan.features)) {
-                features.push(...plan.features);
-              }
-
-              if (plan.tokenLimit)
-                features.push(
-                  `${Number(plan.tokenLimit).toLocaleString("en-IN")} monthly tokens`
-                );
-
-              if (features.length === 0)
-                features.push(`Everything in ${plan.name}`);
-
-              const isFree = Number(plan.monthlyPrice) === 0;
-
-              return {
-                id: plan.id,
-                name: plan.name,
-                price: Number(plan.monthlyPrice),
-                description:
-                  plan.description ||
-                  (isFree
-                    ? "Get started at no cost for your first month."
-                    : `Ideal for ${plan.name} users.`),
-                features,
-                isPopular: plan.name.toLowerCase() === "pro",
-                isFree,
-              };
-            });
-
-          setPlans(parsed);
+        setPlansError(null);
+        const response = await planService.list({
+          page: "1",
+          pageSize: "100",
+        });
+        if (!response.data.status) {
+          setPlans([]);
+          setPlansError("Our plans are being refreshed right now. Check back in a moment.");
+          return;
         }
+
+        const outer = response.data.data;
+        const planList: any[] = Array.isArray(outer)
+          ? outer
+          : Array.isArray(outer?.data)
+          ? outer.data
+          : outer?.records ?? [];
+
+        const parsed = planList
+          .filter((plan: any) => plan.isActive && !plan.isDeleted)
+          .sort(
+            (a: any, b: any) =>
+              Number(a.monthlyPrice) - Number(b.monthlyPrice)
+          )
+          .map((plan: any) => {
+            const features: string[] = [];
+
+            if (
+              plan.features &&
+              typeof plan.features === "object" &&
+              !Array.isArray(plan.features)
+            ) {
+              if (plan.features.maxModels === -1)
+                features.push("Unlimited AI Models");
+              else if (plan.features.maxModels)
+                features.push(`${plan.features.maxModels} AI Models`);
+
+              if (plan.features.attachments)
+                features.push("File Uploads & Attachments");
+
+              if (plan.features.support) {
+                const raw = plan.features.support as string;
+                // "priority_plus" → "Priority Plus Support"
+                const label = raw
+                  .split("_")
+                  .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                  .join(" ");
+                features.push(`${label} Support`);
+              }
+            } else if (Array.isArray(plan.features)) {
+              features.push(...plan.features);
+            }
+
+            if (plan.tokenLimit)
+              features.push(
+                `${Number(plan.tokenLimit).toLocaleString("en-IN")} monthly tokens`
+              );
+
+            if (features.length === 0) features.push(`Everything in ${plan.name}`);
+
+            const isFree = Number(plan.monthlyPrice) === 0;
+
+            return {
+              id: plan.id,
+              name: plan.name,
+              price: Number(plan.monthlyPrice),
+              description:
+                plan.description ||
+                (isFree
+                  ? "Get started at no cost for your first month."
+                  : `Ideal for ${plan.name} users.`),
+              features,
+              isPopular: plan.name.toLowerCase() === "pro",
+              isFree,
+            };
+          });
+
+        if (parsed.length === 0) {
+          setPlans([]);
+          setPlansError("No active plans are available at the moment.");
+          return;
+        }
+
+        setPlans(parsed);
       } catch (err) {
         console.error("Error fetching pricing plans:", err);
-        // Graceful fallback with INR prices
-        setPlans([
-          {
-            id: 1,
-            name: "Free",
-            price: 0,
-            description: "Get started at no cost for your first month.",
-            features: [
-              "Unlimited AI Models",
-              "50,000 monthly tokens",
-              "File Uploads & Attachments",
-              "Community Support",
-            ],
-            isPopular: false,
-            isFree: true,
-          },
-          {
-            id: 2,
-            name: "Pro",
-            price: 1499,
-            description:
-              "Best for professionals who need full model access and higher limits.",
-            features: [
-              "Unlimited AI Models",
-              "10,00,000 monthly tokens",
-              "File Uploads & Attachments",
-              "Priority Support",
-            ],
-            isPopular: true,
-            isFree: false,
-          },
-          {
-            id: 3,
-            name: "Pro Plus",
-            price: 2799,
-            description:
-              "Ideal for power users who demand the highest capacity.",
-            features: [
-              "Unlimited AI Models",
-              "20,00,000 monthly tokens",
-              "File Uploads & Attachments",
-              "Priority Plus Support",
-            ],
-            isPopular: false,
-            isFree: false,
-          },
-        ]);
+        setPlans([]);
+        setPlansError("Our plans are being refreshed right now. Check back in a moment.");
       } finally {
         setLoading(false);
       }
@@ -338,6 +301,12 @@ export function PricingSection() {
             <Loader2 className="h-8 w-8 animate-spin text-pink-400" />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Loading plans…
+            </p>
+          </div>
+        ) : plansError ? (
+          <div className="flex items-center justify-center min-h-[220px]">
+            <p className="text-sm text-gray-600 dark:text-gray-300 text-center">
+              {plansError}
             </p>
           </div>
         ) : (
