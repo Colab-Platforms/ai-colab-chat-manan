@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
 import {
@@ -37,8 +37,9 @@ const adminNav = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { hasRole } = useAuth();
+  const { user, isLoading, hasRole } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const isAdmin = hasRole("ADMIN") || hasRole("SUPERADMIN");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -47,6 +48,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const saved = localStorage.getItem("sidebarCollapsed");
     if (saved === "true") setCollapsed(true);
   }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      const redirectTo = pathname || "/profile";
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+    }
+  }, [user, isLoading, router, pathname]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -215,6 +224,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {innerContent}
     </AppSidebar>
   );
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="flex h-full relative bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 text-foreground">

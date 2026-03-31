@@ -84,7 +84,7 @@ export function Footer() {
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="h-10 w-10 rounded-full bg-gray-100 hover:bg-pink-50 dark:bg-white/5 dark:hover:bg-pink-950/60 border-0 text-gray-500 dark:text-gray-400 hover:text-[#861043] dark:hover:text-pink-400 transition-colors duration-200"
+                  className="h-10 w-10 rounded-full bg-gray-100 hover:bg-pink-50 dark:bg-white/5 dark:hover:bg-pink-950/60 border-0 text-gray-500 dark:text-gray-400 hover:text-landing-primary dark:hover:text-pink-400 transition-colors duration-200"
                   asChild
                 >
                   <a href={link.href} target="_blank" rel="noopener noreferrer" aria-label={link.label}>
@@ -112,7 +112,7 @@ export function Footer() {
                 <li key={i} className="my-1 mx-2 shrink-0">
                   <Link
                     href={link.href}
-                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-[#861043] dark:hover:text-pink-400 underline-offset-4 hover:underline transition-colors duration-150"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-landing-primary dark:hover:text-pink-400 underline-offset-4 hover:underline transition-colors duration-150"
                   >
                     {link.label}
                   </Link>

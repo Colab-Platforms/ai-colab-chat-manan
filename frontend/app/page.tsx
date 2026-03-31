@@ -42,12 +42,12 @@ export default function Home() {
     const ringBase =
       theme === "dark"
         ? "border-[#f2bfdc]/25"
-        : "border-[#861043]/20";
+        : "border-landing-primary/20";
 
     const ringTop =
       theme === "dark"
         ? "border-t-[#f2bfdc]"
-        : "border-t-[#861043]";
+        : "border-t-landing-primary";
 
     return (
       <div className="flex min-h-screen items-center justify-center">

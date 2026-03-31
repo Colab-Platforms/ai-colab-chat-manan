@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 export default function LoginPage() {
   const { login, verifyEmailOtp, resendEmailOtp, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<"login" | "verify">("login");
   const [email, setEmail] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
@@ -50,9 +51,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/");
+      const redirect = searchParams.get("redirect");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     }
-  }, [user, router]);
+  }, [user, router, searchParams]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -78,7 +80,8 @@ export default function LoginPage() {
         return;
       }
       toast.success("Login successful!");
-      router.replace("/");
+      const redirect = searchParams.get("redirect");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Login failed"));
     } finally {
@@ -97,7 +100,8 @@ export default function LoginPage() {
         return;
       }
       toast.success("Email verified. Login successful!");
-      router.replace("/");
+      const redirect = searchParams.get("redirect");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "OTP verification failed"));
     } finally {
@@ -133,7 +137,7 @@ export default function LoginPage() {
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
             <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
           </div>
-          <CardTitle className="text-2xl font-bold text-[#861043]">
+          <CardTitle className="text-2xl font-bold text-landing-primary">
             {step === "login" ? "Welcome back" : "Verify email"}
           </CardTitle>
           <CardDescription className="-mt-3">
@@ -186,7 +190,7 @@ export default function LoginPage() {
               </div>
               <Button
                 type="submit"
-                className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white"
+                className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white"
                 disabled={loading}
               >
                 {loading ? (
@@ -200,7 +204,7 @@ export default function LoginPage() {
                 <div className="text-right text-sm">
                   <Link
                     href="/forgot-password"
-                    className="text-primary hover:text-[#861043] font-medium"
+                    className="text-primary hover:text-landing-primary font-medium"
                   >
                     Forgot password?
                   </Link>
@@ -209,7 +213,7 @@ export default function LoginPage() {
                   Don&apos;t have an account?{" "}
                   <Link
                     href="/register"
-                    className="text-primary hover:text-[#861043] font-medium"
+                    className="text-primary hover:text-landing-primary font-medium"
                   >
                     Sign up
                   </Link>
@@ -287,7 +291,7 @@ export default function LoginPage() {
         </CardContent>
       </Card>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-[#861043] transition-colors">
+      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
         <ArrowLeft className="w-4 h-4 " />
         <Link href="/" className=" font-medium">
           Back to Home

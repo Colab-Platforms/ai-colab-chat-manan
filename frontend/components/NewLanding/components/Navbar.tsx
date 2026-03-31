@@ -79,7 +79,7 @@ export function Navbar() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="hover:text-[#861043] dark:hover:text-pink-400 transition"
+                    className="hover:text-landing-primary dark:hover:text-pink-400 transition"
                   >
                     {link.label}
                   </Link>
@@ -97,12 +97,12 @@ export function Navbar() {
               <Sun className="w-5 h-5 text-gray-200 hidden dark:block" />
             </button>
             <Link href="/login" className="hidden lg:block">
-              <Button className="rounded-full bg-[#861043] hover:bg-[#530929] text-white px-6 transition-all duration-300">
+              <Button className="rounded-full bg-landing-primary hover:bg-landing-primary-hover text-white px-6 transition-all duration-300">
                 Log in
               </Button>
             </Link>
             <Link href="/login" className="lg:hidden">
-              <Button className="rounded-full bg-[#861043] hover:bg-[#530929] text-white px-4 py-2 h-9 text-sm transition-all duration-300">
+              <Button className="rounded-full bg-landing-primary hover:bg-landing-primary-hover text-white px-4 py-2 h-9 text-sm transition-all duration-300">
                 Log in
               </Button>
             </Link>
@@ -138,7 +138,7 @@ export function Navbar() {
                   <li key={`mobile-${link.href}`}>
                     <Link
                       href={link.href}
-                      className="block rounded-2xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100/80 dark:hover:bg-gray-900/70 hover:text-[#861043] dark:hover:text-pink-400 transition-colors"
+                      className="block rounded-2xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100/80 dark:hover:bg-gray-900/70 hover:text-landing-primary dark:hover:text-pink-400 transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       {link.label}

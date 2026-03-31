@@ -111,7 +111,7 @@ export default function ForgotPasswordPage() {
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
             <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
           </div>
-          <CardTitle className="text-2xl font-bold text-[#861043]">
+          <CardTitle className="text-2xl font-bold text-landing-primary">
             {step === "request" ? "Forgot password" : "Reset password"}
           </CardTitle>
           <CardDescription className="-mt-3">
@@ -132,7 +132,7 @@ export default function ForgotPasswordPage() {
                   className="h-11"
                 />
               </div>
-              <Button type="submit" className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white" disabled={loading}>
+              <Button type="submit" className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send OTP"}
               </Button>
             </form>
@@ -188,20 +188,20 @@ export default function ForgotPasswordPage() {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset password"}
               </Button>
               <Button type="button" variant="outline" className="w-full h-11" disabled={resendLoading || timer > 0} onClick={handleResendOtp}>
-                {resendLoading ? <Loader2 className="w-4 h-4 animate-spin bg-[#861043] hover:bg-[#861043] text-white" /> : timer > 0 ? `Resend OTP in ${timer}s` : "Resend OTP"}
+                {resendLoading ? <Loader2 className="w-4 h-4 animate-spin text-landing-primary" /> : timer > 0 ? `Resend OTP in ${timer}s` : "Resend OTP"}
               </Button>
             </form>
           )}
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Back to{" "}
-            <Link href="/login" className="text-primary hover:text-[#861043] font-medium">
+            <Link href="/login" className="text-primary hover:text-landing-primary font-medium">
               Sign in
             </Link>
           </div>
         </CardContent>
       </Card>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-[#861043] transition-colors">
+      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
         <ArrowLeft className="w-4 h-4 " />
         <Link href="/" className=" font-medium">
           Back to Home

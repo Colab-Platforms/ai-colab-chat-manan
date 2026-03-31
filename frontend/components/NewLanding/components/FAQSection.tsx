@@ -78,7 +78,7 @@ function FAQItem({
         <ChevronDown
           className={`flex-shrink-0 h-4 w-4 transition-all duration-300 ${
             isOpen
-              ? "rotate-180 text-[#861043] dark:text-pink-400"
+              ? "rotate-180 text-landing-primary dark:text-pink-400"
               : "rotate-0 text-gray-400 dark:text-gray-500"
           }`}
         />
@@ -130,7 +130,7 @@ export function FAQSection() {
             Everything you need to know about the platform. Can't find the answer you're looking for?{" "}
             <ContactModal>
               <button
-                className="text-[#861043] dark:text-pink-400 font-medium underline-offset-2 hover:underline transition-all"
+                className="text-landing-primary dark:text-pink-400 font-medium underline-offset-2 hover:underline transition-all"
               >
                 Contact our support team.
               </button>

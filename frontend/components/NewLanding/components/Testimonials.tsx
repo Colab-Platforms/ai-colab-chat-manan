@@ -83,7 +83,7 @@ export const Testimonials = () => {
 
           <h2 className="text-4xl max-md:text-3xl font-bold text-pink-900 dark:text-pink-200 mt-5 text-center tracking-tight">
             Trusted by teams who{" "}
-            <span className="text-[#861043] dark:text-pink-400">think with AI</span>
+            <span className="text-landing-primary dark:text-pink-400">think with AI</span>
           </h2>
           <p className="text-center mt-4 text-gray-600 dark:text-gray-400 max-w-3xl text-balance">
             From solo founders to enterprise teams — see why professionals across industries rely on our platform every day.

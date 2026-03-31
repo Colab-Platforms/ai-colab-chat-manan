@@ -117,7 +117,7 @@ export default function RegisterPage() {
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
             <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
           </div>
-          <CardTitle className="text-2xl font-bold text-[#861043]">
+          <CardTitle className="text-2xl font-bold text-landing-primary">
             {step === "register" ? "Create account" : "Verify email"}
           </CardTitle>
           <CardDescription className="-mt-3">
@@ -183,7 +183,7 @@ export default function RegisterPage() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white" disabled={loading}>
+              <Button type="submit" className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create account"}
               </Button>
             </form>
@@ -224,14 +224,14 @@ export default function RegisterPage() {
           )}
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:text-[#861043] font-medium">
+            <Link href="/login" className="text-primary hover:text-landing-primary font-medium">
               Sign in
             </Link>
           </div>
         </CardContent>
       </Card>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-[#861043] transition-colors">
+      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
         <ArrowLeft className="w-4 h-4 " />
         <Link href="/" className=" font-medium">
           Back to Home

@@ -41,7 +41,7 @@ export function ContactModal({ children }: ContactModalProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 transition-all focus-within:ring-1 focus-within:ring-primary/20 p-8">
         <DialogHeader className="text-center space-y-2 mb-4">
-          <DialogTitle className="text-2xl font-bold text-[#861043]">
+          <DialogTitle className="text-2xl font-bold text-landing-primary">
             Contact Support
           </DialogTitle>
           <DialogDescription className="-mt-1">
@@ -91,7 +91,7 @@ export function ContactModal({ children }: ContactModalProps) {
 
           <Button
             type="submit"
-            className="w-full h-11 font-medium bg-[#861043] hover:bg-[#530929] text-white mt-4"
+            className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white mt-4"
             disabled={loading}
           >
             {loading ? (

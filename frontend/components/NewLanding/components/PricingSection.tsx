@@ -65,7 +65,7 @@ export function PricingCard({
         {/* Most Popular ribbon */}
         {featured && (
           <div className="absolute -top-3.5 inset-x-0 flex justify-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#861043] px-4 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-md shadow-pink-400/30">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-landing-primary px-4 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-md shadow-pink-400/30">
               <Sparkles className="h-3 w-3" />
               Most Popular
             </span>
@@ -79,7 +79,7 @@ export function PricingCard({
             className={cn(
               "rounded-md uppercase tracking-wider text-[11px] font-semibold",
               featured &&
-                "bg-pink-100 dark:bg-pink-950/60 text-[#861043] dark:text-pink-400 border-pink-200 dark:border-pink-800"
+                "bg-pink-100 dark:bg-pink-950/60 text-landing-primary dark:text-pink-400 border-pink-200 dark:border-pink-800"
             )}
           >
             {title}
@@ -91,7 +91,7 @@ export function PricingCard({
           className={cn(
             "mt-5 text-4xl font-bold tracking-tight",
             featured
-              ? "text-[#861043] dark:text-pink-400"
+              ? "text-landing-primary dark:text-pink-400"
               : "text-pink-900 dark:text-pink-200"
           )}
         >
@@ -101,8 +101,8 @@ export function PricingCard({
         {/* "Free for 1st month" notice */}
         {/* {isFreeFirstMonth && (
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-pink-50 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-900/50 px-3 py-1 w-fit">
-            <Gift className="h-3.5 w-3.5 text-[#861043] dark:text-pink-400" />
-            <span className="text-[11px] font-semibold text-[#861043] dark:text-pink-400">
+            <Gift className="h-3.5 w-3.5 text-landing-primary dark:text-pink-400" />
+            <span className="text-[11px] font-semibold text-landing-primary dark:text-pink-400">
               Free for your first month
             </span>
           </div>
@@ -129,7 +129,7 @@ export function PricingCard({
                 className={cn(
                   "mr-3 mt-0.5 h-4 w-4 shrink-0",
                   featured
-                    ? "text-[#861043] dark:text-pink-400"
+                    ? "text-landing-primary dark:text-pink-400"
                     : "text-pink-400 dark:text-pink-600"
                 )}
                 aria-hidden
@@ -147,8 +147,8 @@ export function PricingCard({
               className={cn(
                 "w-full font-semibold transition-all",
                 featured
-                  ? "bg-[#861043] hover:bg-[#6d0d37] text-white shadow-md shadow-pink-400/20"
-                  : "border border-pink-200 dark:border-pink-900/50 text-[#861043] dark:text-pink-400 bg-transparent hover:bg-pink-50 dark:hover:bg-pink-950/30"
+                  ? "bg-landing-primary hover:bg-landing-primary-hover text-white shadow-md shadow-pink-400/20"
+                  : "border border-pink-200 dark:border-pink-900/50 text-landing-primary dark:text-pink-400 bg-transparent hover:bg-pink-50 dark:hover:bg-pink-950/30"
               )}
               variant={featured ? "default" : "outline"}
             >

@@ -42,7 +42,7 @@ export function HeroSection() {
           >
             <Link
               href="/register"
-              className="px-8 py-4 mt-2 bg-[#861043] hover:bg-[#530929] rounded-full text-white font-semibold flex items-center gap-2 transition-all duration-300"
+              className="px-8 py-4 mt-2 bg-landing-primary hover:bg-landing-primary-hover rounded-full text-white font-semibold flex items-center gap-2 transition-all duration-300"
             >
               Get Started
               <ArrowUpRight className="w-4 h-4 text-white" />

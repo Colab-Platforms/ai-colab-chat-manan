@@ -94,7 +94,7 @@ const IntegrationCard = () => (
       <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#fde8f1] to-[#fcd5e8] dark:from-pink-950 dark:to-pink-900/60">
         <svg
           viewBox="0 0 24 24"
-          className="h-5 w-5 text-[#861043] dark:text-pink-400"
+          className="h-5 w-5 text-landing-primary dark:text-pink-400"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -113,7 +113,7 @@ const IntegrationCard = () => (
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-gray-400 dark:text-gray-500">
           Pick any model for any task.{" "}
-          <span className="text-[#861043] dark:text-pink-400 font-medium">
+          <span className="text-landing-primary dark:text-pink-400 font-medium">
             Switch instantly — no new tabs, no separate accounts.
           </span>
         </p>
@@ -127,7 +127,7 @@ const IntegrationCard = () => (
             className="flex items-center justify-between py-2.5"
           >
             <div className="flex items-center gap-2.5">
-              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#861043] dark:bg-pink-400 opacity-70" />
+              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-landing-primary dark:bg-pink-400 opacity-70" />
               <span className="text-sm text-gray-700 dark:text-gray-200">{m.name}</span>
             </div>
             <span className="text-[10px] font-medium text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-white/[0.07] px-2 py-0.5 rounded-full">
@@ -144,15 +144,15 @@ const IntegrationCard = () => (
     {/* Bottom: quick-access features */}
     <div className="mt-6 flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1.5 rounded-lg border border-gray-100 dark:border-pink-950 dark:bg-pink-950/30 px-3 py-1.5 text-xs text-gray-500 dark:text-gray-300">
-        <Mic className="h-3.5 w-3.5 text-[#861043] dark:text-pink-400" />
+        <Mic className="h-3.5 w-3.5 text-landing-primary dark:text-pink-400" />
         Voice Input
       </div>
       <div className="flex items-center gap-1.5 rounded-lg border border-gray-100 dark:border-pink-950 dark:bg-pink-950/30 px-3 py-1.5 text-xs text-gray-500 dark:text-gray-300">
-        <Share2 className="h-3.5 w-3.5 text-[#861043] dark:text-pink-400" />
+        <Share2 className="h-3.5 w-3.5 text-landing-primary dark:text-pink-400" />
         Share Chat
       </div>
       <div className="flex items-center gap-1.5 rounded-lg border border-gray-100 dark:border-pink-950 dark:bg-pink-950/30 px-3 py-1.5 text-xs text-gray-500 dark:text-gray-300">
-        <Download className="h-3.5 w-3.5 text-[#861043] dark:text-pink-400" />
+        <Download className="h-3.5 w-3.5 text-landing-primary dark:text-pink-400" />
         Install PWA
       </div>
     </div>
@@ -168,7 +168,7 @@ const TrackersCard = () => (
       <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
         Rolling Context
       </p>
-      <p className="mt-0.5 text-xs text-[#861043] dark:text-pink-400 font-medium">
+      <p className="mt-0.5 text-xs text-landing-primary dark:text-pink-400 font-medium">
         Never lose what matters
       </p>
     </div>
@@ -182,7 +182,7 @@ const TrackersCard = () => (
         { width: "w-4/5",  faded: false },
         { width: "w-full", faded: false },
       ].map((row, i) => (
-        <div key={i} className={`${row.width} h-2.5 rounded-full ${row.faded ? "bg-gray-100 dark:bg-white/[0.07]" : "bg-[#861043]/25 dark:bg-pink-600/40"}`} />
+        <div key={i} className={`${row.width} h-2.5 rounded-full ${row.faded ? "bg-gray-100 dark:bg-white/[0.07]" : "bg-landing-primary/25 dark:bg-pink-600/40"}`} />
       ))}
     </div>
 
@@ -204,7 +204,7 @@ const StatisticCard = () => (
       className="font-black leading-none tracking-tighter text-gray-900 dark:text-gray-100"
       style={{ fontSize: "clamp(4rem, 7vw, 6rem)" }}
     >
-      15<span className="text-[#861043] dark:text-pink-400">+</span>
+      15<span className="text-landing-primary dark:text-pink-400">+</span>
     </p>
     <p className="text-sm text-gray-400 dark:text-gray-500">
       Active AI models across GPT, Claude, Gemini, DeepSeek &amp; more.
@@ -220,14 +220,14 @@ const FocusCard = () => (
     {/* Header */}
     <div className="flex items-start justify-between gap-2">
       <div>
-        <p className="text-sm font-semibold text-[#861043] dark:text-pink-400">
+        <p className="text-sm font-semibold text-landing-primary dark:text-pink-400">
           Streaming Speed
         </p>
         <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
           First Token Latency
         </p>
       </div>
-      <span className="flex-shrink-0 rounded-full border border-[#861043]/25 px-2.5 py-0.5 text-[10px] font-semibold text-[#861043] dark:border-pink-600/30 dark:text-pink-400">
+      <span className="flex-shrink-0 rounded-full border border-landing-primary/25 px-2.5 py-0.5 text-[10px] font-semibold text-landing-primary dark:border-pink-600/30 dark:text-pink-400">
         Live
       </span>
     </div>
@@ -237,7 +237,7 @@ const FocusCard = () => (
       className="font-black leading-none tracking-tighter text-gray-900 dark:text-gray-100"
       style={{ fontSize: "clamp(2.8rem, 4.5vw, 3.75rem)" }}
     >
-      &lt;2<span className="text-[#861043] dark:text-pink-400">s</span>
+      &lt;2<span className="text-landing-primary dark:text-pink-400">s</span>
     </p>
 
     {/* Labels */}
@@ -258,7 +258,7 @@ const ProductivityCard = () => (
     </p>
     <p className="text-sm leading-relaxed text-gray-400 dark:text-gray-500">
       Send one prompt to multiple models simultaneously and{" "}
-      <span className="text-[#861043] dark:text-pink-400 font-medium">
+      <span className="text-landing-primary dark:text-pink-400 font-medium">
         compare answers side-by-side
       </span>{" "}
       to choose the best response.
@@ -276,7 +276,7 @@ const WalletCard = () => (
       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
         Token Wallet
       </p>
-      <p className="mt-1 text-sm text-[#861043] dark:text-pink-400">
+      <p className="mt-1 text-sm text-landing-primary dark:text-pink-400">
         Your usage, always in view.
       </p>
     </div>
