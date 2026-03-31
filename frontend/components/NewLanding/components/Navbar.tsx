@@ -22,7 +22,7 @@ export function Navbar() {
   const { scrollY } = useScroll();
   const navLinks = [
     { href: "#features", label: "Features" },
-    { href: "#models", label: "Models" },
+    // { href: "#models", label: "Models" },
     { href: "#pricing", label: "Pricing" },
     { href: "#testimonials", label: "Testimonials" },
     { href: "#faq", label: "FAQs" },
