@@ -105,6 +105,8 @@ export const planService = {
 
 export const usageLogService = {
   list: (params?: Record<string, string>) => api.get("/usage-logs", { params }),
+  dailyByModel: (params?: Record<string, string>) =>
+    api.get("/usage-logs/daily-by-model", { params }),
 };
 
 export const modelProviderService = {

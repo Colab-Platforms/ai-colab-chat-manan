@@ -2,25 +2,93 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { Card, CardContent } from "@/components/ui/card";
-import { walletService, subscriptionService } from "@/lib/services";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  ModelUsageLineChart,
+  type DailyModelUsageRow,
+} from "@/components/dashboard/model-usage-line-chart";
+import {
+  walletService,
+  subscriptionService,
+  usageLogService,
+} from "@/lib/services";
 import { Wallet, CreditCard, Coins, TrendingUp, Loader2 } from "lucide-react";
+
+const DEFAULT_CHART_DAYS = 30;
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [wallet, setWallet] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [dailyByModel, setDailyByModel] = useState<DailyModelUsageRow[]>([]);
+  const [chartDays, setChartDays] = useState(DEFAULT_CHART_DAYS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      walletService.get().catch(() => null),
-      subscriptionService.getCurrent().catch(() => null),
-    ]).then(([w, s]) => {
-      setWallet(w?.data?.data || null);
-      setSubscription(s?.data?.data?.subscription ?? s?.data?.data ?? null);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [w, s] = await Promise.all([
+          walletService.get().catch(() => null),
+          subscriptionService.getCurrent().catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        const walletData = w?.data?.data || null;
+        setWallet(walletData);
+        setSubscription(s?.data?.data?.subscription ?? s?.data?.data ?? null);
+
+        let days = DEFAULT_CHART_DAYS;
+        if (walletData?.currentPeriodStart) {
+          const start = new Date(walletData.currentPeriodStart);
+          const today = new Date();
+          const startUtc = new Date(
+            Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()),
+          );
+          const todayUtc = new Date(
+            Date.UTC(
+              today.getFullYear(),
+              today.getMonth(),
+              today.getDate(),
+            ),
+          );
+          const diffMs = todayUtc.getTime() - startUtc.getTime();
+          const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+          if (Number.isFinite(diffDays) && diffDays >= 1) {
+            days = Math.min(diffDays, 90);
+          }
+        }
+
+        setChartDays(days);
+
+        const daily = await usageLogService
+          .dailyByModel({ days: String(days) })
+          .catch(() => null);
+
+        if (cancelled) return;
+
+        const rows = daily?.data?.data;
+        setDailyByModel(Array.isArray(rows) ? rows : []);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) {
@@ -88,24 +156,50 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Usage bar */}
       {wallet && (
         <Card className="border-border/30 bg-card/90 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <h3 className="text-sm font-semibold mb-3">Token Usage</h3>
-            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-500"
-                style={{ width: `${Math.min(usagePercent, 100)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-muted-foreground mt-2">
-              <span>{wallet.tokensUsed.toLocaleString()} used</span>
-              <span>{wallet.tokensRemaining.toLocaleString()} remaining</span>
+          <CardHeader>
+            <CardTitle className="text-base">Token Usage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Used</span>
+                <span className="font-medium">
+                  {wallet.tokensUsed.toLocaleString()} /{" "}
+                  {total.toLocaleString()}
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-500"
+                  style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{usagePercent.toFixed(1)}% used</span>
+                <span>
+                  {wallet.tokensRemaining.toLocaleString()} remaining
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-border/30 bg-card/90 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Usage by model</CardTitle>
+          <CardDescription>
+            {wallet?.currentPeriodStart
+              ? "Total tokens per day by model since your current plan renewed (UTC)."
+              : `Total tokens per day by model — last ${chartDays} days (UTC).`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ModelUsageLineChart rows={dailyByModel} days={chartDays} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

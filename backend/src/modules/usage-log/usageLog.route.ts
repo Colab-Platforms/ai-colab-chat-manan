@@ -5,6 +5,12 @@ import * as usageLogController from "./usageLog.controller.js";
 const router = Router();
 
 router.get(
+  "/daily-by-model",
+  auth("USER", "ADMIN", "SUPERADMIN"),
+  usageLogController.dailyTokensByModel,
+);
+
+router.get(
   "/",
   auth("USER", "ADMIN", "SUPERADMIN"),
   usageLogController.listUsageLogs,

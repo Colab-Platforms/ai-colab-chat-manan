@@ -1,4 +1,5 @@
 import prisma from "@root/prisma.js";
+import { Prisma } from "@prisma/client";
 import {
   getPaginationOptions,
   formatPaginationResponse,
@@ -62,6 +63,48 @@ class UsageLogService {
     ]);
 
     return formatPaginationResponse(logs, totalRecords, page, pageSize);
+  }
+
+  /** Total tokens logged per calendar day (UTC) per model, for charts. */
+  async getDailyTokensByModel(userId: number, days: number) {
+    const safeDays = Math.min(Math.max(Math.floor(days), 1), 90);
+    const from = new Date();
+    from.setUTCHours(0, 0, 0, 0);
+    from.setUTCDate(from.getUTCDate() - (safeDays - 1));
+
+    const rows = await prisma.$queryRaw<
+      Array<{
+        day: Date;
+        modelId: number;
+        modelName: string;
+        tokens: bigint;
+      }>
+    >(Prisma.sql`
+      SELECT
+        (ul."createdAt" AT TIME ZONE 'UTC')::date AS day,
+        ul."modelId",
+        m.name AS "modelName",
+        COALESCE(SUM(ul."totalTokens"), 0)::bigint AS tokens
+      FROM "UsageLog" ul
+      INNER JOIN "Model" m ON m.id = ul."modelId"
+      WHERE ul."userId" = ${userId}
+        AND ul."createdAt" >= ${from}
+      GROUP BY (ul."createdAt" AT TIME ZONE 'UTC')::date, ul."modelId", m.name
+      ORDER BY day ASC, m.name ASC
+    `);
+
+    return rows.map((r) => {
+      const day =
+        r.day instanceof Date
+          ? r.day.toISOString().slice(0, 10)
+          : String(r.day).slice(0, 10);
+      return {
+        day,
+        modelId: r.modelId,
+        modelName: r.modelName,
+        tokens: Number(r.tokens),
+      };
+    });
   }
 }
 

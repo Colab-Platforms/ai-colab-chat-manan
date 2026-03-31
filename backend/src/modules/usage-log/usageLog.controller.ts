@@ -30,3 +30,31 @@ export const listUsageLogs = async (
     );
   }
 };
+
+export const dailyTokensByModel = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const daysRaw = parseInt(String(req.query.days ?? "30"), 10);
+    const days = Number.isFinite(daysRaw) ? daysRaw : 30;
+    const result = await usageLogService.getDailyTokensByModel(userId, days);
+    sendResponse(
+      res,
+      true,
+      result,
+      "Daily usage by model fetched successfully",
+      STATUS_CODES.OK,
+    );
+  } catch (error: any) {
+    console.error("Daily tokens by model error", error);
+    sendResponse(
+      res,
+      false,
+      null,
+      error.message,
+      error.statusCode ?? STATUS_CODES.SERVER_ERROR,
+    );
+  }
+};
