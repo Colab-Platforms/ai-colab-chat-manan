@@ -226,7 +226,15 @@ export const ChatItem = memo(function ChatItem({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveOpen(false)}>Cancel</Button>
-            <Button onClick={() => { onMove(chat.id, selectedFolder === "none" ? null : parseInt(selectedFolder, 10)); setMoveOpen(false); }}>Move</Button>
+            <Button
+              disabled={selectedFolder === "none"}
+              onClick={() => {
+                onMove(chat.id, selectedFolder === "none" ? null : parseInt(selectedFolder, 10));
+                setMoveOpen(false);
+              }}
+            >
+              Move
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

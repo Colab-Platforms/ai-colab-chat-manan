@@ -168,6 +168,20 @@ function SidebarInner({
   }, [searchQuery]);
 
   useEffect(() => {
+    const handler = () => {
+      setCreateFolderOpen(true);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("open-create-folder-dialog", handler);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("open-create-folder-dialog", handler);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const next = new Map<number, number | null>();
     for (const c of chats) {
       next.set(c.id, c.folderId ?? null);
@@ -200,6 +214,14 @@ function SidebarInner({
       toast.success("Folder created");
       setNewFolderName("");
       setCreateFolderOpen(false);
+
+      try {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("folder-created"));
+        }
+      } catch {
+        // ignore cross-environment issues
+      }
 
       if (opts?.forChatId !== undefined) {
         setLocalFolders(prev => [created, ...prev]);

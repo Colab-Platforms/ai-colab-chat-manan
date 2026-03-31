@@ -10,6 +10,14 @@ import { DataTable, Column } from "@/components/dashboard/data-table";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ContextModal } from "@/components/contexts/ContextModal";
 import { ContextViewDialog } from "@/components/contexts/ContextViewDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { contextService, folderService, userPreferenceService } from "@/lib/services";
 import { toast } from "react-toastify";
 
@@ -29,6 +37,19 @@ export default function PreferencesPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // create folder modal (used when ContextModal requests a new folder from this page)
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [pendingContextDraft, setPendingContextDraft] = useState<{
+    title: string;
+    memory: string;
+    type: "GLOBAL" | "FOLDER" | "CUSTOM";
+    folderId: string;
+    isAutoSelected: boolean;
+  } | null>(null);
+  const [contextInitialData, setContextInitialData] = useState<any | null>(null);
 
   // ── Preferences state ────────────────────────────────────────────────────
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
@@ -78,10 +99,26 @@ export default function PreferencesPage() {
     fetchPreferences();
   }, [fetchContexts, fetchFolders, fetchPreferences]);
 
+  // Keep folders updated when created elsewhere (e.g. sidebar)
+  useEffect(() => {
+    const handleFolderCreated = () => {
+      void fetchFolders();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("folder-created", handleFolderCreated);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("folder-created", handleFolderCreated);
+      }
+    };
+  }, [fetchFolders]);
+
   // ── Context handlers ──────────────────────────────────────────────────────
 
   const handleOpenCreate = () => {
     setEditContext(null);
+    setContextInitialData(null);
     setEditModalOpen(true);
   };
 
@@ -104,6 +141,18 @@ export default function PreferencesPage() {
     }
   };
 
+  const handleContextRequestCreateFolder = (draft: {
+    title: string;
+    memory: string;
+    type: "GLOBAL" | "FOLDER" | "CUSTOM";
+    folderId: string;
+    isAutoSelected: boolean;
+  }) => {
+    setPendingContextDraft(draft);
+    setEditModalOpen(false);
+    setCreateFolderOpen(true);
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -116,6 +165,37 @@ export default function PreferencesPage() {
       toast.error("Failed to delete context");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim() || isCreatingFolder) return;
+    setIsCreatingFolder(true);
+    try {
+      const res = await folderService.create({ name: newFolderName.trim() });
+      const createdId = res?.data?.data?.id;
+      toast.success("Folder created");
+      setNewFolderName("");
+      setCreateFolderOpen(false);
+      await fetchFolders();
+
+      if (pendingContextDraft && createdId) {
+        const draft = pendingContextDraft;
+        setPendingContextDraft(null);
+        setContextInitialData({
+          title: draft.title,
+          memory: draft.memory,
+          type: "FOLDER",
+          folderId: createdId,
+          isAutoSelected: draft.isAutoSelected,
+        });
+        setEditContext(null);
+        setEditModalOpen(true);
+      }
+    } catch {
+      toast.error("Failed to create folder");
+    } finally {
+      setIsCreatingFolder(false);
     }
   };
 
@@ -217,7 +297,11 @@ export default function PreferencesPage() {
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-blue-500"
             title="Edit"
-            onClick={() => { setEditContext(r); setEditModalOpen(true); }}
+            onClick={() => {
+              setEditContext(r);
+              setContextInitialData(r);
+              setEditModalOpen(true);
+            }}
           >
             <Edit2 className="w-4 h-4" />
           </Button>
@@ -294,12 +378,17 @@ export default function PreferencesPage() {
       {/* ── Create / Edit Modal ── */}
       <ContextModal
         isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
+        onClose={() => {
+          setEditModalOpen(false);
+          setPendingContextDraft(null);
+          setContextInitialData(null);
+        }}
         onSave={handleSaveContext}
-        initialData={editContext}
+        initialData={contextInitialData || editContext}
         folders={folders}
         isSaving={isSaving}
         mode={editContext ? "edit" : "create"}
+        onRequestCreateFolder={handleContextRequestCreateFolder}
       />
 
       {/* ── Delete Confirmation ── */}
@@ -311,6 +400,52 @@ export default function PreferencesPage() {
         onConfirm={handleConfirmDelete}
         loading={isDeleting}
       />
+
+      {/* New Project Folder dialog (for contexts on this page) */}
+      <Dialog
+        open={createFolderOpen}
+        onOpenChange={(open) => {
+          if (!isCreatingFolder) {
+            setCreateFolderOpen(open);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Project Folder</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="e.g. Marketing Campaign"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleCreateFolder();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!isCreatingFolder) {
+                  setCreateFolderOpen(false);
+                }
+              }}
+              disabled={isCreatingFolder}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => void handleCreateFolder()} disabled={!newFolderName.trim() || isCreatingFolder}>
+              {isCreatingFolder ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
