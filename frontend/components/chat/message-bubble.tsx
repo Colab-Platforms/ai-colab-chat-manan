@@ -122,12 +122,13 @@ interface MessageBubbleProps {
   sharedView?: boolean;
   onToggleStar?: (responseId: number, isStarred: boolean) => void;
   onContinue?: (messageId: number, modelId: number) => void;
+  onRetryAssistantResponse?: (assistantMessageId: number, modelId: number) => void;
 }
 
 export const MessageBubble = React.memo(function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
-  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar, onContinue
+  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar, onContinue, onRetryAssistantResponse
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
@@ -411,7 +412,24 @@ export const MessageBubble = React.memo(function MessageBubble({
                   {singleResp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                 </div>
               ) : singleResp.status === "FAILED" ? (
-                <p className="text-sm text-destructive">Response failed. Please try again.</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-destructive">
+                    {singleResp.content?.trim() || "Failed to generate a response. Please try again."}
+                  </p>
+                  {!sharedView && onRetryAssistantResponse && uniqueModels[0] ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      type="button"
+                      onClick={() =>
+                        onRetryAssistantResponse(message.id, uniqueModels[0]!.id)
+                      }
+                    >
+                      Try again
+                    </Button>
+                  ) : null}
+                </div>
               ) : (
                 <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
               )
@@ -546,6 +564,25 @@ export const MessageBubble = React.memo(function MessageBubble({
                             </div>
                             {resp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
                           </>
+                        ) : resp?.status === "FAILED" ? (
+                          <div className="space-y-2">
+                            <p className="text-sm text-destructive">
+                              {resp.content?.trim() || "Failed to generate a response. Please try again."}
+                            </p>
+                            {!sharedView && onRetryAssistantResponse ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                type="button"
+                                onClick={() =>
+                                  onRetryAssistantResponse(message.id, model.id)
+                                }
+                              >
+                                Try again
+                              </Button>
+                            ) : null}
+                          </div>
                         ) : resp ? (
                           <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
                         ) : null}
@@ -644,7 +681,9 @@ export const MessageBubble = React.memo(function MessageBubble({
   
   if (pMsg.attachments?.length !== nMsg.attachments?.length) return false;
   if (prev.editVersions?.length !== next.editVersions?.length) return false;
-  
+
+  if (prev.onRetryAssistantResponse !== next.onRetryAssistantResponse) return false;
+
   return true;
 });
 

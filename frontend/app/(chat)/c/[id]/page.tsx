@@ -335,6 +335,8 @@ export default function ChatPage() {
     scrollToBottom();
   }, [shouldForceScrollFromStarred, messages.length]);
 
+  const FAILED_GENERATION_COPY = "Failed to generate a response. Please try again.";
+
   const streamSingleModel = (
     mid: number,
     streamingMsgId: number,
@@ -374,6 +376,8 @@ export default function ChatPage() {
       let accumulated = "";
       let buffer = "";
       let currentMsgId = streamingMsgId;
+      let lastDonePayload: any = null;
+      let streamEndedWithError = false;
       if (reader) {
         let lastUpdate = Date.now();
         const THROTTLE_MS = 60;
@@ -429,7 +433,8 @@ export default function ChatPage() {
                   );
                 }
               } else if (parsed.type === "error") {
-                const errorMessage = parsed.message || "Generation failed";
+                streamEndedWithError = true;
+                const errorMessage = parsed.message || FAILED_GENERATION_COPY;
                 accumulated = errorMessage;
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -445,35 +450,160 @@ export default function ChatPage() {
                       : msg
                   )
                 );
-                toast.error(`${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${parsed.message}`);
-              } else if (parsed.type === "done") {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === currentMsgId
-                      ? {
-                          ...msg,
-                          modelResponses: msg.modelResponses?.map((mr: any) =>
-                            mr.model.id === mid
-                              ? { 
-                                  ...mr, 
-                                  id: parsed.modelResponseId || mr.id,
-                                  content: accumulated, 
-                                  status: "COMPLETED", 
-                                  finishReason: parsed.finishReason,
-                                  tokensUsed: parsed.totalTokens,
-                                }
-                              : mr
-                          ),
-                        }
-                      : msg
-                  )
+                toast.error(
+                  `${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${errorMessage}`,
                 );
+              } else if (parsed.type === "done") {
+                // Capture final usage/meta; actual state update happens after stream ends.
+                lastDonePayload = parsed;
               }
             } catch { /* ignore parse errors */ }
           }
         }
       }
+
+      if (accumulated) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === currentMsgId
+              ? {
+                  ...msg,
+                  modelResponses: msg.modelResponses?.map((mr: any) =>
+                    mr.model.id === mid
+                      ? { ...mr, content: accumulated, status: "STREAMING" }
+                      : mr
+                  ),
+                }
+              : msg
+          )
+        );
+      }
+
+      if (streamEndedWithError) {
+        return;
+      }
+
+      // After the stream ends, decide how to finalize based on accumulated content.
+      const trimmed = accumulated.trim();
+      const modelName = modelsRef.current.find((m) => m.id === mid)?.name || "Model";
+
+      if (!trimmed) {
+        const failureMessage = FAILED_GENERATION_COPY;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === currentMsgId
+              ? {
+                  ...msg,
+                  modelResponses: msg.modelResponses?.map((mr: any) =>
+                    mr.model.id === mid
+                      ? {
+                          ...mr,
+                          content: failureMessage,
+                          status: "FAILED",
+                        }
+                      : mr
+                  ),
+                }
+              : msg
+          )
+        );
+        toast.error(`${modelName}: ${failureMessage}`);
+        return;
+      }
+
+      // Normal successful completion path.
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === currentMsgId
+            ? {
+                ...msg,
+                modelResponses: msg.modelResponses?.map((mr: any) =>
+                  mr.model.id === mid
+                    ? { 
+                        ...mr, 
+                        id: (mr.id && typeof mr.id === "number" ? mr.id : lastDonePayload?.modelResponseId) || mr.id,
+                        content: accumulated, 
+                        status: "COMPLETED", 
+                      }
+                    : mr
+                ),
+              }
+            : msg
+        )
+      );
     });
+  };
+
+  const retryFailedAssistant = async (assistantMessageId: number, modelId: number) => {
+    if (isSending) return;
+    const idx = messages.findIndex((m) => m.id === assistantMessageId);
+    if (idx <= 0) return;
+    const userMsg = messages[idx - 1];
+    if (userMsg.role !== "USER") return;
+
+    stopRequestedRef.current = false;
+    clearStreamAbortControllers();
+    setIsSending(true);
+    setIsStreaming(true);
+    isStreamingRef.current = true;
+
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantMessageId
+          ? {
+              ...msg,
+              modelResponses: msg.modelResponses?.map((mr: any) =>
+                mr.model.id === modelId
+                  ? { ...mr, content: "", status: "STREAMING", tokensUsed: null }
+                  : mr
+              ),
+            }
+          : msg
+      )
+    );
+
+    const token = localStorage.getItem("token") || "";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+    const assistantRow = messages.find((m) => m.id === assistantMessageId);
+    const chatType =
+      assistantRow?.chatType ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("preferredChatType") || undefined
+        : undefined);
+    const attachmentIds =
+      userMsg.attachments
+        ?.map((a: any) => a.id)
+        .filter((id: unknown) => typeof id === "number" && !Number.isNaN(id)) || undefined;
+
+    try {
+      const controller = createStreamAbortController();
+      await streamSingleModel(
+        modelId,
+        assistantMessageId,
+        token,
+        apiUrl,
+        userMsg.content,
+        chatType,
+        userMsg.id,
+        assistantMessageId,
+        attachmentIds,
+        controller.signal,
+        undefined,
+      );
+      window.setTimeout(() => fetchChat(true), 2000);
+    } catch (err: any) {
+      if (isAbortError(err) || stopRequestedRef.current) {
+        syncChatAfterStop();
+      } else {
+        toast.error(err.message || "Retry failed");
+      }
+    } finally {
+      clearStreamAbortControllers();
+      isStreamingRef.current = false;
+      setIsSending(false);
+      setIsStreaming(false);
+      stopRequestedRef.current = false;
+    }
   };
 
   const sendMessage = async (content: string, attachmentIds?: number[], modelIds?: number[], chatType?: string, attachmentObjects?: any[]) => {
@@ -1153,6 +1283,7 @@ export default function ChatPage() {
         onFollowUpClick={setInitialPrompt}
         onToggleStar={handleToggleStar}
         onContinue={handleContinueGeneration}
+        onRetryAssistantResponse={retryFailedAssistant}
         bottomAnchorId="chat-bottom-anchor"
         forceScrollToBottom={shouldForceScrollFromStarred}
         scrollContainerId="chat-scroll-container"

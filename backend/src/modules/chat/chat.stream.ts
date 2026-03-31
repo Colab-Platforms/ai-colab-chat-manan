@@ -534,6 +534,163 @@ function keepOnlyFirstImageMarkdown(content: string): string {
 const EMPTY_IMAGE_RESPONSE_ERROR =
   "Image generation failed: the request was blocked by safety checks or produced no image output.";
 
+const FAILED_GENERATION_USER_MESSAGE =
+  "Failed to generate a response. Please try again.";
+
+const MAX_OPENROUTER_STREAM_ATTEMPTS = 2;
+
+interface OpenRouterSseAccumulator {
+  fullContent: string;
+  promptTokens: number;
+  completionTokens: number;
+  imagesToUpload: string[];
+  selectedImageUrl: string | null;
+  finishReason: string | null;
+}
+
+function createEmptyOpenRouterAccumulator(): OpenRouterSseAccumulator {
+  return {
+    fullContent: "",
+    promptTokens: 0,
+    completionTokens: 0,
+    imagesToUpload: [],
+    selectedImageUrl: null,
+    finishReason: null,
+  };
+}
+
+function shouldRetryEmptyOpenRouterAttempt(
+  chatType: string | undefined,
+  fullContent: string,
+  completionTokens: number,
+): boolean {
+  if (chatType === "IMAGE_GENERATION") {
+    return !fullContent.trim();
+  }
+  return !fullContent.trim() && completionTokens === 0;
+}
+
+async function pipeOpenRouterStreamToClient(
+  stream: AsyncIterable<any>,
+  chatType: string | undefined,
+  res: Response,
+  isClientAborted: () => boolean,
+  acc: OpenRouterSseAccumulator,
+  streamOptions: { includeImages?: boolean; includeAnnotations?: boolean },
+): Promise<void> {
+  const includeImages = streamOptions.includeImages !== false;
+  const includeAnnotations = streamOptions.includeAnnotations === true;
+
+  for await (const chunk of stream) {
+    let delta = chunk.choices?.[0]?.delta?.content || "";
+
+    let annotations: any;
+    if (includeAnnotations) {
+      annotations =
+        chunk.choices?.[0]?.delta?.annotations ||
+        chunk.choices?.[0]?.message?.annotations ||
+        (chunk.choices?.[0]?.delta?.content as any)?.annotations;
+    }
+
+    if (includeImages) {
+      const images =
+        chunk.choices?.[0]?.delta?.images ||
+        chunk.choices?.[0]?.message?.images;
+      if (images && Array.isArray(images)) {
+        const imageUrls = images
+          .map((img: any) => img.image_url?.url || img.url)
+          .filter((url: string | undefined): url is string => Boolean(url));
+        const uniqueUrls = [...new Set(imageUrls)];
+        let selectedUrls = uniqueUrls;
+        if (chatType === "IMAGE_GENERATION") {
+          if (!acc.selectedImageUrl && uniqueUrls.length > 0) {
+            acc.selectedImageUrl = uniqueUrls[0];
+          }
+          selectedUrls = acc.selectedImageUrl ? [acc.selectedImageUrl] : [];
+        }
+        const imageMd = selectedUrls
+          .map((url: string) => {
+            if (acc.imagesToUpload.includes(url)) return "";
+            acc.imagesToUpload.push(url);
+            return `\n![Generated Image](${url})\n`;
+          })
+          .join("");
+        if (imageMd) delta += imageMd;
+      }
+    }
+
+    if (delta) {
+      acc.fullContent += delta;
+      res.write(
+        `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
+      );
+      if (typeof (res as any).flush === "function") {
+        (res as any).flush();
+      }
+      if (includeAnnotations && annotations && annotations.length > 0) {
+        res.write(
+          `data: ${JSON.stringify({ type: "annotations", annotations })}\n\n`,
+        );
+      }
+    }
+
+    if (chunk.usage) {
+      acc.promptTokens = chunk.usage.prompt_tokens || 0;
+      acc.completionTokens = chunk.usage.completion_tokens || 0;
+    }
+    const fr =
+      chunk.choices?.[0]?.finish_reason ||
+      chunk.choices?.[0]?.message?.finish_reason;
+    if (fr) {
+      acc.finishReason = fr;
+    }
+  }
+
+  if (isClientAborted()) {
+    const abortError = new Error("Generation aborted by client");
+    (abortError as any).name = "AbortError";
+    throw abortError;
+  }
+}
+
+async function runOpenRouterStreamWithEmptyRetry(params: {
+  chatType: string | undefined;
+  res: Response;
+  isClientAborted: () => boolean;
+  streamOptions: { includeImages?: boolean; includeAnnotations?: boolean };
+  createStream: () => Promise<AsyncIterable<any>>;
+}): Promise<OpenRouterSseAccumulator> {
+  let acc = createEmptyOpenRouterAccumulator();
+
+  for (let attempt = 0; attempt < MAX_OPENROUTER_STREAM_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      acc = createEmptyOpenRouterAccumulator();
+    }
+
+    const stream = await params.createStream();
+    await pipeOpenRouterStreamToClient(
+      stream,
+      params.chatType,
+      params.res,
+      params.isClientAborted,
+      acc,
+      params.streamOptions,
+    );
+
+    if (
+      !shouldRetryEmptyOpenRouterAttempt(
+        params.chatType,
+        acc.fullContent,
+        acc.completionTokens,
+      )
+    ) {
+      break;
+    }
+  }
+
+  return acc;
+}
+
 export async function streamChat(req: Request, res: Response) {
   const userId = req.user!.id;
   const chatId = Number(req.params.chatId);
@@ -976,85 +1133,30 @@ export async function streamChat(req: Request, res: Response) {
     let promptTokens = 0;
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
-    let selectedImageUrl: string | null = null;
     let finishReason: string | null = null;
 
     try {
-      const stream = await createOpenRouterStream({
-        model: model.externalId,
-        messages: trimmedHistory,
+      const acc = await runOpenRouterStreamWithEmptyRetry({
         chatType,
-        max_tokens: maxCompletionTokens,
-        plugins: streamPlugins.length > 0 ? streamPlugins : undefined,
-        temperature: assistantTemperature,
-        signal: abortController.signal,
+        res,
+        isClientAborted,
+        streamOptions: { includeImages: true, includeAnnotations: true },
+        createStream: () =>
+          createOpenRouterStream({
+            model: model.externalId,
+            messages: trimmedHistory,
+            chatType,
+            max_tokens: maxCompletionTokens,
+            plugins: streamPlugins.length > 0 ? streamPlugins : undefined,
+            temperature: assistantTemperature,
+            signal: abortController.signal,
+          }),
       });
-
-      for await (const chunk of stream) {
-        let delta = chunk.choices?.[0]?.delta?.content || "";
-        const annotations =
-          chunk.choices?.[0]?.delta?.annotations ||
-          chunk.choices?.[0]?.message?.annotations ||
-          chunk.choices?.[0]?.delta?.content.annotations;
-
-        // Handle images payload from OpenRouter
-        const images =
-          chunk.choices?.[0]?.delta?.images ||
-          chunk.choices?.[0]?.message?.images;
-        if (images && Array.isArray(images)) {
-          const imageUrls = images
-            .map((img: any) => img.image_url?.url || img.url)
-            .filter((url: string | undefined): url is string => Boolean(url));
-          const uniqueUrls = [...new Set(imageUrls)];
-          let selectedUrls = uniqueUrls;
-          if (chatType === "IMAGE_GENERATION") {
-            if (!selectedImageUrl && uniqueUrls.length > 0) {
-              selectedImageUrl = uniqueUrls[0];
-            }
-            selectedUrls = selectedImageUrl ? [selectedImageUrl] : [];
-          }
-          const imageMd = selectedUrls
-            .map((url: string) => {
-              if (imagesToUpload.includes(url)) return "";
-              imagesToUpload.push(url);
-              return `\n![Generated Image](${url})\n`;
-            })
-            .join("");
-          if (imageMd) delta += imageMd;
-        }
-
-        if (delta) {
-          fullContent += delta;
-          res.write(
-            `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
-          );
-          if (typeof (res as any).flush === "function") {
-            (res as any).flush();
-          }
-          if (annotations && annotations.length > 0) {
-            res.write(
-              `data: ${JSON.stringify({ type: "annotations", annotations })}\n\n`,
-            );
-          }
-        }
-
-        // Capture usage from the final chunk
-        if (chunk.usage) {
-          promptTokens = chunk.usage.prompt_tokens || 0;
-          completionTokens = chunk.usage.completion_tokens || 0;
-        }
-        const fr =
-          chunk.choices?.[0]?.finish_reason ||
-          chunk.choices?.[0]?.message?.finish_reason;
-        if (fr) {
-          finishReason = fr;
-        }
-      }
-      if (isClientAborted()) {
-        const abortError = new Error("Generation aborted by client");
-        (abortError as any).name = "AbortError";
-        throw abortError;
-      }
+      fullContent = acc.fullContent;
+      promptTokens = acc.promptTokens;
+      completionTokens = acc.completionTokens;
+      imagesToUpload = acc.imagesToUpload;
+      finishReason = acc.finishReason;
     } catch (aiError: any) {
       if (isClientAborted() || isAbortError(aiError)) {
         const stoppedContent =
@@ -1128,6 +1230,36 @@ export async function streamChat(req: Request, res: Response) {
 
     if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
       const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
+      await prisma.$transaction(async (tx) => {
+        await tx.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: failureMessage },
+        });
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: failureMessage,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            status: "FAILED",
+            finishReason,
+            completedAt: new Date(),
+          },
+        });
+      });
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    if (!fullContent.trim() && chatType !== "IMAGE_GENERATION") {
+      const failureMessage = FAILED_GENERATION_USER_MESSAGE;
       await prisma.$transaction(async (tx) => {
         await tx.message.update({
           where: { id: assistantMessage.id },
@@ -1559,72 +1691,28 @@ export async function regenerateChat(req: Request, res: Response) {
     let promptTokens = 0;
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
-    let selectedImageUrl: string | null = null;
     let finishReason: string | null = null;
 
     try {
-      const stream = await createOpenRouterStream({
-        model: model.externalId,
-        messages: trimmedHistory,
+      const acc = await runOpenRouterStreamWithEmptyRetry({
         chatType,
-        max_tokens: maxCompletionTokens,
-        signal: abortController.signal,
+        res,
+        isClientAborted,
+        streamOptions: { includeImages: true, includeAnnotations: false },
+        createStream: () =>
+          createOpenRouterStream({
+            model: model.externalId,
+            messages: trimmedHistory,
+            chatType,
+            max_tokens: maxCompletionTokens,
+            signal: abortController.signal,
+          }),
       });
-
-      for await (const chunk of stream) {
-        let delta = chunk.choices?.[0]?.delta?.content || "";
-
-        const images =
-          chunk.choices?.[0]?.delta?.images ||
-          chunk.choices?.[0]?.message?.images;
-        if (images && Array.isArray(images)) {
-          const imageUrls = images
-            .map((img: any) => img.image_url?.url || img.url)
-            .filter((url: string | undefined): url is string => Boolean(url));
-          const uniqueUrls = [...new Set(imageUrls)];
-          let selectedUrls = uniqueUrls;
-          if (chatType === "IMAGE_GENERATION") {
-            if (!selectedImageUrl && uniqueUrls.length > 0) {
-              selectedImageUrl = uniqueUrls[0];
-            }
-            selectedUrls = selectedImageUrl ? [selectedImageUrl] : [];
-          }
-          const imageMd = selectedUrls
-            .map((url: string) => {
-              if (imagesToUpload.includes(url)) return "";
-              imagesToUpload.push(url);
-              return `\n![Generated Image](${url})\n`;
-            })
-            .join("");
-          if (imageMd) delta += imageMd;
-        }
-
-        if (delta) {
-          fullContent += delta;
-          res.write(
-            `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
-          );
-          if (typeof (res as any).flush === "function") {
-            (res as any).flush();
-          }
-        }
-
-        if (chunk.usage) {
-          promptTokens = chunk.usage.prompt_tokens || 0;
-          completionTokens = chunk.usage.completion_tokens || 0;
-        }
-        const fr =
-          chunk.choices?.[0]?.finish_reason ||
-          chunk.choices?.[0]?.message?.finish_reason;
-        if (fr) {
-          finishReason = fr;
-        }
-      }
-      if (isClientAborted()) {
-        const abortError = new Error("Generation aborted by client");
-        (abortError as any).name = "AbortError";
-        throw abortError;
-      }
+      fullContent = acc.fullContent;
+      promptTokens = acc.promptTokens;
+      completionTokens = acc.completionTokens;
+      imagesToUpload = acc.imagesToUpload;
+      finishReason = acc.finishReason;
     } catch (aiError: any) {
       if (isClientAborted() || isAbortError(aiError)) {
         const stoppedContent =
@@ -1693,6 +1781,36 @@ export async function regenerateChat(req: Request, res: Response) {
           finishReason,
           completedAt: new Date(),
         },
+      });
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    if (!fullContent.trim() && chatType !== "IMAGE_GENERATION") {
+      const failureMessage = FAILED_GENERATION_USER_MESSAGE;
+      await prisma.$transaction(async (tx) => {
+        await tx.message.update({
+          where: { id: messageId },
+          data: { content: failureMessage },
+        });
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId,
+            modelId: model.id,
+            content: failureMessage,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            status: "FAILED",
+            finishReason,
+            completedAt: new Date(),
+          },
+        });
       });
       res.write(
         `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
@@ -2074,72 +2192,28 @@ export async function editAndResend(req: Request, res: Response) {
     let promptTokens = 0;
     let completionTokens = 0;
     let imagesToUpload: string[] = [];
-    let selectedImageUrl: string | null = null;
     let finishReason: string | null = null;
 
     try {
-      const stream = await createOpenRouterStream({
-        model: model.externalId,
-        messages: trimmedHistory,
+      const acc = await runOpenRouterStreamWithEmptyRetry({
         chatType,
-        max_tokens: maxCompletionTokens,
-        signal: abortController.signal,
+        res,
+        isClientAborted,
+        streamOptions: { includeImages: true, includeAnnotations: false },
+        createStream: () =>
+          createOpenRouterStream({
+            model: model.externalId,
+            messages: trimmedHistory,
+            chatType,
+            max_tokens: maxCompletionTokens,
+            signal: abortController.signal,
+          }),
       });
-
-      for await (const chunk of stream) {
-        let delta = chunk.choices?.[0]?.delta?.content || "";
-
-        const images =
-          chunk.choices?.[0]?.delta?.images ||
-          chunk.choices?.[0]?.message?.images;
-        if (images && Array.isArray(images)) {
-          const imageUrls = images
-            .map((img: any) => img.image_url?.url || img.url)
-            .filter((url: string | undefined): url is string => Boolean(url));
-          const uniqueUrls = [...new Set(imageUrls)];
-          let selectedUrls = uniqueUrls;
-          if (chatType === "IMAGE_GENERATION") {
-            if (!selectedImageUrl && uniqueUrls.length > 0) {
-              selectedImageUrl = uniqueUrls[0];
-            }
-            selectedUrls = selectedImageUrl ? [selectedImageUrl] : [];
-          }
-          const imageMd = selectedUrls
-            .map((url: string) => {
-              if (imagesToUpload.includes(url)) return "";
-              imagesToUpload.push(url);
-              return `\n![Generated Image](${url})\n`;
-            })
-            .join("");
-          if (imageMd) delta += imageMd;
-        }
-
-        if (delta) {
-          fullContent += delta;
-          res.write(
-            `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
-          );
-          if (typeof (res as any).flush === "function") {
-            (res as any).flush();
-          }
-        }
-
-        if (chunk.usage) {
-          promptTokens = chunk.usage.prompt_tokens || 0;
-          completionTokens = chunk.usage.completion_tokens || 0;
-        }
-        const fr =
-          chunk.choices?.[0]?.finish_reason ||
-          chunk.choices?.[0]?.message?.finish_reason;
-        if (fr) {
-          finishReason = fr;
-        }
-      }
-      if (isClientAborted()) {
-        const abortError = new Error("Generation aborted by client");
-        (abortError as any).name = "AbortError";
-        throw abortError;
-      }
+      fullContent = acc.fullContent;
+      promptTokens = acc.promptTokens;
+      completionTokens = acc.completionTokens;
+      imagesToUpload = acc.imagesToUpload;
+      finishReason = acc.finishReason;
     } catch (aiError: any) {
       if (isClientAborted() || isAbortError(aiError)) {
         const stoppedContent =
@@ -2203,6 +2277,36 @@ export async function editAndResend(req: Request, res: Response) {
 
     if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
       const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
+      await prisma.$transaction(async (tx) => {
+        await tx.message.update({
+          where: { id: assistantMessage.id },
+          data: { content: failureMessage },
+        });
+        await tx.modelResponse.create({
+          data: {
+            chatId,
+            messageId: assistantMessage.id,
+            modelId: model.id,
+            content: failureMessage,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            status: "FAILED",
+            finishReason,
+            completedAt: new Date(),
+          },
+        });
+      });
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    if (!fullContent.trim() && chatType !== "IMAGE_GENERATION") {
+      const failureMessage = FAILED_GENERATION_USER_MESSAGE;
       await prisma.$transaction(async (tx) => {
         await tx.message.update({
           where: { id: assistantMessage.id },
@@ -2644,41 +2748,25 @@ export async function continueChatStream(req: Request, res: Response) {
     let finishReason: string | null = null;
 
     try {
-      const stream = await createOpenRouterStream({
-        model: model.externalId,
-        messages: trimmedHistory,
+      const acc = await runOpenRouterStreamWithEmptyRetry({
         chatType: "STANDARD",
-        max_tokens: maxCompletionTokens,
-        plugins: attachmentPlugins.length > 0 ? attachmentPlugins : undefined,
-        signal: abortController.signal,
+        res,
+        isClientAborted,
+        streamOptions: { includeImages: false, includeAnnotations: false },
+        createStream: () =>
+          createOpenRouterStream({
+            model: model.externalId,
+            messages: trimmedHistory,
+            chatType: "STANDARD",
+            max_tokens: maxCompletionTokens,
+            plugins: attachmentPlugins.length > 0 ? attachmentPlugins : undefined,
+            signal: abortController.signal,
+          }),
       });
-
-      for await (const chunk of stream) {
-        let delta = chunk.choices?.[0]?.delta?.content || "";
-        if (delta) {
-          fullContent += delta;
-          res.write(
-            `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
-          );
-          if (typeof (res as any).flush === "function") {
-            (res as any).flush();
-          }
-        }
-        if (chunk.usage) {
-          promptTokens = chunk.usage.prompt_tokens || 0;
-          completionTokens = chunk.usage.completion_tokens || 0;
-        }
-        const fr =
-          chunk.choices?.[0]?.finish_reason ||
-          chunk.choices?.[0]?.message?.finish_reason;
-        if (fr) finishReason = fr;
-      }
-
-      if (isClientAborted()) {
-        throw new (Error as any)("Generation aborted by client", {
-          name: "AbortError",
-        });
-      }
+      fullContent = acc.fullContent;
+      promptTokens = acc.promptTokens;
+      completionTokens = acc.completionTokens;
+      finishReason = acc.finishReason;
     } catch (aiError: any) {
       // Stream failed but we might have partial content
       if (fullContent.trim()) {
@@ -2702,6 +2790,16 @@ export async function continueChatStream(req: Request, res: Response) {
       }
       res.write(
         `data: ${JSON.stringify({ type: "error", message: aiError.message || "AI request failed" })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    if (!fullContent.trim() && completionTokens === 0) {
+      const failureMessage = FAILED_GENERATION_USER_MESSAGE;
+      res.write(
+        `data: ${JSON.stringify({ type: "error", message: failureMessage })}\n\n`,
       );
       res.write("data: [DONE]\n\n");
       res.end();
