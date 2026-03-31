@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Plus, Search, Star } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
-import { getRouteUiSnapshot, subscribeRouteUi } from "@/lib/route-ui-store";
+import { getRouteUiSnapshot, subscribeRouteUi, useIsStarredRoute } from "@/lib/route-ui-store";
 import { toast } from "react-toastify";
 import { AppSidebar } from "./app-sidebar";
 import type { Assistant, Chat, FolderItem } from "./sidebar-types";
@@ -84,6 +84,8 @@ function SidebarInner({
   useEffect(() => {
     routerRef.current = router;
   }, [router]);
+  const isStarredRoute = useIsStarredRoute();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(searchQuery);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
 
@@ -464,7 +466,12 @@ function SidebarInner({
             variant="ghost"
             size="icon"
             className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer"
-            onClick={() => { if (onToggleCollapse) onToggleCollapse(); }}
+            onClick={() => {
+              if (onToggleCollapse) onToggleCollapse();
+              setTimeout(() => {
+                searchInputRef.current?.focus();
+              }, 100);
+            }}
           >
             <Search className="w-4 h-4" />
           </Button>
@@ -478,13 +485,13 @@ function SidebarInner({
             variant="ghost"
             size="icon"
             className={`h-9 w-9 rounded-lg cursor-pointer ${
-              routeUiRef.current.isStarredRoute
+              isStarredRoute
                 ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/15"
                 : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
             }`}
             onClick={() => { onMobileClose(); router.push("/starred"); }}
           >
-            <Star className={`w-4 h-4 ${routeUiRef.current.isStarredRoute ? "fill-current" : ""}`} />
+            <Star className={`w-4 h-4 ${isStarredRoute ? "fill-current" : ""}`} />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">Starred Messages</TooltipContent>
@@ -516,6 +523,7 @@ function SidebarInner({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             placeholder="Search chats..."
             value={search}
             onChange={(e) => {
@@ -523,7 +531,7 @@ function SidebarInner({
               setSearch(value);
               onSearchChange(value);
             }}
-            className="h-9 border-none bg-sidebar-accent/50 pl-9 text-sm"
+            className="h-9 border-none bg-sidebar-accent/50 pl-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none"
           />
         </div>
       </div>

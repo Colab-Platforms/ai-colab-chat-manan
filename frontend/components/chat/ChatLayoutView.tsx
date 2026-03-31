@@ -430,7 +430,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const sidebarContent = (
+  const renderSidebar = (isMobile: boolean) => (
     <Sidebar
       chats={chats}
       folders={folders}
@@ -443,7 +443,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       onSearchChange={setChatSearch}
       assistantsHasMore={assistantsHasMore}
       onLoadMoreAssistants={handleLoadMoreAssistants}
-      collapsed={sidebarCollapsed}
+      collapsed={isMobile ? false : sidebarCollapsed}
       onToggleCollapse={toggleSidebarCollapsed}
     />
   );
@@ -488,7 +488,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         }`}
         style={{ contain: "layout style paint", willChange: "transform" }}
       >
-        {sidebarContent}
+        {renderSidebar(false)}
       </aside>
 
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-3 bg-background/80 backdrop-blur-md border-b border-border/50 justify-between">
@@ -551,7 +551,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
           `}
           style={{ contain: "layout style paint" }}
         >
-          {sidebarContent}
+          {renderSidebar(true)}
         </aside>
       )}
 
