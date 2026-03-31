@@ -121,7 +121,13 @@ export function AppSidebar({
                 {theme === "dark" ? "Light Mode" : "Dark Mode"}
               </DropdownMenuItem>
               {variant === "chat" ? (
-                <DropdownMenuItem onClick={() => { handleClose(); router.push("/profile"); }} className="gap-2 cursor-pointer">
+                <DropdownMenuItem onClick={() => { 
+                  handleClose(); 
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("last_chat_path", window.location.pathname);
+                  }
+                  router.push("/profile"); 
+                }} className="gap-2 cursor-pointer">
                   <Settings className="w-4 h-4" /> Settings
                 </DropdownMenuItem>
               ) : (
@@ -134,7 +140,12 @@ export function AppSidebar({
                     } catch {
                       // ignore localStorage issues
                     }
-                    router.push("/");
+                    if (typeof window !== "undefined") {
+                      const lastPath = localStorage.getItem("last_chat_path") || "/";
+                      router.push(lastPath);
+                    } else {
+                      router.push("/");
+                    }
                   }}
                   className="gap-2 cursor-pointer"
                 >
@@ -212,7 +223,13 @@ export function AppSidebar({
               {theme === "dark" ? "Light Mode" : "Dark Mode"}
             </DropdownMenuItem>
             {variant === "chat" ? (
-              <DropdownMenuItem onClick={() => { handleClose(); router.push("/profile"); }} className="gap-2 cursor-pointer">
+              <DropdownMenuItem onClick={() => { 
+                handleClose(); 
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("last_chat_path", window.location.pathname);
+                }
+                router.push("/profile"); 
+              }} className="gap-2 cursor-pointer">
                 <Settings className="w-4 h-4" /> Settings
               </DropdownMenuItem>
             ) : (
@@ -225,7 +242,12 @@ export function AppSidebar({
                   } catch {
                     // ignore localStorage issues
                   }
-                  router.push("/");
+                  if (typeof window !== "undefined") {
+                    const lastPath = localStorage.getItem("last_chat_path") || "/";
+                    router.push(lastPath);
+                  } else {
+                    router.push("/");
+                  }
                 }}
                 className="gap-2 cursor-pointer"
               >

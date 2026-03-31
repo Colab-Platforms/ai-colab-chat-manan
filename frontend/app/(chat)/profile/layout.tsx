@@ -71,7 +71,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Back to chat */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href="/">
+          <Link href="#" onClick={(e) => {
+            e.preventDefault();
+            const lastPath = localStorage.getItem("last_chat_path") || "/";
+            router.push(lastPath);
+          }}>
             <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer">
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -143,7 +147,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <>
       {/* Back to chat link — sits just below the logo/collapse row */}
       <div className="px-3 pb-2">
-        <Link href="/" onClick={() => setMobileOpen(false)}>
+        <Link href="#" onClick={(e) => {
+          e.preventDefault();
+          setMobileOpen(false);
+          const lastPath = localStorage.getItem("last_chat_path") || "/";
+          router.push(lastPath);
+        }}>
           <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground justify-start cursor-pointer w-full">
             <ArrowLeft className="w-4 h-4" />
             Back to Chat
