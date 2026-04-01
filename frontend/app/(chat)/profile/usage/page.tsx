@@ -74,41 +74,7 @@ export default function AdminUsagePage() {
       const res = await usageLogService.list(params);
       const result = res.data.data;
       
-      // Group logs by messageId (if present), fallback to grouping by id if no messageId
-      const grouped = new Map<string, GroupedLog>();
-      
-      (result?.data || []).forEach((log: any) => {
-        const key = log.messageId ? `msg_${log.messageId}` : `log_${log.id}`;
-        if (!grouped.has(key)) {
-          grouped.set(key, {
-            id: key,
-            user: log.user,
-            messageId: log.messageId,
-            capability: log.capability,
-            createdAt: log.createdAt,
-            models: [],
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-            billablePromptTokens: 0,
-            billableCompletionTokens: 0,
-            billableTotalTokens: 0,
-            subLogs: [],
-          });
-        }
-        
-        const group = grouped.get(key)!;
-        group.models.push(log.model);
-        group.promptTokens += (log.promptTokens || 0);
-        group.completionTokens += (log.completionTokens || 0);
-        group.totalTokens += (log.totalTokens || 0);
-        group.billablePromptTokens += (log.billablePromptTokens || 0);
-        group.billableCompletionTokens += (log.billableCompletionTokens || 0);
-        group.billableTotalTokens += (log.billableTotalTokens || 0);
-        group.subLogs.push(log);
-      });
-
-      setLogs(Array.from(grouped.values()));
+      setLogs(result?.data || []);
       setPagination(result || {});
     } catch { 
       /* ignore */ 

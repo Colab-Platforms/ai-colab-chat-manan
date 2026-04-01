@@ -300,19 +300,69 @@ class UserService {
       _count: true,
     });
 
-    // Paginated usage logs
-    const [logs, totalRecords] = await Promise.all([
-      prisma.usageLog.findMany({
-        where: { userId },
-        skip,
-        take,
-        orderBy: { createdAt: "desc" },
-        include: {
-          model: { select: { id: true, name: true } },
-        },
-      }),
-      prisma.usageLog.count({ where: { userId } }),
-    ]);
+    // 1. Get the distinct group IDs for pagination
+    const groupIdentifiers = await prisma.usageLog.findMany({
+      where: { userId },
+      skip,
+      take,
+      distinct: ['groupId'],
+      orderBy: { createdAt: "desc" },
+      select: { groupId: true },
+    });
+
+    const groupsToFetch = groupIdentifiers.map((g) => g.groupId).filter(Boolean) as string[];
+
+    // 2. Fetch all components of those specific groups in 1 query
+    const rawLogs = await prisma.usageLog.findMany({
+      where: {
+        userId,
+        groupId: { in: groupsToFetch },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        model: { select: { id: true, name: true } },
+      },
+    });
+
+    const grouped = new Map<string, any>();
+    for (const log of rawLogs) {
+      if (!log.groupId) continue;
+
+      if (!grouped.has(log.groupId)) {
+        grouped.set(log.groupId, {
+          id: log.groupId,
+          userId: log.userId,
+          messageId: log.messageId,
+          capability: log.capability,
+          createdAt: log.createdAt,
+          models: [],
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          billablePromptTokens: 0,
+          billableCompletionTokens: 0,
+          billableTotalTokens: 0,
+          subLogs: [],
+        });
+      }
+
+      const group = grouped.get(log.groupId);
+      if (log.model) group.models.push(log.model);
+      group.promptTokens += (log.promptTokens || 0);
+      group.completionTokens += (log.completionTokens || 0);
+      group.totalTokens += (log.totalTokens || 0);
+      group.billablePromptTokens += (log.billablePromptTokens || 0);
+      group.billableCompletionTokens += (log.billableCompletionTokens || 0);
+      group.billableTotalTokens += (log.billableTotalTokens || 0);
+      group.subLogs.push(log);
+    }
+
+    // Preserve sorting
+    const paginatedLogs = groupsToFetch.map((g) => grouped.get(g)).filter(Boolean);
+
+    // Get total distinct groups reliably
+    const distinctGroups = await prisma.usageLog.groupBy({ by: ['groupId'], where: { userId } });
+    const totalRecords = distinctGroups.length;
 
     return {
       summary: {
@@ -324,7 +374,7 @@ class UserService {
         billableTotalTokens: summary._sum.billableTotalTokens || 0,
         totalPrompts: summary._count || 0,
       },
-      usage: formatPaginationResponse(logs, totalRecords, page, pageSize),
+      usage: formatPaginationResponse(paginatedLogs, totalRecords, page, pageSize),
     };
   }
 

@@ -46,23 +46,72 @@ class UsageLogService {
       };
     }
 
-    const [logs, totalRecords] = await Promise.all([
-      prisma.usageLog.findMany({
-        where,
-        skip,
-        take,
-        orderBy,
-        include: {
-          user: {
-            select: { id: true, firstName: true, lastName: true, email: true },
-          },
-          model: { select: { id: true, name: true } },
-        },
-      }),
-      prisma.usageLog.count({ where }),
-    ]);
+    // 1. Get the distinct group IDs for pagination
+    const groupIdentifiers = await prisma.usageLog.findMany({
+      where,
+      skip,
+      take,
+      distinct: ['groupId'],
+      orderBy,
+      select: { groupId: true },
+    });
 
-    return formatPaginationResponse(logs, totalRecords, page, pageSize);
+    const groupsToFetch = groupIdentifiers.map((g) => g.groupId).filter(Boolean) as string[];
+
+    // 2. Fetch all components of those specific groups in 1 query
+    const rawLogs = await prisma.usageLog.findMany({
+      where: {
+        ...where,
+        groupId: { in: groupsToFetch },
+      },
+      orderBy,
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        model: { select: { id: true, name: true } },
+      },
+    });
+
+    const grouped = new Map<string, any>();
+    for (const log of rawLogs) {
+      if (!log.groupId) continue; // Should not happen after backfill
+      
+      if (!grouped.has(log.groupId)) {
+        grouped.set(log.groupId, {
+          id: log.groupId,
+          user: log.user,
+          messageId: log.messageId,
+          capability: log.capability,
+          createdAt: log.createdAt,
+          models: [],
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          billablePromptTokens: 0,
+          billableCompletionTokens: 0,
+          billableTotalTokens: 0,
+          subLogs: [],
+        });
+      }
+
+      const group = grouped.get(log.groupId);
+      if (log.model) group.models.push(log.model);
+      group.promptTokens += (log.promptTokens || 0);
+      group.completionTokens += (log.completionTokens || 0);
+      group.totalTokens += (log.totalTokens || 0);
+      group.billablePromptTokens += (log.billablePromptTokens || 0);
+      group.billableCompletionTokens += (log.billableCompletionTokens || 0);
+      group.billableTotalTokens += (log.billableTotalTokens || 0);
+      group.subLogs.push(log);
+    }
+
+    // Preserve sorting
+    const paginatedLogs = groupsToFetch.map((g) => grouped.get(g)).filter(Boolean);
+
+    // Get total distinct groups reliably
+    const distinctGroups = await prisma.usageLog.groupBy({ by: ['groupId'], where });
+    const totalRecords = distinctGroups.length;
+
+    return formatPaginationResponse(paginatedLogs, totalRecords, page, pageSize);
   }
 
   /** Total tokens logged per calendar day (UTC) per model, for charts. */

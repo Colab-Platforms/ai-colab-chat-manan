@@ -353,6 +353,7 @@ model UsageLog {
   model                    Model           @relation(fields: [modelId], references: [id])
   chat                     Chat?           @relation(fields: [chatId], references: [id])
   message                  Message?        @relation(fields: [messageId], references: [id])
+  groupId                  String?         @default(cuid())
   createdAt                DateTime        @default(now())
 
   @@index([userId])
@@ -362,6 +363,7 @@ model UsageLog {
   @@index([userId, createdAt])
   @@index([modelId, createdAt])
   @@index([capability, createdAt])
+  @@index([groupId])
 }
 
 model Plan {
