@@ -69,7 +69,7 @@ export function AppSidebar({
       onLogout();
     } else {
       logout();
-      router.replace("/login");
+      router.replace("/");
     }
   };
 

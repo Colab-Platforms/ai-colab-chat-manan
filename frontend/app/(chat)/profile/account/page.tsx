@@ -98,7 +98,7 @@ export default function AccountPage() {
       await userService.delete(user.id);
       toast.success("Account deleted successfully");
       logout();
-      router.push("/login");
+      router.push("/");
     } catch {
       toast.error("Failed to delete account");
       setDeleting(false);
