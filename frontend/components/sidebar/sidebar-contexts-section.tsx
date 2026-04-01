@@ -348,11 +348,9 @@ export function ContextsSectionContainer({
             setSelectedContextIds(selectedRes.data?.data?.contextIds || []);
           } else {
             const payload = cached;
-            const defaultGlobalIds = folderId
-              ? (payload.globalContexts || [])
-                  .filter((ctx: SidebarContextRow) => ctx.isAutoSelected)
-                  .map((ctx: SidebarContextRow) => ctx.id)
-              : (payload.globalContexts || []).map((ctx: SidebarContextRow) => ctx.id);
+            const defaultGlobalIds = (payload.globalContexts || [])
+              .filter((ctx: SidebarContextRow) => ctx.isAutoSelected)
+              .map((ctx: SidebarContextRow) => ctx.id);
             const defaultFolderIds = folderId
               ? (payload.folderContexts || []).map((ctx: SidebarContextRow) => ctx.id)
               : [];
@@ -404,11 +402,9 @@ export function ContextsSectionContainer({
           const selectedRes = await chatService.getContexts(chatId);
           setSelectedContextIds(selectedRes.data?.data?.contextIds || []);
         } else {
-          const defaultGlobalIds = folderId
-            ? (payload.globalContexts || [])
-                .filter((ctx: SidebarContextRow) => ctx.isAutoSelected)
-                .map((ctx: SidebarContextRow) => ctx.id)
-            : (payload.globalContexts || []).map((ctx: SidebarContextRow) => ctx.id);
+          const defaultGlobalIds = (payload.globalContexts || [])
+            .filter((ctx: SidebarContextRow) => ctx.isAutoSelected)
+            .map((ctx: SidebarContextRow) => ctx.id);
           const defaultFolderIds = folderId
             ? (payload.folderContexts || []).map((ctx: SidebarContextRow) => ctx.id)
             : [];
