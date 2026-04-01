@@ -202,11 +202,11 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, router]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !isProfileRoute) {
       fetchFolders();
       fetchAssistants(1);
     }
-  }, [user, fetchFolders, fetchAssistants]);
+  }, [user, isProfileRoute, fetchFolders, fetchAssistants]);
 
   // When navigating back from settings/profile (or any non-chat route)
   // to a chat route, re-fetch sidebar data so changes made in settings
@@ -229,10 +229,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   }, [user, pathname, fetchFolders, fetchChats, fetchAssistants]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !isProfileRoute) {
       fetchChats(1);
     }
-  }, [user, fetchChats, chatSearch]);
+  }, [user, isProfileRoute, fetchChats, chatSearch]);
 
   const chatListRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -15,6 +15,7 @@ import userPreferenceRoutes from "@/modules/user-preference/user-preference.rout
 import assistantRoutes from "@/modules/assistant/assistant.route.js";
 import contextRoutes from "@/modules/context/context.route.js";
 import subscriptionRoutes from "@/modules/subscription/subscription.route.js";
+import dashboardRoutes from "@/modules/dashboard/dashboard.route.js";
 
 const router = Router();
 
@@ -37,5 +38,6 @@ router.use("/model-providers", modelProviderRoutes);
 router.use("/preferences", userPreferenceRoutes);
 router.use("/assistants", assistantRoutes);
 router.use("/contexts", contextRoutes);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;

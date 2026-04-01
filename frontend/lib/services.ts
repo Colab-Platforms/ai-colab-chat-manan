@@ -153,6 +153,10 @@ export const assistantService = {
   delete: (id: number) => api.delete(`/assistants/${id}`),
 };
 
+export const dashboardService = {
+  getSummary: () => api.get("/dashboard/summary"),
+};
+
 export const contextService = {
   list: (params?: Record<string, string>) => api.get("/contexts", { params }),
   getSidebar: (params?: Record<string, string>) => api.get("/contexts/sidebar", { params }),
