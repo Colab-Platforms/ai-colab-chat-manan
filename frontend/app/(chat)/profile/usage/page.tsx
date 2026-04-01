@@ -185,11 +185,12 @@ export default function AdminUsagePage() {
       />
 
       <Dialog open={!!selectedGroup} onOpenChange={(open) => !open && setSelectedGroup(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl w-[90%]">
           <DialogHeader>
             <DialogTitle>Usage Breakdown</DialogTitle>
           </DialogHeader>
           <div className="mt-4 border border-border rounded-lg overflow-hidden bg-card/50">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
@@ -218,6 +219,7 @@ export default function AdminUsagePage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
