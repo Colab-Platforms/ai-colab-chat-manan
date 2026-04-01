@@ -241,15 +241,15 @@ export function DataTable<T extends Record<string, any>>({
       )}
 
       {/* Table */}
-      <div className="border border-border/30 rounded-xl overflow-hidden bg-card/90 backdrop-blur-sm">
-        <div className="overflow-x-auto">
+      <div className="border border-border/30 rounded-xl overflow-hidden bg-card/90 backdrop-blur-sm flex flex-col">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/30 border-b border-border/30">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-card border-b border-border/30">
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    className={`px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap ${col.sortable ? "cursor-pointer select-none hover:text-foreground transition-colors" : ""} ${col.className || ""}`}
+                    className={`px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap bg-muted/60 backdrop-blur-sm ${col.sortable ? "cursor-pointer select-none hover:text-foreground transition-colors" : ""} ${col.className || ""}`}
                     onClick={() => col.sortable && handleSort(col.key)}
                   >
                     <div className="flex items-center gap-1">
