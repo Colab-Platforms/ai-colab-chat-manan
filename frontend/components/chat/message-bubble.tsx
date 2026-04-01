@@ -222,6 +222,14 @@ export const MessageBubble = React.memo(function MessageBubble({
     align: "start",
     dragFree: false,
     containScroll: "trimSnaps",
+    watchDrag: (emblaApi, event) => {
+      if (event.type === "mousedown" || (event as PointerEvent).pointerType === "mouse") {
+        const target = event.target as HTMLElement;
+        const dragHandle = target.closest('[data-drag-handle="true"]');
+        return !!dragHandle;
+      }
+      return true;
+    },
   });
 
   const [activeTab, setActiveTab] = useState<number>(uniqueModels[0]?.id ?? 0);
@@ -538,7 +546,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                   >
                     <div className="flex flex-col h-full rounded-xl border border-border/40 bg-muted/30 overflow-hidden break-words min-w-0 bg-muted/40">
                       {/* Card header */}
-                      <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b border-border/30  min-w-0">
+                      <div data-drag-handle="true" className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 border-b border-border/30 min-w-0 cursor-grab active:cursor-grabbing">
                         <span className="text-xs font-semibold text-foreground/80 truncate flex-1 min-w-0">{model.name}</span>
                         {hasSourceChat && sourceChatUrl && (
                           <Link
