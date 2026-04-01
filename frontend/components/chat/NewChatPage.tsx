@@ -108,12 +108,15 @@ export function NewChatPage() {
   }, [loadAssistantAndModels]);
 
   useEffect(() => {
-    const handleAssistantSelected = () => {
+    const handleEvents = () => {
       loadAssistantAndModels();
     };
-    window.addEventListener("assistant-selected", handleAssistantSelected);
-    return () =>
-      window.removeEventListener("assistant-selected", handleAssistantSelected);
+    window.addEventListener("assistant-selected", handleEvents);
+    window.addEventListener("refresh-models", handleEvents);
+    return () => {
+      window.removeEventListener("assistant-selected", handleEvents);
+      window.removeEventListener("refresh-models", handleEvents);
+    };
   }, [loadAssistantAndModels]);
 
   const handleSend = async (content: string, attachmentIds?: number[], chatType?: string, attachmentObjects?: any[]) => {

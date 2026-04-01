@@ -222,6 +222,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     fetchFolders();
     fetchChats(1);
     fetchAssistants(1);
+    
+    // Clear models cache and trigger refresh so any settings changes take effect
+    sessionStorage.removeItem("models_cache_v1");
+    window.dispatchEvent(new CustomEvent("refresh-models"));
   }, [user, pathname, fetchFolders, fetchChats, fetchAssistants]);
 
   useEffect(() => {

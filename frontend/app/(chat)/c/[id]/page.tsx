@@ -317,6 +317,12 @@ export default function ChatPage() {
   }, [fetchModels, fetchChat]);
 
   useEffect(() => {
+    const handleRefreshModels = () => fetchModels();
+    window.addEventListener("refresh-models", handleRefreshModels);
+    return () => window.removeEventListener("refresh-models", handleRefreshModels);
+  }, [fetchModels]);
+
+  useEffect(() => {
     if (!shouldForceScrollFromStarred) return;
     let attempt = 0;
     const maxAttempts = 8;
