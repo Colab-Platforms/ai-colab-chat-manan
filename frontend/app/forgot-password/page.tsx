@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
+import { motion } from "framer-motion";
+import { EASE } from "@/components/NewLanding/components/motionVariants";
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (
@@ -105,7 +107,13 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
-      <Card className="w-full mx-3 max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: EASE }}
+        className="w-[90%] max-w-md mx-3"
+      >
+        <Card className="w-full border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto">
             <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
@@ -184,7 +192,7 @@ export default function ForgotPasswordPage() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full h-11 font-medium" disabled={loading}>
+              <Button type="submit" className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset password"}
               </Button>
               <Button type="button" variant="outline" className="w-full h-11" disabled={resendLoading || timer > 0} onClick={handleResendOtp}>
@@ -201,12 +209,13 @@ export default function ForgotPasswordPage() {
         </CardContent>
       </Card>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
+      <div className="mt-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
         <ArrowLeft className="w-4 h-4 " />
         <Link href="/" className=" font-medium">
           Back to Home
         </Link>
       </div>
+      </motion.div>
     </div>
   );
 }
