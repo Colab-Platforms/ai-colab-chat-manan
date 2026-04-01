@@ -52,7 +52,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setIsLoading(false);
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) {
+      setIsLoading(false);
+      return;
+    }
+    // Fetch fresh profile from server on every page load so cross-device
+    // profile updates (name, avatar, etc.) are always reflected.
+    api
+      .get("/users/profile")
+      .then((res) => {
+        const userData = res.data.data;
+        setUser(userData);
+        localStorage.setItem("user", JSON.stringify(userData));
+      })
+      .catch(() => {
+        // Keep the cached user if the request fails (e.g. offline)
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   const saveAuth = (userData: User, tokenData: string) => {
