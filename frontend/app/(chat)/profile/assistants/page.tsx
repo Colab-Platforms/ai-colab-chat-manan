@@ -197,6 +197,7 @@ export default function AssistantsAdminPage() {
         filters={[{ key: "isActive", label: "Active", type: "boolean" }]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
+        loading={loading}
       />
 
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>

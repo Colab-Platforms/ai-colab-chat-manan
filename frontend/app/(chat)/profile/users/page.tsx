@@ -233,6 +233,7 @@ export default function UsersAdminPage() {
         ]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
+        loading={loading}
       />
 
       {/* ─── View Modal ─── */}

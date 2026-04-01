@@ -131,6 +131,7 @@ export default function PlansAdminPage() {
         filters={[{ key: "isActive", label: "Active", type: "boolean" }]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
+        loading={loading}
       />
 
       {/* View */}

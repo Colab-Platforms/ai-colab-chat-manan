@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Search, ChevronUp, ChevronDown, ChevronsUpDown,
-  ChevronLeft, ChevronRight, SlidersHorizontal, X,
+  ChevronLeft, ChevronRight, SlidersHorizontal, X, Loader2,
 } from "lucide-react";
 
 export interface Column<T = any> {
@@ -83,6 +83,7 @@ export function DataTable<T extends Record<string, any>>({
   filters,
   activeFilters = {},
   onFilterChange,
+  loading = false,
 }: DataTableProps<T>) {
   const [localSearch, setLocalSearch] = useState(externalSearch || "");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -260,7 +261,14 @@ export function DataTable<T extends Record<string, any>>({
               </tr>
             </thead>
             <tbody>
-              {data.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-12 text-center text-muted-foreground">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary mb-2" />
+                    <p className="text-sm">Loading records...</p>
+                  </td>
+                </tr>
+              ) : data.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-12 text-center text-muted-foreground">
                     No records found

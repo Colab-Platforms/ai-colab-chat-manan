@@ -91,6 +91,7 @@ export default function ProvidersAdminPage() {
         filters={[{ key: "isActive", label: "Active", type: "boolean" }]}
         activeFilters={activeFilters}
         onFilterChange={handleFilterChange}
+        loading={loading}
       />
 
       {/* View */}

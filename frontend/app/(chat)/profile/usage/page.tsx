@@ -148,6 +148,7 @@ export default function AdminUsagePage() {
         hasPreviousPage={pagination.hasPreviousPage}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
+        loading={loading}
       />
 
       <Dialog open={!!selectedGroup} onOpenChange={(open) => !open && setSelectedGroup(null)}>

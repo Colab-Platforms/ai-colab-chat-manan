@@ -354,6 +354,7 @@ export default function PreferencesPage() {
               Create Context
             </Button>
           }
+          loading={loadingContexts}
         />
       </section>
 
