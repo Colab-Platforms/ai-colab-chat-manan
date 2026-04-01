@@ -769,7 +769,7 @@ export function ChatInput({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 w-full">
                   <p className="text-xs font-semibold text-primary mb-1">Enhanced prompt preview</p>
-                  <div className="max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="max-h-[100px] sm:max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                     <p className="whitespace-pre-wrap break-words text-sm text-foreground leading-relaxed">{enhancedPrompt}</p>
                   </div>
                 </div>
