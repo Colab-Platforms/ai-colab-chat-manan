@@ -186,7 +186,7 @@ export function NewChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Center hero */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-xl">

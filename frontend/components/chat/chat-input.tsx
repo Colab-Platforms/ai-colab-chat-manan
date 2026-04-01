@@ -667,11 +667,13 @@ export function ChatInput({
       )}
       <div className="pt-2 pb-6 px-4 w-full">
         <div className="max-w-3xl mx-auto">
-          <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+          <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all max-h-[50vh] md:max-h-[60vh]">
 
-          {/* Top Row: Chat Type Pill */}
+          {/* Scrollable Context Area */}
+          <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar min-h-0">
+            {/* Top Row: Chat Type Pill */}
           {chatType !== "STANDARD" && (
-            <div className="flex items-center mb-1 px-2">
+            <div className="flex items-center mb-1 px-2 mt-1 flex-shrink-0">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 shadow-sm animate-in fade-in zoom-in-95">
                 {chatType === "WEB_SEARCH" && <Search className="w-3.5 h-3.5" />}
                 {chatType === "DEEP_RESEARCH" && <Sparkles className="w-3.5 h-3.5" />}
@@ -690,7 +692,7 @@ export function ChatInput({
 
           {/* Multi-model selection chips */}
           {selectedModels.length > 1 && (
-            <div className="flex flex-wrap gap-1.5 px-2 mb-1 mt-1">
+            <div className="flex flex-wrap gap-1.5 px-2 mb-1 mt-1 flex-shrink-0">
               {models
                 .filter((m) => selectedModels.includes(m.id))
                 .map((model) => (
@@ -721,7 +723,7 @@ export function ChatInput({
 
           {/* Attachment previews */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1">
+            <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1 flex-shrink-0">
               {attachments.map((att) => {
                 const visual = getAttachmentVisual(att.fileName, att.mimeType);
                 return (
@@ -765,7 +767,7 @@ export function ChatInput({
           )}
 
           {enhancedPrompt && (
-            <div className="mx-2 mb-2 mt-1 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4">
+            <div className="mx-2 mb-2 mt-1 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4 flex-shrink-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 w-full">
                   <p className="text-xs font-semibold text-primary mb-1">Enhanced prompt preview</p>
@@ -795,9 +797,10 @@ export function ChatInput({
               </div>
             </div>
           )}
+          </div>
 
           {/* Middle Row: input & actions */}
-          <div className="flex items-end gap-2 relative pb-1">
+          <div className="flex items-end gap-2 relative pb-1 flex-shrink-0">
             <input
               ref={fileInputRef}
               type="file"
