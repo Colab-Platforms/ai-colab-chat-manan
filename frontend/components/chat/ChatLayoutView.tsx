@@ -208,24 +208,35 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     }
   }, [user, isProfileRoute, fetchFolders, fetchAssistants]);
 
+  const prevPathnameRef = useRef(pathname);
+
   // When navigating back from settings/profile (or any non-chat route)
   // to a chat route, re-fetch sidebar data so changes made in settings
   // are reflected immediately.
   useEffect(() => {
+    const prevPathname = prevPathnameRef.current;
+    prevPathnameRef.current = pathname;
+
     if (!user) return;
-    const onChatRoute =
-      !pathname.startsWith("/profile") &&
-      !pathname.startsWith("/login") &&
-      !pathname.startsWith("/register") &&
-      !pathname.startsWith("/forgot-password");
-    if (!onChatRoute) return;
-    fetchFolders();
-    fetchChats(1);
-    fetchAssistants(1);
-    
-    // Clear models cache and trigger refresh so any settings changes take effect
-    sessionStorage.removeItem("models_cache_v1");
-    window.dispatchEvent(new CustomEvent("refresh-models"));
+
+    const isNonChatRoute = (p: string) =>
+      p.startsWith("/profile") ||
+      p.startsWith("/login") ||
+      p.startsWith("/register") ||
+      p.startsWith("/forgot-password");
+
+    const wasNonChatRoute = isNonChatRoute(prevPathname);
+    const isNowChatRoute = !isNonChatRoute(pathname);
+
+    if (wasNonChatRoute && isNowChatRoute) {
+      fetchFolders();
+      fetchChats(1);
+      fetchAssistants(1);
+      
+      // Clear models cache and trigger refresh so any settings changes take effect
+      sessionStorage.removeItem("models_cache_v1");
+      window.dispatchEvent(new CustomEvent("refresh-models"));
+    }
   }, [user, pathname, fetchFolders, fetchChats, fetchAssistants]);
 
   useEffect(() => {

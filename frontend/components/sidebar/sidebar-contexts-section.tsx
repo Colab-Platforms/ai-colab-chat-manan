@@ -91,10 +91,12 @@ function ContextSidebarItem({
         className="h-3.5 w-3.5 shrink-0 accent-primary cursor-pointer"
       />
       <span
-        className="min-w-0 flex-1 truncate pr-10 text-xs text-foreground"
+        className="min-w-0 flex-1 truncate pr-8 text-xs text-foreground"
         title={ctx.title || ctx.memory}
       >
-        {ctx.title || "Untitled context"}
+        {(ctx.title || "Untitled context").length > 30
+          ? (ctx.title || "Untitled context").substring(0, 30) + "..."
+          : (ctx.title || "Untitled context")}
       </span>
       <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center">
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -477,6 +479,15 @@ export function ContextsSectionContainer({
     window.addEventListener("pending-new-chat-folder-updated", handler as EventListener);
     return () =>
       window.removeEventListener("pending-new-chat-folder-updated", handler as EventListener);
+  }, [getNewChatFolderIdHint, refreshSidebarContexts]);
+
+  useEffect(() => {
+    const handler = () => {
+      const activeId = getRouteUiSnapshot().activeChatId;
+      void refreshSidebarContexts(activeId, activeId ? undefined : getNewChatFolderIdHint(), true);
+    };
+    window.addEventListener("contexts-updated", handler);
+    return () => window.removeEventListener("contexts-updated", handler);
   }, [getNewChatFolderIdHint, refreshSidebarContexts]);
 
   const handleToggleContext = useCallback(
