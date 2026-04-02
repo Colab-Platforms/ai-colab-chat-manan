@@ -100,6 +100,13 @@ export async function cashfreeWebhook(req: Request, res: Response) {
   const now = new Date();
   const nextPeriodEnd = addCycle(now, subscription.billingCycle);
   const tokenLimit = subscription.plan.tokenLimit;
+  const recurringAmount = Number(
+    subscription.billingCycle === "MONTHLY"
+      ? subscription.plan.monthlyPrice
+      : subscription.billingCycle === "QUARTERLY"
+        ? subscription.plan.quarterlyPrice
+        : subscription.plan.yearlyPrice,
+  );
 
   if (eventType === "SUBSCRIPTION_STATUS_CHANGE") {
     const status = payloadData?.subscription_details?.subscription_status;
@@ -124,7 +131,15 @@ export async function cashfreeWebhook(req: Request, res: Response) {
             subscriptionId,
             localSubscriptionId: subscription.id,
           });
-          await cashfreeService.triggerFirstCharge(subscriptionId);
+          if (recurringAmount >= 1) {
+            await cashfreeService.triggerFirstCharge(subscriptionId, recurringAmount);
+          } else {
+            console.warn("[Cashfree][Webhook] Not triggering first charge: invalid recurringAmount", {
+              subscriptionId,
+              localSubscriptionId: subscription.id,
+              recurringAmount,
+            });
+          }
         } catch (e: any) {
           console.warn("[Cashfree][Webhook] triggerFirstCharge failed (best effort)", {
             subscriptionId,
@@ -179,7 +194,15 @@ export async function cashfreeWebhook(req: Request, res: Response) {
             data: { startedAt: now },
           });
 
-          await cashfreeService.triggerFirstCharge(subscriptionId);
+          if (recurringAmount >= 1) {
+            await cashfreeService.triggerFirstCharge(subscriptionId, recurringAmount);
+          } else {
+            console.warn("[Cashfree][Webhook] Not triggering first charge after auth: invalid recurringAmount", {
+              subscriptionId,
+              localSubscriptionId: subscription.id,
+              recurringAmount,
+            });
+          }
         } catch (e: any) {
           console.warn("[Cashfree][Webhook] triggerFirstCharge after auth-payment failed (best effort)", {
             subscriptionId,

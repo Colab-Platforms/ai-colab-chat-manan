@@ -637,64 +637,54 @@ class SubscriptionCashfreeService {
     }
   }
 
-  async triggerFirstCharge(subscriptionId: string): Promise<boolean> {
+  async triggerFirstCharge(subscriptionId: string, paymentAmount: number): Promise<boolean> {
     const endpoint = `${this.pgBaseUrl}/subscriptions/pay`;
     const paymentId = `initial_charge_${subscriptionId}`;
-    const payloads = [
-      {
-        subscription_id: subscriptionId,
-        payment_id: paymentId,
-        payment_type: "CHARGE",
-      },
-      {
-        subscription_id: subscriptionId,
-        payment_id: paymentId,
-        payment_type: "RECURRING",
-      },
-      {
-        subscription_id: subscriptionId,
-        payment_id: paymentId,
-      },
-    ];
+    // Cashfree "raise charge" for subscriptions requires payment_amount for CHARGE.
+    const payload = {
+      subscription_id: subscriptionId,
+      payment_id: paymentId,
+      payment_type: "CHARGE",
+      payment_amount: paymentAmount,
+      payment_currency: "INR",
+    };
 
-    for (const payload of payloads) {
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            ...this.getHeaders(),
-            "x-idempotency-key": paymentId,
-          },
-          body: JSON.stringify(payload),
-        });
+    // x-idempotency-key must match the exact request body to avoid idempotency mismatch errors.
+    const idempotencyKey = `${paymentId}_CHARGE`;
 
-        const bodyText = await response.text().catch(() => "");
-        // Ensure we have a visible log in production (debugLog is currently suppressed).
-        console.info("[Cashfree][Subscription] triggerFirstCharge attempt", {
-          endpoint,
-          subscriptionId,
-          paymentId,
-          paymentType: payload.payment_type ?? null,
-          status: response.status,
-          ok: response.ok,
-          // keep body small to avoid huge logs
-          bodyPreview: bodyText ? bodyText.slice(0, 250) : "",
-        });
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          ...this.getHeaders(),
+          "x-idempotency-key": idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+      });
 
-        if (response.ok) {
-          return true;
-        }
-      } catch (error: any) {
-        console.warn("[Cashfree][Subscription] triggerFirstCharge error", {
-          subscriptionId,
-          paymentId,
-          paymentType: payload.payment_type ?? null,
-          message: error?.message ?? String(error),
-        });
-      }
+      const bodyText = await response.text().catch(() => "");
+      console.info("[Cashfree][Subscription] triggerFirstCharge attempt", {
+        endpoint,
+        subscriptionId,
+        paymentId,
+        paymentType: payload.payment_type,
+        paymentAmount: payload.payment_amount,
+        status: response.status,
+        ok: response.ok,
+        bodyPreview: bodyText ? bodyText.slice(0, 250) : "",
+      });
+
+      return response.ok;
+    } catch (error: any) {
+      console.warn("[Cashfree][Subscription] triggerFirstCharge error", {
+        subscriptionId,
+        paymentId,
+        paymentType: payload.payment_type,
+        paymentAmount: payload.payment_amount,
+        message: error?.message ?? String(error),
+      });
+      return false;
     }
-
-    return false;
   }
 
   verifyWebhookSignature(req: any) {
