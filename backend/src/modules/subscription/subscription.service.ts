@@ -11,19 +11,21 @@ class SubscriptionService {
     private cashfreeService = new SubscriptionCashfreeService();
     private static readonly PENDING_AUTH_WINDOW_MINUTES = Number(process.env.SUBSCRIPTION_PENDING_AUTH_WINDOW_MINUTES ?? 15);
 
-    private getPendingExpiry(createdAt: Date): Date {
-        return dayjs(createdAt)
+    // For paid plans, we keep subscription PENDING until we receive the real debit success.
+    // The expiry window should start when mandate authorization happens, not when the user initially clicks "Subscribe".
+    private getPendingExpiry(baseAt: Date): Date {
+        return dayjs(baseAt)
             .add(SubscriptionService.PENDING_AUTH_WINDOW_MINUTES, "minute")
             .toDate();
     }
 
     private async expirePendingSubscriptionIfNeeded(subscription: {
         id: number;
-        createdAt: Date;
+        startedAt: Date;
         cashfreeSubscriptionId: string | null;
     }): Promise<boolean> {
         const now = new Date();
-        const pendingExpiry = this.getPendingExpiry(subscription.createdAt);
+        const pendingExpiry = this.getPendingExpiry(subscription.startedAt);
         const isExpired = now > pendingExpiry;
         if (!isExpired) return false;
 
@@ -83,8 +85,9 @@ class SubscriptionService {
             const isSamePlan = existingSub.planId === plan.id;
 
             if (existingSub.status === "PENDING") {
-                const pendingExpiry = this.getPendingExpiry(existingSub.createdAt);
+                const pendingExpiry = this.getPendingExpiry(existingSub.startedAt);
                 const isExpired = now > pendingExpiry;
+                // Note: pending expiry is based on startedAt (auth moment), not createdAt.
 
                 if (!isExpired && !data.forceRetry) {
                     throw new ApiError(
@@ -292,7 +295,7 @@ class SubscriptionService {
 
         const pendingExpiresAt =
             activePendingSubscription
-                ? this.getPendingExpiry(activePendingSubscription.createdAt)
+                ? this.getPendingExpiry(activePendingSubscription.startedAt)
                 : null;
 
         const pendingAuthLink =
@@ -332,6 +335,31 @@ class SubscriptionService {
         return prisma.subscription.update({
             where: { id: subscription.id },
             data: { status: "CANCELLED", autoRenew: false },
+        });
+    }
+
+    // Cancel only a PENDING subscription (used for "Cancel payment" flows).
+    // This prevents accidentally cancelling an ACTIVE subscription if the user completed payment.
+    async cancelPending(userId: number) {
+        const subscription = await prisma.subscription.findFirst({
+            where: { userId, status: "PENDING" },
+            orderBy: { createdAt: "desc" },
+        });
+
+        if (!subscription) {
+            throw new ApiError("No pending subscription found", STATUS_CODES.NOT_FOUND);
+        }
+
+        const now = new Date();
+
+        // If cashfreeSubscriptionId exists, cancel on Cashfree first.
+        if (subscription.cashfreeSubscriptionId) {
+            await this.cashfreeService.cancelSubscription(subscription.cashfreeSubscriptionId);
+        }
+
+        return prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { status: "CANCELLED", autoRenew: false, expiresAt: now },
         });
     }
 }

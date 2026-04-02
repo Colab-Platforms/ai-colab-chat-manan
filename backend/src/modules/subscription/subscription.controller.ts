@@ -49,3 +49,13 @@ export const cancelSubscription = async (req: Request, res: Response): Promise<v
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };
+
+export const cancelPendingSubscription = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const result = await subscriptionService.cancelPending(req.user!.id);
+        sendResponse(res, true, result, "Pending subscription cancelled successfully", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Cancel pending subscription error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};

@@ -141,7 +141,9 @@ export default function SubscriptionPage() {
     const autoCancelExpiredPending = async () => {
       setAutoCancellingPending(true);
       try {
-        await subscriptionService.cancel();
+        // Cancel only PENDING so we don't accidentally cancel an ACTIVE subscription
+        // after payment has completed.
+        await subscriptionService.cancelPending();
         if (typeof window !== "undefined") {
           localStorage.removeItem("pending_subscription_auth_link");
         }
@@ -158,6 +160,19 @@ export default function SubscriptionPage() {
 
     void autoCancelExpiredPending();
   }, [pendingSubscription, pendingCountdownMs, autoCancellingPending, fetchData]);
+
+  // While a payment is pending, poll to pick up webhook updates quickly.
+  // This prevents the 15-minute timer from cancelling after the subscription becomes ACTIVE.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!pendingSubscription) return;
+
+    const id = window.setInterval(() => {
+      void fetchData();
+    }, 10_000);
+
+    return () => window.clearInterval(id);
+  }, [pendingSubscription?.id, fetchData]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -266,7 +281,7 @@ export default function SubscriptionPage() {
     if (cancellingPendingPayment || autoCancellingPending) return;
     setCancellingPendingPayment(true);
     try {
-      await subscriptionService.cancel();
+      await subscriptionService.cancelPending();
       if (typeof window !== "undefined") {
         localStorage.removeItem("pending_subscription_auth_link");
       }
@@ -349,7 +364,7 @@ export default function SubscriptionPage() {
                 Payment authorization pending
               </p>
               <p className="text-xs text-amber-700/90 dark:text-amber-300/90 mt-0.5">
-                A ₹2 mandate auth debit may be made and refunded. Your actual plan amount is charged right after authorization.
+                A small mandate authorization may happen and be refunded. Your plan amount is charged right after authorization is confirmed.
               </p>
             </div>
 

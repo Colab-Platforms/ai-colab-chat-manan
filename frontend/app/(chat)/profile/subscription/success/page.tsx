@@ -48,7 +48,9 @@ export default function SubscriptionSuccessPage() {
     let mounted = true;
     let intervalId: number | null = null;
     const startedAt = Date.now();
-    const POLL_TIMEOUT_MS = 60_000;
+    // Match the backend "pending auth" cancellation window so we don't show
+    // "Payment is being verified" for longer than the user can be cancelled.
+    const POLL_TIMEOUT_MS = 15 * 60_000;
     const POLL_INTERVAL_MS = 2_500;
 
     const checkCurrentStatus = async () => {

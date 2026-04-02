@@ -54,8 +54,21 @@ function getWebhookPaymentType(data: any): string | null {
 
 function isMandateAuthorizationPayment(data: any, paymentId: string | null): boolean {
   const paymentType = getWebhookPaymentType(data);
-  if (paymentType === "AUTH" || paymentType === "AUTHORIZATION") return true;
-  if (paymentId && paymentId.toLowerCase().startsWith("auth_")) return true;
+  // Cashfree auth/debit success payloads can vary across accounts; treat any "AUTH*"
+  // payment_type as authorization success.
+  if (paymentType && paymentType.includes("AUTH")) return true;
+
+  // Some payloads include an explicit authorization_details.payment_id.
+  const authPaymentId =
+    data?.authorization_details?.paymentId ?? data?.authorization_details?.payment_id ?? null;
+  if (authPaymentId && paymentId) {
+    if (String(authPaymentId).toLowerCase() === String(paymentId).toLowerCase()) return true;
+  }
+
+  // Fallback: ids created by our fallback / getSubscriptionAuthLink helpers are usually auth_*
+  // (but don't rely on this alone).
+  if (paymentId && String(paymentId).toLowerCase().startsWith("auth_")) return true;
+
   return false;
 }
 
@@ -97,10 +110,29 @@ export async function cashfreeWebhook(req: Request, res: Response) {
     if (status === "ACTIVE") {
       // Mandate is authorized. Trigger first debit immediately so user can be
       // activated quickly after auth.
-      try {
-        await cashfreeService.triggerFirstCharge(subscriptionId);
-      } catch {
-        // Best effort only. Subscription remains pending until payment success webhook arrives.
+      // Only do this for local PENDING subscriptions to avoid duplicate triggers later.
+      if (subscription.status === "PENDING") {
+        try {
+          // Extend the "pending payment" window starting from the moment Cashfree confirms
+          // mandate authorization (so the user isn't cancelled mid-payment).
+          await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { startedAt: now },
+          });
+
+          console.info("[Cashfree][Webhook] Mandate authorized -> trigger first charge", {
+            subscriptionId,
+            localSubscriptionId: subscription.id,
+          });
+          await cashfreeService.triggerFirstCharge(subscriptionId);
+        } catch (e: any) {
+          console.warn("[Cashfree][Webhook] triggerFirstCharge failed (best effort)", {
+            subscriptionId,
+            localSubscriptionId: subscription.id,
+            message: e?.message ?? String(e),
+          });
+          // Subscription remains pending until payment success webhook arrives.
+        }
       }
       return res.status(200).json({ status: true, message: "Processed" });
     } else if (status === "CUSTOMER_CANCELLED") {
@@ -129,10 +161,38 @@ export async function cashfreeWebhook(req: Request, res: Response) {
         .slice(0, 32)}`;
     if (isMandateAuthorizationPayment(payloadData, paymentId)) {
       // Ignore mandate-auth debit success. Keep subscription pending until first actual recurring debit.
+      console.info("[Cashfree][Webhook] Ignored mandate auth payment success", {
+        subscriptionId,
+        localSubscriptionId: subscription.id,
+        paymentId,
+        paymentType: getWebhookPaymentType(payloadData),
+      });
+
+      // Ensure the real subscription debit gets triggered after auth even if
+      // Cashfree sends auth success under SUBSCRIPTION_PAYMENT_SUCCESS.
+      if (subscription.status === "PENDING") {
+        try {
+          await cashfreeService.triggerFirstCharge(subscriptionId);
+        } catch (e: any) {
+          console.warn("[Cashfree][Webhook] triggerFirstCharge after auth-payment failed (best effort)", {
+            subscriptionId,
+            localSubscriptionId: subscription.id,
+            message: e?.message ?? String(e),
+          });
+        }
+      }
+
       return res.status(200).json({ status: true, message: "Ignored auth payment success" });
     }
 
     await prisma.$transaction(async (tx) => {
+      console.info("[Cashfree][Webhook] Activating subscription on real payment success", {
+        subscriptionId,
+        localSubscriptionId: subscription.id,
+        paymentId,
+        paymentType: getWebhookPaymentType(payloadData),
+      });
+
       await tx.subscription.updateMany({
         where: {
           userId: subscription.userId,

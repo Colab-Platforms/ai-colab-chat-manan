@@ -93,6 +93,7 @@ export const subscriptionService = {
     api.post("/subscription/create", data),
   getCurrent: () => api.get("/subscription/current"),
   cancel: () => api.post("/subscription/cancel"),
+  cancelPending: () => api.post("/subscription/cancel-pending"),
 };
 
 export const planService = {
