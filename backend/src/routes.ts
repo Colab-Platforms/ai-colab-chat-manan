@@ -16,6 +16,7 @@ import assistantRoutes from "@/modules/assistant/assistant.route.js";
 import contextRoutes from "@/modules/context/context.route.js";
 import subscriptionRoutes from "@/modules/subscription/subscription.route.js";
 import dashboardRoutes from "@/modules/dashboard/dashboard.route.js";
+import paymentRoutes from "@/modules/payments/payment.route.js";
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.use("/preferences", userPreferenceRoutes);
 router.use("/assistants", assistantRoutes);
 router.use("/contexts", contextRoutes);
 router.use("/dashboard", dashboardRoutes);
+router.use("/payments", paymentRoutes);
 
 export default router;

@@ -60,9 +60,10 @@ export default function SubscriptionSuccessPage() {
         const current = res?.data?.data?.subscription;
         const pending = res?.data?.data?.pendingSubscription;
         const activeCurrent = Boolean(current && ["ACTIVE", "TRIAL"].includes(String(current.status)));
+        const hasPaidCurrent = Number(current?.plan?.monthlyPrice ?? 0) > 0;
         // Don't show "Successfully subscribed" if there's still a pending paid subscription.
         // This avoids false success when user already has a free/active plan.
-        const active = activeCurrent && !pending;
+        const active = activeCurrent && hasPaidCurrent && !pending;
         setIsActive(active);
         if (active && intervalId) {
           window.clearInterval(intervalId);
@@ -170,13 +171,11 @@ export default function SubscriptionSuccessPage() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Payment is being verified</CardTitle>
             <CardDescription>
-              We are still waiting for confirmation from the payment gateway. You can continue or cancel from subscription page.
+              We are still waiting for confirmation from the payment gateway. Please don’t refresh or close this page.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
-            <Button asChild>
-              <Link href="/profile/subscription">Back to subscription</Link>
-            </Button>
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </CardContent>
         </Card>
       </div>

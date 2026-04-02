@@ -362,6 +362,69 @@ class SubscriptionService {
             data: { status: "CANCELLED", autoRenew: false, expiresAt: now },
         });
     }
+
+    async enableAutoPay(userId: number, data: CreateSubscriptionBody) {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+        });
+        if (!user) {
+            throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+        }
+
+        const plan = await prisma.plan.findFirst({
+            where: { id: data.planId, isActive: true, isDeleted: false },
+        });
+        if (!plan) {
+            throw new ApiError("Plan not found", STATUS_CODES.NOT_FOUND);
+        }
+
+        const activeSub = await prisma.subscription.findFirst({
+            where: {
+                userId,
+                status: "ACTIVE",
+                planId: data.planId,
+                billingCycle: data.billingCycle,
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        if (!activeSub) {
+            throw new ApiError("Active paid subscription not found for AutoPay enablement", STATUS_CODES.NOT_FOUND);
+        }
+
+        if (activeSub.cashfreeSubscriptionId && activeSub.autoRenew) {
+            throw new ApiError("AutoPay is already enabled", STATUS_CODES.CONFLICT);
+        }
+
+        const hasPending = await prisma.subscription.findFirst({
+            where: { userId, status: "PENDING" },
+            select: { id: true },
+        });
+        if (hasPending) {
+            throw new ApiError("Please complete existing pending payment first", STATUS_CODES.CONFLICT);
+        }
+
+        const cashfreeSubscriptionId = `sub_${userId}_${Date.now()}`;
+        const { auth_link, subscription_session_id } = await this.cashfreeService.createSubscription(
+            user,
+            plan as unknown as CashfreePlanSource,
+            data.billingCycle,
+            cashfreeSubscriptionId,
+        );
+
+        await prisma.subscription.update({
+            where: { id: activeSub.id },
+            data: {
+                autoRenew: true,
+                cashfreeSubscriptionId,
+            },
+        });
+
+        return {
+            auth_link,
+            subscription_session_id,
+            cashfreeSubscriptionId,
+        };
+    }
 }
 
 export default SubscriptionService;

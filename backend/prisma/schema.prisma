@@ -421,3 +421,23 @@ enum SubscriptionCycle {
   YEARLY
   QUARTERLY
 }
+
+enum SubscriptionReminderStage {
+  D3
+  D1
+  D0
+}
+
+model SubscriptionReminder {
+  id             Int                       @id @default(autoincrement())
+  userId         Int
+  subscriptionId Int
+  stage          SubscriptionReminderStage
+  sentAt         DateTime                  @default(now())
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@unique([subscriptionId, stage])
+  @@index([userId, stage])
+  @@index([subscriptionId])
+}

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { subscriptionService, planService } from "@/lib/services";
+import { subscriptionService, planService, paymentService } from "@/lib/services";
 import { Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
 
@@ -66,6 +66,27 @@ export default function SubscriptionPage() {
     const result = await cashfree.subscriptionsCheckout({
       subsSessionId: sessionId,
       // Keep checkout in same tab so browser back returns here.
+      redirectTarget: "_self",
+    });
+
+    if (result?.error) {
+      toast.error(result.error?.message || "Failed to open payment checkout");
+    }
+  };
+
+  const openPaymentCheckout = async (paymentSessionId: string) => {
+    const Cashfree = await loadCashfreeSdk();
+    if (!Cashfree) {
+      toast.error("Failed to load Cashfree checkout");
+      return;
+    }
+
+    const mode = String(process.env.NEXT_PUBLIC_CASHFREE_MODE || "production").toLowerCase() === "sandbox"
+      ? "sandbox"
+      : "production";
+    const cashfree = Cashfree({ mode });
+    const result = await cashfree.checkout({
+      paymentSessionId,
       redirectTarget: "_self",
     });
 
@@ -202,6 +223,25 @@ export default function SubscriptionPage() {
     setSubscribingPlanId(planId);
     try {
       console.debug("[SubscriptionPage] handleSubscribe request", { planId });
+      const selectedPlan = plans.find((p: any) => p.id === planId);
+      const isPaidPlan = Number(selectedPlan?.monthlyPrice ?? 0) > 0;
+
+      if (isPaidPlan) {
+        const payRes = await paymentService.createSubscribeOneTime({
+          planId,
+          billingCycle: "MONTHLY",
+        });
+        const paymentSessionId = payRes?.data?.data?.payment_session_id;
+        if (!paymentSessionId) {
+          toast.error("Could not start payment. Try again.");
+          return;
+        }
+        markCheckoutFlowStart();
+        await openPaymentCheckout(paymentSessionId);
+        await fetchData();
+        return;
+      }
+
       const res = await subscriptionService.create({
         planId,
         billingCycle: "MONTHLY",
@@ -210,19 +250,6 @@ export default function SubscriptionPage() {
 
       const auth_link = res?.data?.data?.auth_link;
       const subscriptionSessionId = res?.data?.data?.subscription_session_id;
-      const selectedPlan = plans.find((p: any) => p.id === planId);
-      const isPaidPlan = Number(selectedPlan?.monthlyPrice ?? 0) > 0;
-
-      if (isPaidPlan && subscriptionSessionId) {
-        markCheckoutFlowStart();
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("pending_subscription_auth_link");
-          setPendingAuthLink(null);
-        }
-        await openSubscriptionCheckout(subscriptionSessionId);
-        await fetchData();
-        return;
-      }
 
       if (isUsableAuthLink(auth_link)) {
         console.debug("[SubscriptionPage] redirecting with auth_link", { auth_link });
@@ -293,6 +320,32 @@ export default function SubscriptionPage() {
       toast.error(err?.response?.data?.message || "Failed to cancel pending payment");
     } finally {
       setCancellingPendingPayment(false);
+    }
+  };
+
+  const handleEnableAutoPay = async () => {
+    if (!subscription?.planId || subscribingPlanId !== null) return;
+    setSubscribingPlanId(subscription.planId);
+    try {
+      const res = await subscriptionService.enableAutoPay({
+        planId: subscription.planId,
+        billingCycle: String(subscription.billingCycle || "MONTHLY"),
+      });
+      const subscriptionSessionId = res?.data?.data?.subscription_session_id;
+      const authLink = res?.data?.data?.auth_link;
+      markCheckoutFlowStart();
+      if (subscriptionSessionId) {
+        await openSubscriptionCheckout(subscriptionSessionId);
+      } else if (isUsableAuthLink(authLink)) {
+        window.location.href = authLink as string;
+      } else {
+        toast.info("AutoPay setup started. Continue from subscription page.");
+      }
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to enable AutoPay");
+    } finally {
+      setSubscribingPlanId(null);
     }
   };
 
@@ -385,6 +438,29 @@ export default function SubscriptionPage() {
           </CardContent>
         </Card>
       )}
+
+      {subscription
+        && Number(subscription?.plan?.monthlyPrice ?? 0) > 0
+        && subscription.status === "ACTIVE"
+        && !subscription.autoRenew
+        && !subscription.cashfreeSubscriptionId && (
+          <Card className="bg-card/90 backdrop-blur-sm border-border/30">
+            <CardHeader>
+              <CardTitle>Enable AutoPay for renewals</CardTitle>
+              <CardDescription>
+                You can use the plan now. Enable AutoPay so future monthly renewals happen automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={handleEnableAutoPay} disabled={subscribingPlanId !== null}>
+                {subscribingPlanId !== null ? "Starting..." : "Enable AutoPay"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => toast.info("AutoPay skipped. You can enable it later.")}>
+                Skip for now
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
       {pendingSubscription && (
         <Card className="bg-card/90 backdrop-blur-sm border-border/30">
@@ -490,7 +566,7 @@ export default function SubscriptionPage() {
                             ? "Upgrade"
                             : hasCurrentPlan
                               ? "Change plan"
-                              : "Subscribe"}
+                              : "Pay now"}
                     </Button>
                   );
                 })()}

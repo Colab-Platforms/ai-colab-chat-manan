@@ -108,7 +108,7 @@ export async function cashfreeWebhook(req: Request, res: Response) {
         : subscription.plan.yearlyPrice,
   );
 
-  if (eventType === "SUBSCRIPTION_STATUS_CHANGE") {
+  if (eventType === "SUBSCRIPTION_STATUS_CHANGE" || eventType === "SUBSCRIPTION_STATUS_CHANGED") {
     const status = payloadData?.subscription_details?.subscription_status;
 
     // Keep subscription in PENDING on mandate activation.
@@ -155,6 +155,40 @@ export async function cashfreeWebhook(req: Request, res: Response) {
         where: { id: subscription.id },
         data: { status: "CANCELLED", autoRenew: false },
       });
+    }
+
+    return res.status(200).json({ status: true, message: "Processed" });
+  }
+
+  // Cashfree also sends an explicit auth status webhook when checkout completes.
+  // Treat AUTH success as "mandate authorised" signal and immediately trigger first charge.
+  if (eventType === "SUBSCRIPTION_AUTH_STATUS") {
+    const paymentId = getWebhookPaymentId(payloadData);
+    if (isMandateAuthorizationPayment(payloadData, paymentId)) {
+      console.info("[Cashfree][Webhook] Received SUBSCRIPTION_AUTH_STATUS for mandate auth", {
+        subscriptionId,
+        localSubscriptionId: subscription.id,
+        paymentId,
+        paymentType: getWebhookPaymentType(payloadData),
+      });
+
+      if (subscription.status === "PENDING") {
+        try {
+          await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { startedAt: now },
+          });
+          if (recurringAmount >= 1) {
+            await cashfreeService.triggerFirstCharge(subscriptionId, recurringAmount);
+          }
+        } catch (e: any) {
+          console.warn("[Cashfree][Webhook] triggerFirstCharge failed after SUBSCRIPTION_AUTH_STATUS (best effort)", {
+            subscriptionId,
+            localSubscriptionId: subscription.id,
+            message: e?.message ?? String(e),
+          });
+        }
+      }
     }
 
     return res.status(200).json({ status: true, message: "Processed" });

@@ -59,3 +59,18 @@ export const cancelPendingSubscription = async (req: Request, res: Response): Pr
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };
+
+export const enableAutoPaySubscription = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { error, value } = validateCreateSubscriptionSchema(req.body);
+        if (error) {
+            sendResponse(res, false, error, error.message, STATUS_CODES.BAD_REQUEST);
+            return;
+        }
+        const result = await subscriptionService.enableAutoPay(req.user!.id, value);
+        sendResponse(res, true, result, "AutoPay enablement initiated", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Enable AutoPay error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};

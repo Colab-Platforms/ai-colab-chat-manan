@@ -91,9 +91,16 @@ export const walletService = {
 export const subscriptionService = {
   create: (data: { planId: number; billingCycle: string; forceRetry?: boolean }) =>
     api.post("/subscription/create", data),
+  enableAutoPay: (data: { planId: number; billingCycle: string }) =>
+    api.post("/subscription/enable-autopay", data),
   getCurrent: () => api.get("/subscription/current"),
   cancel: () => api.post("/subscription/cancel"),
   cancelPending: () => api.post("/subscription/cancel-pending"),
+};
+
+export const paymentService = {
+  createSubscribeOneTime: (data: { planId: number; billingCycle: string }) =>
+    api.post("/payments/subscribe-one-time/create", data),
 };
 
 export const planService = {

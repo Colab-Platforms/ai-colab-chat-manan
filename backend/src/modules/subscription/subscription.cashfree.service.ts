@@ -643,18 +643,34 @@ class SubscriptionCashfreeService {
     // Cashfree "raise charge" for subscriptions requires payment_amount for CHARGE.
     // `payment_schedule_date` is required for UPI and CARD payment modes (Cashfree docs).
     // Only the date component is considered by Cashfree; time is ignored.
-    const paymentScheduleDate = new Date().toISOString();
+
+    // UPI AutoPay has cut-off windows where charges are not allowed on the same day.
+    // We schedule based on the FAQ cut-off table (IST) to reduce 400s:
+    // - 00:00–06:59 -> can be T, but Cashfree often enforces "future date" validation; use T+1.
+    // - 07:00–20:59 -> T+1
+    // - 21:00–23:59 -> T+2
+    const now = new Date();
+    const istMs = now.getTime() + 330 * 60 * 1000; // IST = UTC+05:30, fixed offset
+    const ist = new Date(istMs);
+    const istMinutes = ist.getUTCHours() * 60 + ist.getUTCMinutes(); // treat "ist" as UTC clock
+    const scheduleDays = istMinutes >= 21 * 60 ? 2 : 1;
+    const paymentScheduleDate = new Date(now.getTime() + scheduleDays * 24 * 60 * 60 * 1000).toISOString();
+
     const payload = {
       subscription_id: subscriptionId,
       payment_id: paymentId,
       payment_type: "CHARGE",
       payment_amount: paymentAmount,
-      payment_currency: "INR",
       payment_schedule_date: paymentScheduleDate,
     };
 
     // x-idempotency-key must match the exact request body to avoid idempotency mismatch errors.
-    const idempotencyKey = `${paymentId}_CHARGE`;
+    // Hashing the payload ensures: same payload -> same key, different payload -> different key.
+    const idempotencyKey = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(payload))
+      .digest("hex")
+      .slice(0, 40);
 
     try {
       const response = await fetch(endpoint, {
