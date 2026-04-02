@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function SubscriptionPage() {
+  const searchParams = useSearchParams();
   const [subscription, setSubscription] = useState<any>(null);
   const [pendingSubscription, setPendingSubscription] = useState<any>(null);
   const [freePlanTaken, setFreePlanTaken] = useState(false);
@@ -35,6 +37,8 @@ export default function SubscriptionPage() {
   const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null);
   const [confirmUpgradePlanId, setConfirmUpgradePlanId] = useState<number | null>(null);
   const [autoPayUpdating, setAutoPayUpdating] = useState(false);
+  const [autoStartingPlanId, setAutoStartingPlanId] = useState<number | null>(null);
+  const autoStartedPlanIdsRef = useRef<Set<number>>(new Set());
   const isUsableAuthLink = (url: string | null | undefined) =>
     Boolean(url) && !String(url).includes("/subscriptions/checkout/timer");
   const markCheckoutFlowStart = () => {
@@ -298,6 +302,39 @@ export default function SubscriptionPage() {
       setSubscribingPlanId(null);
     }
   };
+
+  useEffect(() => {
+    if (loading) return;
+    const rawPlanId = searchParams.get("planId");
+    if (!rawPlanId) return;
+    const parsedPlanId = Number(rawPlanId);
+    if (!Number.isFinite(parsedPlanId) || parsedPlanId <= 0) return;
+    if (autoStartingPlanId === parsedPlanId || subscribingPlanId !== null) return;
+    if (autoStartedPlanIdsRef.current.has(parsedPlanId)) return;
+
+    const selectedPlan = plans.find((p: any) => p.id === parsedPlanId);
+    if (!selectedPlan) return;
+
+    const isCurrentPlan = !!subscription && subscription.planId === parsedPlanId;
+    if (isCurrentPlan) return;
+
+    const isFreePlan = Number(selectedPlan.monthlyPrice ?? 0) === 0;
+    if (isFreePlan && freePlanTaken) return;
+
+    setAutoStartingPlanId(parsedPlanId);
+    autoStartedPlanIdsRef.current.add(parsedPlanId);
+    void handleSubscribe(parsedPlanId).finally(() => {
+      setAutoStartingPlanId(null);
+    });
+  }, [
+    loading,
+    searchParams,
+    autoStartingPlanId,
+    subscribingPlanId,
+    plans,
+    subscription,
+    freePlanTaken,
+  ]);
 
   const handleContinuePending = () => {
     console.debug("[SubscriptionPage] handleContinuePending", {

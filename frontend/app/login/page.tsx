@@ -217,7 +217,7 @@ export default function LoginPage() {
                                 <div className="text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{" "}
                   <Link
-                    href="/register"
+                    href={`/register${searchParams.get("redirect") ? `?redirect=${encodeURIComponent(searchParams.get("redirect") as string)}` : ""}`}
                     className="text-primary hover:text-landing-primary font-medium"
                   >
                     Sign up
@@ -285,7 +285,7 @@ export default function LoginPage() {
                 <div className="text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{" "}
                   <Link
-                    href="/register"
+                    href={`/register${searchParams.get("redirect") ? `?redirect=${encodeURIComponent(searchParams.get("redirect") as string)}` : ""}`}
                     className="text-primary hover:underline font-medium"
                   >
                     Sign up

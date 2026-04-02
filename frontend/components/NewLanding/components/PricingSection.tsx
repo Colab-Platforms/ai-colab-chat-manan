@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/auth-context";
 import { CircleCheck, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +166,7 @@ export function PricingCard({
 //  PricingSection — full section with header + cards
 // ─────────────────────────────────────────────────────
 export function PricingSection() {
+  const { user } = useAuth();
   const [plans, setPlans] = React.useState<PlanTier[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [plansError, setPlansError] = React.useState<string | null>(null);
@@ -273,6 +275,12 @@ export function PricingSection() {
     return `₹${price.toLocaleString("en-IN")}/mo`;
   };
 
+  const getPlanHref = (planId: number) => {
+    const target = `/profile/subscription?planId=${planId}`;
+    if (user) return target;
+    return `/login?redirect=${encodeURIComponent(target)}`;
+  };
+
   return (
     <section id="pricing" className="py-24 bg-[#fdf6f9] dark:bg-[#060104]">
       <div className="container mx-auto px-6">
@@ -327,7 +335,7 @@ export function PricingSection() {
                     ? "Get Started — Pro"
                     : `Choose ${plan.name}`
                 }
-                href={`/checkout?planId=${plan.id}`}
+                href={getPlanHref(plan.id)}
                 featured={plan.isPopular}
               />
             ))}

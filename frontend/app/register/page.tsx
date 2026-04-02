@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 export default function RegisterPage() {
   const { register, verifyEmailOtp, resendEmailOtp, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<"register" | "verify">("register");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -48,9 +49,10 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/");
+      const redirect = searchParams.get("redirect");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     }
-  }, [user, router]);
+  }, [user, router, searchParams]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -86,7 +88,11 @@ export default function RegisterPage() {
     try {
       await verifyEmailOtp(pendingEmail, otp);
       toast.success("Email verified. Please sign in.");
-      router.push("/login");
+      const redirect = searchParams.get("redirect");
+      const loginHref = redirect && redirect.startsWith("/")
+        ? `/login?redirect=${encodeURIComponent(redirect)}`
+        : "/login";
+      router.push(loginHref);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "OTP verification failed"));
     } finally {
@@ -232,7 +238,10 @@ export default function RegisterPage() {
           )}
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:text-landing-primary font-medium">
+            <Link
+              href={`/login${searchParams.get("redirect") ? `?redirect=${encodeURIComponent(searchParams.get("redirect") as string)}` : ""}`}
+              className="text-primary hover:text-landing-primary font-medium"
+            >
               Sign in
             </Link>
           </div>
