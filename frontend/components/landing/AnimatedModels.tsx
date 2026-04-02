@@ -1,7 +1,7 @@
 'use client'
 
 import { Sparkles } from 'lucide-react'
-import { ModelCarousel } from './ModelCarousel'
+import Link from 'next/link'
 
 const leftModels = [
   { 
@@ -129,10 +129,10 @@ export function AnimatedModels() {
 
         {/* Bottom CTA */}
         <div className="text-center mt-12 md:mt-16">
-          <a href="/login" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-medium transition-all duration-300 border border-emerald-500/30 hover:border-emerald-500/50">
+          <Link href="/login" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-medium transition-all duration-300 border border-emerald-500/30 hover:border-emerald-500/50">
             Explore All Models
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </a>
+          </Link>
         </div>
       </div>
 

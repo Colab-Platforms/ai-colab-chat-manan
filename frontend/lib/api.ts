@@ -26,9 +26,9 @@ api.interceptors.response.use(
       if (!isAuthRequest && hasToken) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        if (window.location.pathname !== "/") {
-          window.location.href = "/";
-        }
+        // Dispatch a custom event so React/Next.js router can handle the redirect
+        // without a full page reload (window.location.href is avoided intentionally).
+        window.dispatchEvent(new CustomEvent("auth:unauthorized"));
       }
     }
     return Promise.reject(error);

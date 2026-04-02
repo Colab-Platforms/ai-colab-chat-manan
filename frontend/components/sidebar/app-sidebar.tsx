@@ -69,8 +69,7 @@ export function AppSidebar({
       onLogout();
     } else {
       logout();
-      // Redirect to the home route
-      window.location.href = "/";
+      router.replace("/");
     }
   };
 

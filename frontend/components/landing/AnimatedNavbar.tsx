@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Menu, X, User, LogOut, Sparkles, ThumbsUp } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { FeedbackModal } from '@/components/ui/FeedbackModal'
@@ -14,6 +15,7 @@ export function AnimatedNavbar() {
   const [scrolled, setScrolled] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const { user, logout } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50)
@@ -115,7 +117,7 @@ export function AnimatedNavbar() {
       <div className={`md:hidden overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-screen' : 'max-h-0'}`}>
         <div className="px-4 py-4 bg-black/95 backdrop-blur-xl border-t border-white/10 space-y-2">
           {['Features', 'Models', 'Modes', 'Pricing'].map((item) => (
-            <button key={item} onClick={() => item === 'Pricing' ? window.location.href = '/pricing' : scrollToSection(item.toLowerCase())} className="block w-full text-left px-4 py-3 text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+            <button key={item} onClick={() => item === 'Pricing' ? router.push('/pricing') : scrollToSection(item.toLowerCase())} className="block w-full text-left px-4 py-3 text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
               {item}
             </button>
           ))}
@@ -131,7 +133,7 @@ export function AnimatedNavbar() {
             {user ? (
               <>
                 <Link href="/" prefetch={true} className="block w-full px-4 py-3 text-center bg-gradient-to-r from-[#1bffc7] to-[#14b8a6] text-black rounded-xl font-medium" onClick={() => setIsOpen(false)}>Go to Chat</Link>
-                <button onClick={() => { logout(); window.location.href = '/'; }} className="block w-full mt-2 px-4 py-3 text-center text-red-400 hover:bg-white/10 rounded-xl">Sign Out</button>
+                <button onClick={() => { logout(); router.replace('/'); }} className="block w-full mt-2 px-4 py-3 text-center text-red-400 hover:bg-white/10 rounded-xl">Sign Out</button>
               </>
             ) : (
               <Link href="/login" prefetch={true} className="block w-full px-4 py-3 text-center bg-gradient-to-r from-[#1bffc7] to-[#14b8a6] text-black rounded-xl font-medium" onClick={() => setIsOpen(false)}>Get Started</Link>
