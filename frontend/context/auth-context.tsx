@@ -117,6 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    // Mark this as an intentional logout so layout guards redirect to
+    // the landing page rather than /login?redirect=...
+    sessionStorage.setItem("explicit_logout", "1");
   }, []);
 
   // Listen for 401 unauthorized events fired by the API interceptor.

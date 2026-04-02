@@ -55,8 +55,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (isLoading) return;
     
     if (!user) {
-      // If we are on an admin route, we don't want to redirect back to it after logout
-      // because if the next user is not an admin, they will get a 404 or be blocked.
+      // Check if this was an intentional logout — if so, go to the landing
+      // page rather than /login with a redirect parameter.
+      const isExplicitLogout = sessionStorage.getItem("explicit_logout") === "1";
+      sessionStorage.removeItem("explicit_logout");
+
+      if (isExplicitLogout) {
+        router.replace("/");
+        return;
+      }
+
+      // Unauthenticated direct URL access: send to login with redirect.
+      // Admin routes are excluded so a non-admin logging in next doesn't
+      // land on an admin-only page.
       if (isAdminRoute) {
         router.replace("/login");
       } else {
@@ -68,7 +79,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // Role-based access control: block non-admins from admin routes
     if (isAdminRoute && !isAdmin) {
-      // Direct unauthorized access to admin pages results in a 404 redirect
       router.replace("/404");
     }
   }, [user, isLoading, router, pathname, isAdminRoute, isAdmin]);
