@@ -641,12 +641,16 @@ class SubscriptionCashfreeService {
     const endpoint = `${this.pgBaseUrl}/subscriptions/pay`;
     const paymentId = `initial_charge_${subscriptionId}`;
     // Cashfree "raise charge" for subscriptions requires payment_amount for CHARGE.
+    // `payment_schedule_date` is required for UPI and CARD payment modes (Cashfree docs).
+    // Only the date component is considered by Cashfree; time is ignored.
+    const paymentScheduleDate = new Date().toISOString();
     const payload = {
       subscription_id: subscriptionId,
       payment_id: paymentId,
       payment_type: "CHARGE",
       payment_amount: paymentAmount,
       payment_currency: "INR",
+      payment_schedule_date: paymentScheduleDate,
     };
 
     // x-idempotency-key must match the exact request body to avoid idempotency mismatch errors.
@@ -669,6 +673,7 @@ class SubscriptionCashfreeService {
         paymentId,
         paymentType: payload.payment_type,
         paymentAmount: payload.payment_amount,
+        paymentScheduleDate: payload.payment_schedule_date,
         status: response.status,
         ok: response.ok,
         bodyPreview: bodyText ? bodyText.slice(0, 250) : "",
