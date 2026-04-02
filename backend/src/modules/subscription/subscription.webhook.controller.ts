@@ -172,6 +172,13 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       // Cashfree sends auth success under SUBSCRIPTION_PAYMENT_SUCCESS.
       if (subscription.status === "PENDING") {
         try {
+          // Start the 15-minute cancel window from AUTH success (payment_type AUTH),
+          // not from when the user clicked "Subscribe".
+          await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { startedAt: now },
+          });
+
           await cashfreeService.triggerFirstCharge(subscriptionId);
         } catch (e: any) {
           console.warn("[Cashfree][Webhook] triggerFirstCharge after auth-payment failed (best effort)", {

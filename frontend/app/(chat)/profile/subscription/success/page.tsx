@@ -58,7 +58,11 @@ export default function SubscriptionSuccessPage() {
         const res = await subscriptionService.getCurrent();
         if (!mounted) return;
         const current = res?.data?.data?.subscription;
-        const active = Boolean(current && ["ACTIVE", "TRIAL"].includes(String(current.status)));
+        const pending = res?.data?.data?.pendingSubscription;
+        const activeCurrent = Boolean(current && ["ACTIVE", "TRIAL"].includes(String(current.status)));
+        // Don't show "Successfully subscribed" if there's still a pending paid subscription.
+        // This avoids false success when user already has a free/active plan.
+        const active = activeCurrent && !pending;
         setIsActive(active);
         if (active && intervalId) {
           window.clearInterval(intervalId);

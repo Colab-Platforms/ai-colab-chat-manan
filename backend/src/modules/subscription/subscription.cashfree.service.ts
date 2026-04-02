@@ -669,20 +669,26 @@ class SubscriptionCashfreeService {
         });
 
         const bodyText = await response.text().catch(() => "");
-        this.debugLog("triggerFirstCharge response", {
+        // Ensure we have a visible log in production (debugLog is currently suppressed).
+        console.info("[Cashfree][Subscription] triggerFirstCharge attempt", {
           endpoint,
+          subscriptionId,
+          paymentId,
+          paymentType: payload.payment_type ?? null,
           status: response.status,
           ok: response.ok,
-          payload,
-          body: bodyText.slice(0, 500),
+          // keep body small to avoid huge logs
+          bodyPreview: bodyText ? bodyText.slice(0, 250) : "",
         });
 
         if (response.ok) {
           return true;
         }
       } catch (error: any) {
-        this.debugLog("triggerFirstCharge error", {
-          payload,
+        console.warn("[Cashfree][Subscription] triggerFirstCharge error", {
+          subscriptionId,
+          paymentId,
+          paymentType: payload.payment_type ?? null,
           message: error?.message ?? String(error),
         });
       }
