@@ -151,10 +151,18 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       }
       return res.status(200).json({ status: true, message: "Processed" });
     } else if (status === "CUSTOMER_CANCELLED") {
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: { status: "CANCELLED", autoRenew: false },
-      });
+      if (subscription.status === "PENDING") {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: "CANCELLED", autoRenew: false },
+        });
+      } else {
+        // User may disable AutoPay but keep current paid cycle active.
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { autoRenew: false },
+        });
+      }
     }
 
     return res.status(200).json({ status: true, message: "Processed" });

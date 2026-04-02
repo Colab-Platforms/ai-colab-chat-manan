@@ -277,6 +277,7 @@ class SubscriptionCashfreeService {
     plan: CashfreePlanSource,
     billingCycle: BillingCycle,
     subscriptionIdOverride?: string,
+    returnUrlOverride?: string,
   ) {
     const recurringAmount = Number(
       billingCycle === "MONTHLY"
@@ -305,7 +306,10 @@ class SubscriptionCashfreeService {
     const isLegacySubscriptionEndpoint = this.subscriptionsBaseUrl.includes(
       "/api/v2/subscriptions/nonSeamless/subscription",
     );
-    const returnUrl = this.getHttpsReturnUrl();
+    const returnUrl =
+      returnUrlOverride && String(returnUrlOverride).startsWith("https://")
+        ? String(returnUrlOverride)
+        : this.getHttpsReturnUrl();
     const authorizationAmount = Math.min(
       recurringAmount,
       SubscriptionCashfreeService.AUTHORIZATION_AMOUNT_INR,

@@ -403,12 +403,19 @@ class SubscriptionService {
             throw new ApiError("Please complete existing pending payment first", STATUS_CODES.CONFLICT);
         }
 
+        const frontendUrl = String(process.env.FRONTEND_URL || "").trim().replace(/\/+$/, "");
+        const autoPayReturnUrl =
+            frontendUrl.startsWith("https://")
+                ? `${frontendUrl}/profile/subscription`
+                : undefined;
+
         const cashfreeSubscriptionId = `sub_${userId}_${Date.now()}`;
         const { auth_link, subscription_session_id } = await this.cashfreeService.createSubscription(
             user,
             plan as unknown as CashfreePlanSource,
             data.billingCycle,
             cashfreeSubscriptionId,
+            autoPayReturnUrl,
         );
 
         await prisma.subscription.update({
@@ -424,6 +431,36 @@ class SubscriptionService {
             subscription_session_id,
             cashfreeSubscriptionId,
         };
+    }
+
+    async disableAutoPay(userId: number) {
+        const activeSub = await prisma.subscription.findFirst({
+            where: {
+                userId,
+                status: "ACTIVE",
+                autoRenew: true,
+                cashfreeSubscriptionId: { not: null },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        if (!activeSub) {
+            throw new ApiError("AutoPay is already disabled", STATUS_CODES.CONFLICT);
+        }
+
+        if (activeSub.cashfreeSubscriptionId) {
+            try {
+                await this.cashfreeService.cancelSubscription(activeSub.cashfreeSubscriptionId);
+            } catch (e: any) {
+                console.warn("Cashfree cancel mandate warning:", e?.message ?? e);
+            }
+        }
+
+        return prisma.subscription.update({
+            where: { id: activeSub.id },
+            data: {
+                autoRenew: false,
+            },
+        });
     }
 }
 

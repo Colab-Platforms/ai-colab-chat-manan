@@ -93,6 +93,7 @@ export const subscriptionService = {
     api.post("/subscription/create", data),
   enableAutoPay: (data: { planId: number; billingCycle: string }) =>
     api.post("/subscription/enable-autopay", data),
+  disableAutoPay: () => api.post("/subscription/disable-autopay"),
   getCurrent: () => api.get("/subscription/current"),
   cancel: () => api.post("/subscription/cancel"),
   cancelPending: () => api.post("/subscription/cancel-pending"),

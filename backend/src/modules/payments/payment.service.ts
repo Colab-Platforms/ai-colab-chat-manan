@@ -203,6 +203,25 @@ class PaymentService {
           },
         });
 
+        const existingWallet = await tx.userWallet.findUnique({
+          where: { userId: subscription.userId },
+        });
+
+        if (existingWallet && existingWallet.tokensRemaining > 0) {
+          await createWalletTransaction(tx, {
+            userId: subscription.userId,
+            walletId: existingWallet.id,
+            amount: existingWallet.tokensRemaining,
+            type: "DEBIT",
+            referenceId: "upgrade_previous_tokens_removed",
+            meta: {
+              reason: "UPGRADE_PREVIOUS_TOKENS_REMOVED",
+              orderId,
+              paymentId: normalizedPaymentId,
+            },
+          });
+        }
+
         const wallet = await tx.userWallet.upsert({
           where: { userId: subscription.userId },
           create: {

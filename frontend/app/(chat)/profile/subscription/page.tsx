@@ -7,6 +7,17 @@ import { Badge } from "@/components/ui/badge";
 import { subscriptionService, planService, paymentService } from "@/lib/services";
 import { Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
+import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<any>(null);
@@ -22,6 +33,8 @@ export default function SubscriptionPage() {
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
   const [cancellingPendingPayment, setCancellingPendingPayment] = useState(false);
   const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null);
+  const [confirmUpgradePlanId, setConfirmUpgradePlanId] = useState<number | null>(null);
+  const [autoPayUpdating, setAutoPayUpdating] = useState(false);
   const isUsableAuthLink = (url: string | null | undefined) =>
     Boolean(url) && !String(url).includes("/subscriptions/checkout/timer");
   const markCheckoutFlowStart = () => {
@@ -334,6 +347,9 @@ export default function SubscriptionPage() {
       const subscriptionSessionId = res?.data?.data?.subscription_session_id;
       const authLink = res?.data?.data?.auth_link;
       markCheckoutFlowStart();
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("autopay_toggle_flow", "1");
+      }
       if (subscriptionSessionId) {
         await openSubscriptionCheckout(subscriptionSessionId);
       } else if (isUsableAuthLink(authLink)) {
@@ -348,6 +364,34 @@ export default function SubscriptionPage() {
       setSubscribingPlanId(null);
     }
   };
+
+  const handleToggleAutoPay = async (checked: boolean) => {
+    if (!subscription || autoPayUpdating) return;
+    setAutoPayUpdating(true);
+    try {
+      if (checked) {
+        await handleEnableAutoPay();
+        return;
+      }
+      await subscriptionService.disableAutoPay();
+      toast.success("AutoPay turned off");
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to update AutoPay");
+    } finally {
+      setAutoPayUpdating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const wasAutoPayFlow = sessionStorage.getItem("autopay_toggle_flow") === "1";
+    if (!wasAutoPayFlow || !subscription) return;
+    if (subscription.autoRenew) {
+      toast.success("AutoPay turned on");
+      sessionStorage.removeItem("autopay_toggle_flow");
+    }
+  }, [subscription?.id, subscription?.autoRenew]);
 
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
@@ -365,6 +409,31 @@ export default function SubscriptionPage() {
         <h1 className="text-2xl font-bold">Subscription</h1>
         <p className="text-muted-foreground text-sm mt-1">Manage your plan and billing</p>
       </div>
+
+      <AlertDialog open={confirmUpgradePlanId !== null} onOpenChange={(open) => !open && setConfirmUpgradePlanId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm upgrade</AlertDialogTitle>
+            <AlertDialogDescription>
+              You still have remaining tokens in your current plan. If you continue, remaining tokens will be removed and your new plan tokens will be credited.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={subscribingPlanId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmUpgradePlanId != null) {
+                  void handleSubscribe(confirmUpgradePlanId);
+                }
+                setConfirmUpgradePlanId(null);
+              }}
+              disabled={subscribingPlanId !== null}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {subscription ? (
         <Card className="bg-card/90 backdrop-blur-sm border-border/30">
@@ -402,23 +471,23 @@ export default function SubscriptionPage() {
 
       {subscription
         && Number(subscription?.plan?.monthlyPrice ?? 0) > 0
-        && subscription.status === "ACTIVE"
-        && !subscription.autoRenew
-        && !subscription.cashfreeSubscriptionId && (
+        && subscription.status === "ACTIVE" && (
           <Card className="bg-card/90 backdrop-blur-sm border-border/30">
             <CardHeader>
-              <CardTitle>Enable AutoPay for renewals</CardTitle>
+              <CardTitle>AutoPay for renewals</CardTitle>
               <CardDescription>
-                You can use the plan now. Enable AutoPay so future monthly renewals happen automatically.
+                Turn AutoPay on/off anytime. Your current cycle remains active either way.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={handleEnableAutoPay} disabled={subscribingPlanId !== null}>
-                {subscribingPlanId !== null ? "Starting..." : "Enable AutoPay"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => toast.info("AutoPay skipped. You can enable it later.")}>
-                Skip for now
-              </Button>
+            <CardContent className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                {subscription.autoRenew ? "Enabled" : "Disabled"}
+              </p>
+              <Switch
+                checked={Boolean(subscription.autoRenew)}
+                onCheckedChange={handleToggleAutoPay}
+                disabled={autoPayUpdating || subscribingPlanId !== null}
+              />
             </CardContent>
           </Card>
         )}
@@ -504,6 +573,7 @@ export default function SubscriptionPage() {
                   const planMonthlyPrice = Number(plan.monthlyPrice ?? 0);
                   const hasCurrentPlan = Boolean(subscription);
                   const isUpgrade = hasCurrentPlan && planMonthlyPrice > currentMonthlyPrice;
+                  const currentIsFree = Number(subscription?.plan?.monthlyPrice ?? 0) === 0;
 
                   if (isCurrentPlan) {
                     return <Badge className="w-full justify-center">Current plan</Badge>;
@@ -517,7 +587,13 @@ export default function SubscriptionPage() {
                     <Button
                       size="sm"
                       className="w-full"
-                      onClick={() => handleSubscribe(plan.id)}
+                      onClick={() => {
+                        if (isUpgrade && currentIsFree) {
+                          setConfirmUpgradePlanId(plan.id);
+                          return;
+                        }
+                        void handleSubscribe(plan.id);
+                      }}
                     >
                       {subscribingPlanId === plan.id
                         ? "Starting..."

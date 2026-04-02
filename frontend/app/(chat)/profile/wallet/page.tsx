@@ -148,11 +148,11 @@ export default function WalletPage() {
     {
       key: "actions",
       label: "",
-      className: "w-10",
+      className: "w-12 min-w-[48px] text-center",
       render: (r) => (
         <button
           onClick={() => setSelectedTx(r)}
-          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors cursor-pointer"
+          className="mx-auto p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors cursor-pointer shrink-0"
           title="View Details"
         >
           <Eye className="w-4 h-4" />
@@ -251,13 +251,13 @@ export default function WalletPage() {
         open={!!selectedTx}
         onOpenChange={(open) => !open && setSelectedTx(null)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] max-w-md">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
           </DialogHeader>
           {selectedTx && (
             <div className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground block text-xs uppercase mb-1">
                     Type
@@ -289,7 +289,7 @@ export default function WalletPage() {
                   <span className="text-muted-foreground block text-xs uppercase mb-1">
                     Reference ID
                   </span>
-                  <span className="font-mono text-muted-foreground">
+                  <span className="font-mono text-muted-foreground break-all">
                     {selectedTx.referenceId || "N/A"}
                   </span>
                 </div>

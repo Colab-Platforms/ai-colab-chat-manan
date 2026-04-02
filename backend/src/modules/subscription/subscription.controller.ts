@@ -74,3 +74,13 @@ export const enableAutoPaySubscription = async (req: Request, res: Response): Pr
         sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
     }
 };
+
+export const disableAutoPaySubscription = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const result = await subscriptionService.disableAutoPay(req.user!.id);
+        sendResponse(res, true, result, "AutoPay disabled", STATUS_CODES.OK);
+    } catch (error: any) {
+        console.error("Disable AutoPay error", error);
+        sendResponse(res, false, null, error.message, error.statusCode ?? STATUS_CODES.SERVER_ERROR);
+    }
+};
