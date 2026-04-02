@@ -402,8 +402,8 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
 
   const handleLogout = useCallback(() => {
     logout();
-    router.replace("/login");
-  }, [logout, router]);
+    window.location.href = "/";
+  }, [logout]);
 
   /** Folders + chat list — assistants are refreshed only via dedicated events. */
   const handleSidebarRefresh = useCallback(() => {
