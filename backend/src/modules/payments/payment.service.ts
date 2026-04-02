@@ -129,6 +129,7 @@ class PaymentService {
       data?.payment_id ??
       data?.payment?.payment_id ??
       null;
+    const normalizedPaymentId = paymentId != null ? String(paymentId) : null;
 
     if (!orderId || !String(orderId).startsWith("subpay_")) {
       return { ignored: true, reason: "Not a subscription one-time order" };
@@ -169,7 +170,11 @@ class PaymentService {
           where: { id: subscription.id },
         });
         if (!currentSub) return;
-        if (currentSub.lastPaymentId && paymentId && currentSub.lastPaymentId === paymentId) return;
+        if (
+          currentSub.lastPaymentId &&
+          normalizedPaymentId &&
+          currentSub.lastPaymentId === normalizedPaymentId
+        ) return;
 
         await tx.subscription.updateMany({
           where: {
@@ -194,7 +199,7 @@ class PaymentService {
             currentPeriodStart: now,
             currentPeriodEnd: nextPeriodEnd,
             nextBillingDate: nextPeriodEnd,
-            lastPaymentId: paymentId ?? String(orderId),
+            lastPaymentId: normalizedPaymentId ?? String(orderId),
           },
         });
 
@@ -224,7 +229,7 @@ class PaymentService {
           meta: {
             reason: "ONE_TIME_PAYMENT_SUCCESS",
             orderId,
-            paymentId,
+            paymentId: normalizedPaymentId,
           },
         });
       });
@@ -237,7 +242,7 @@ class PaymentService {
         data: {
           status: "CANCELLED",
           autoRenew: false,
-          lastPaymentId: paymentId ?? String(orderId),
+          lastPaymentId: normalizedPaymentId ?? String(orderId),
         },
       });
       return { ignored: false, processed: "failed" };
