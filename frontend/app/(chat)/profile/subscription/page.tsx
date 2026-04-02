@@ -361,45 +361,6 @@ export default function SubscriptionPage() {
 
   return (
     <div className="space-y-6">
-      {pendingSubscription && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-xl border-border/40 bg-card/95">
-            <CardHeader>
-              <CardTitle>Verifying your subscription payment</CardTitle>
-              <CardDescription>
-                We’re confirming your payment with the gateway. Please don’t refresh or close this page.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Processing…</span>
-              </div>
-
-              <div className="rounded-lg border border-amber-200/60 bg-amber-50/50 px-3 py-2 dark:border-amber-900/40 dark:bg-amber-950/20">
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                  Payment in progress
-                </p>
-                <p className="text-xs text-amber-700/90 dark:text-amber-300/90 mt-0.5">
-                  A small mandate authorization may happen and be refunded. Your plan amount is charged right after authorization is confirmed.
-                </p>
-              </div>
-
-              {pendingExpiresAt && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/25 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">
-                    Payment window expires around {new Date(pendingExpiresAt).toLocaleString()}
-                  </p>
-                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                    {pendingCountdownLabel ?? "--:--"} left
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       <div>
         <h1 className="text-2xl font-bold">Subscription</h1>
         <p className="text-muted-foreground text-sm mt-1">Manage your plan and billing</p>

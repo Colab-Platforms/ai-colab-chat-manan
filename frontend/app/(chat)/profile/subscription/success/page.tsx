@@ -158,7 +158,7 @@ export default function SubscriptionSuccessPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/95 backdrop-blur-sm">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -166,7 +166,7 @@ export default function SubscriptionSuccessPage() {
 
   if (!isActive) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/95 backdrop-blur-sm p-4">
         <Card className="w-full max-w-xl border-border/40 bg-card/90 backdrop-blur-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Payment is being verified</CardTitle>
