@@ -49,13 +49,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (saved === "true") setCollapsed(true);
   }, []);
 
+  const isAdminRoute = adminNav.some(item => pathname === item.href);
+
   useEffect(() => {
     if (isLoading) return;
+    
     if (!user) {
-      const redirectTo = pathname || "/profile";
-      router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+      // If we are on an admin route, we don't want to redirect back to it after logout
+      // because if the next user is not an admin, they will get a 404 or be blocked.
+      if (isAdminRoute) {
+        router.replace("/login");
+      } else {
+        const redirectTo = pathname || "/profile";
+        router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+      }
+      return;
     }
-  }, [user, isLoading, router, pathname]);
+
+    // Role-based access control: block non-admins from admin routes
+    if (isAdminRoute && !isAdmin) {
+      // Direct unauthorized access to admin pages results in a 404 redirect
+      router.replace("/404");
+    }
+  }, [user, isLoading, router, pathname, isAdminRoute, isAdmin]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -234,7 +250,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </AppSidebar>
   );
 
-  if (!user) {
+  if (!user || (isAdminRoute && !isAdmin)) {
     return null;
   }
 

@@ -69,7 +69,8 @@ export function AppSidebar({
       onLogout();
     } else {
       logout();
-      router.replace("/");
+      // Go directly to login on logout, without redirect params
+      router.replace("/login");
     }
   };
 
