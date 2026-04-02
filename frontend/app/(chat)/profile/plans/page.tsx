@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
@@ -19,6 +20,7 @@ export default function PlansAdminPage() {
     quarterlyPrice: 0,
     yearlyPrice: 0,
     tokenLimit: 10000,
+    isActive: true,
     features: JSON.stringify(defaultFeatures, null, 2),
   };
   const [plans, setPlans] = useState<any[]>([]);
@@ -64,6 +66,7 @@ export default function PlansAdminPage() {
       quarterlyPrice: p.quarterlyPrice,
       yearlyPrice: p.yearlyPrice,
       tokenLimit: p.tokenLimit,
+      isActive: p.isActive ?? true,
       features: JSON.stringify(p.features ?? defaultFeatures, null, 2),
     });
     setEditPlan(p);
@@ -86,6 +89,7 @@ export default function PlansAdminPage() {
         quarterlyPrice: form.quarterlyPrice,
         yearlyPrice: form.yearlyPrice,
         tokenLimit: form.tokenLimit,
+        isActive: form.isActive,
         features: parsedFeatures,
       };
 
@@ -105,6 +109,10 @@ export default function PlansAdminPage() {
   const columns: Column[] = [
     { key: "name", label: "Name", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "monthlyPrice", label: "Monthly", sortable: true, render: (r) => r.monthlyPrice === 0 ? "Free" : `₹${r.monthlyPrice}` },
+    {
+      key: "isActive", label: "Status", sortable: false,
+      render: (r) => <Badge variant={r.isActive ? "default" : "secondary"}>{r.isActive ? "Active" : "Inactive"}</Badge>,
+    },
     { key: "tokenLimit", label: "Token Limit", sortable: true, render: (r) => `${(r.tokenLimit / 1000).toFixed(0)}k` },
     { key: "models", label: "Models", render: (r) => r.features?.maxModels === -1 ? "∞" : r.features?.maxModels },
     {
@@ -145,6 +153,7 @@ export default function PlansAdminPage() {
               <div><span className="text-muted-foreground">Quarterly:</span> ₹{viewPlan.quarterlyPrice}</div>
               <div><span className="text-muted-foreground">Yearly:</span> ₹{viewPlan.yearlyPrice}</div>
               <div><span className="text-muted-foreground">Token Limit:</span> {viewPlan.tokenLimit?.toLocaleString()}</div>
+              <div><span className="text-muted-foreground">Status:</span> <Badge variant={viewPlan.isActive ? "default" : "secondary"}>{viewPlan.isActive ? "Active" : "Inactive"}</Badge></div>
               <div><span className="text-muted-foreground">Features:</span> <pre className="mt-1 text-xs bg-muted p-2 rounded">{JSON.stringify(viewPlan.features, null, 2)}</pre></div>
             </div>
           )}
@@ -163,6 +172,16 @@ export default function PlansAdminPage() {
               <div className="space-y-1"><label className="text-xs font-medium">Yearly (INR ₹)</label><Input type="number" step="0.01" value={form.yearlyPrice} onChange={(e) => setForm({ ...form, yearlyPrice: parseFloat(e.target.value) || 0 })} /></div>
             </div>
             <div className="space-y-1"><label className="text-sm font-medium">Token Limit</label><Input type="number" value={form.tokenLimit} onChange={(e) => setForm({ ...form, tokenLimit: parseInt(e.target.value) || 0 })} /></div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                id="planActive"
+                className="rounded"
+              />
+              <label htmlFor="planActive" className="text-sm">Active</label>
+            </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Features (JSON)</label>
               <Textarea

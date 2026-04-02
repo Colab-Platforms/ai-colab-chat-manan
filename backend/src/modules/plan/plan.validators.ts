@@ -7,6 +7,7 @@ const createPlanSchema = Joi.object({
     yearlyPrice: Joi.number().min(0).required(),
     tokenLimit: Joi.number().integer().positive().required(),
     features: Joi.object().required(),
+    isActive: Joi.boolean().optional(),
 });
 
 const updatePlanSchema = Joi.object({
@@ -16,6 +17,7 @@ const updatePlanSchema = Joi.object({
     yearlyPrice: Joi.number().min(0).optional(),
     tokenLimit: Joi.number().integer().positive().optional(),
     features: Joi.object().optional(),
+    isActive: Joi.boolean().optional(),
 });
 
 export const validateCreatePlanSchema = (data: unknown) => {

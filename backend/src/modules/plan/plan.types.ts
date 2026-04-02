@@ -5,6 +5,7 @@ export interface CreatePlanBody {
     yearlyPrice: number;
     tokenLimit: number;
     features: any;
+    isActive?: boolean;
 }
 
 export interface UpdatePlanBody {
@@ -14,4 +15,5 @@ export interface UpdatePlanBody {
     yearlyPrice?: number;
     tokenLimit?: number;
     features?: any;
+    isActive?: boolean;
 }
