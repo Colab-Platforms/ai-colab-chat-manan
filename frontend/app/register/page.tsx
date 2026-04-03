@@ -32,7 +32,7 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 };
 
 export default function RegisterPage() {
-  const { register, verifyEmailOtp, resendEmailOtp, refreshUser, user } = useAuth();
+  const { register, verifyEmailOtp, resendEmailOtp, login, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<"register" | "verify">("register");
@@ -70,6 +70,10 @@ export default function RegisterPage() {
 
     try {
       const result = await register({ firstName, lastName, email, password });
+      if (typeof window !== "undefined") {
+        localStorage.setItem("signup_free_plan_prompt_pending", "1");
+        localStorage.removeItem("signup_free_plan_prompt_seen");
+      }
       if (result.requiresEmailVerification) {
         setPendingEmail(email);
         setStep("verify");
@@ -93,8 +97,12 @@ export default function RegisterPage() {
 
     try {
       await verifyEmailOtp(pendingEmail, otp);
-      await refreshUser();
-      toast.success("Email verified successfully");
+      const loginResult = await login(pendingEmail, password);
+      if (loginResult.requiresEmailVerification) {
+        toast.error("Verification is still pending. Please try again.");
+        return;
+      }
+      toast.success("Email verified and signed in successfully");
       const redirect = searchParams.get("redirect");
       router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {

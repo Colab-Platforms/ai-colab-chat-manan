@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, startTransition } from "react
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
-import { Menu, Settings, LogOut, Sun, Moon } from "lucide-react";
+import { Menu, Settings, LogOut, Sun, Moon, ArrowRight } from "lucide-react";
 import { chatService, folderService, assistantService } from "@/lib/services";
 import {
   DropdownMenu,
@@ -17,6 +17,15 @@ import { useTheme } from "@/context/theme-context";
 import { setRouteUiFromPathname } from "@/lib/route-ui-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sidebar } from "../sidebar/sidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 interface Chat {
   id: number;
@@ -77,6 +86,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   const [activeAssistantTheme, setActiveAssistantTheme] = useState<Assistant | null>(
     null,
   );
+  const [planPopupOpen, setPlanPopupOpen] = useState(false);
   const chatsRef = useRef<Chat[]>([]);
   const chatAssistantCacheRef = useRef<Map<number, number | null>>(new Map());
   const chatAssistantInflightRef = useRef<Map<number, Promise<number | null>>>(new Map());
@@ -244,6 +254,35 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       fetchChats(1);
     }
   }, [user, isProfileRoute, fetchChats, chatSearch]);
+
+  useEffect(() => {
+    if (!user || isProfileRoute) return;
+    if (
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/register") ||
+      pathname.startsWith("/forgot-password") ||
+      pathname.startsWith("/share/")
+    ) {
+      return;
+    }
+
+    const pendingSignup = localStorage.getItem("signup_free_plan_prompt_pending") === "1";
+    const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
+    if (!pendingSignup || seenSignup) return;
+
+    setPlanPopupOpen(true);
+  }, [user, isProfileRoute, pathname]);
+
+  const dismissPlanPopup = useCallback(() => {
+    setPlanPopupOpen(false);
+    localStorage.removeItem("signup_free_plan_prompt_pending");
+    localStorage.setItem("signup_free_plan_prompt_seen", "1");
+  }, []);
+
+  const handleUpgradeFromPopup = useCallback(() => {
+    dismissPlanPopup();
+    router.push("/profile/subscription");
+  }, [dismissPlanPopup, router]);
 
   const chatListRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -489,90 +528,122 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     : undefined;
 
   return (
-    <div
-      className={`h-dvh flex overflow-hidden text-foreground ${
-        hasAssistantGradient
-          ? "bg-background"
-          : "bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
-      }`}
-      style={dynamicBackgroundStyle}
-    >
-      <aside
-        className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-[width] duration-300 ease-in-out ${
-          sidebarCollapsed ? "w-[64px]" : "w-[280px]"
-        }`}
-        style={{ contain: "layout style paint", willChange: "transform" }}
+    <>
+      <Dialog
+        open={planPopupOpen}
+        onOpenChange={(open) => {
+          if (!open) dismissPlanPopup();
+        }}
       >
-        {renderSidebar(false)}
-      </aside>
+        <DialogContent className="sm:max-w-md border-border/40 bg-background/95 backdrop-blur-xl">
+          <DialogHeader className="space-y-3 text-left">
+            <Badge variant="default" className="w-fit rounded-full px-3 py-1 text-xs">
+              Free plan activated 🎉
+            </Badge>
+            <div className="space-y-1">
+              <DialogTitle className="text-xl sm:text-2xl text-balance">You’ve got 30 days of free access to get started.</DialogTitle>
+              <DialogDescription className="text-sm leading-6 text-muted-foreground">
+                Need more power? Upgrade anytime for higher limits, priority speed, and full access.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <Button variant="outline" onClick={dismissPlanPopup} className="sm:flex-1">
+              Start chatting
+            </Button>
+            <Button onClick={handleUpgradeFromPopup} className="sm:flex-1 gap-2 bg-landing-primary hover:bg-landing-primary-hover text-white">
+              Upgrade plan
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-3 bg-background/80 backdrop-blur-md border-b border-border/50 justify-between">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="cursor-pointer -ml-2 text-foreground"
-          onClick={() => setMobileOpen(true)}
-        >
-          <Menu className="w-5 h-5" />
-        </Button>
-        <span className="font-semibold text-sm">
-          {activeAssistantTheme?.name || "AI Colab"}
-        </span>
-        <div className="flex-shrink-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden">
-                <Avatar className="w-8 h-8 border border-border/50">
-                  {user?.profileImage && <AvatarImage src={user.profileImage} alt={`${user?.firstName} ${user?.lastName}`} />}
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                    {user?.firstName?.[0]?.toUpperCase()}{user?.lastName?.[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[200px]">
-              <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex flex-col items-start min-w-0">
-                <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
-                {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
-              </div>
-              <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
-                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                {theme === "dark" ? "Light Mode" : "Dark Mode"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/profile")} className="gap-2 cursor-pointer">
-                <Settings className="w-4 h-4" /> Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
-                <LogOut className="w-4 h-4" /> Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      {mobileOpen && (
+      <div
+        className={`h-dvh flex overflow-hidden text-foreground ${
+          hasAssistantGradient
+            ? "bg-background"
+            : "bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
+        }`}
+        style={dynamicBackgroundStyle}
+      >
         <aside
-          className={`
-            md:hidden fixed z-50 h-full w-[280px] flex-shrink-0 border-r border-border/40
-            bg-background flex flex-col transition-all duration-300 ease-in-out translate-x-0
-          `}
-          style={{ contain: "layout style paint" }}
+          className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-[width] duration-300 ease-in-out ${
+            sidebarCollapsed ? "w-[64px]" : "w-[280px]"
+          }`}
+          style={{ contain: "layout style paint", willChange: "transform" }}
         >
-          {renderSidebar(true)}
+          {renderSidebar(false)}
         </aside>
-      )}
 
-      <main className="flex-1 flex flex-col min-w-0 md:pt-0 pt-14">
-        {children}
-      </main>
-    </div>
+        <div className="md:hidden fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-3 bg-background/80 backdrop-blur-md border-b border-border/50 justify-between">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="cursor-pointer -ml-2 text-foreground"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          <span className="font-semibold text-sm">
+            {activeAssistantTheme?.name || "AI Colab"}
+          </span>
+          <div className="flex-shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden">
+                  <Avatar className="w-8 h-8 border border-border/50">
+                    {user?.profileImage && <AvatarImage src={user.profileImage} alt={`${user?.firstName} ${user?.lastName}`} />}
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                      {user?.firstName?.[0]?.toUpperCase()}{user?.lastName?.[0]?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex flex-col items-start min-w-0">
+                  <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
+                  {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
+                </div>
+                <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
+                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/profile")} className="gap-2 cursor-pointer">
+                  <Settings className="w-4 h-4" /> Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
+                  <LogOut className="w-4 h-4" /> Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {mobileOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+
+        {mobileOpen && (
+          <aside
+            className={`
+              md:hidden fixed z-50 h-full w-[280px] flex-shrink-0 border-r border-border/40
+              bg-background flex flex-col transition-all duration-300 ease-in-out translate-x-0
+            `}
+            style={{ contain: "layout style paint" }}
+          >
+            {renderSidebar(true)}
+          </aside>
+        )}
+
+        <main className="flex-1 flex flex-col min-w-0 md:pt-0 pt-14">
+          {children}
+        </main>
+      </div>
+    </>
   );
 }

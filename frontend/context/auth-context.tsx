@@ -96,10 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.post("/auth/register", data);
     const responseData = res.data.data;
 
-    if (responseData?.user && responseData?.token) {
-      saveAuth(responseData.user, responseData.token);
-    }
-
     return {
       requiresEmailVerification: Boolean(responseData?.requiresEmailVerification),
       user: responseData?.user,
