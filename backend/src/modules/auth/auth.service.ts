@@ -10,6 +10,7 @@ import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import { generateOtp, getOtpExpiry } from "@/utils/otp.js";
 import { sendOtpEmail } from "@/utils/email.js";
+import { createWalletTransaction } from "@/utils/walletUtils.js";
 import {
   RegisterBody,
   LoginBody,
@@ -237,7 +238,7 @@ class AuthService {
     const now = new Date();
     const periodEnd = dayjs(now).add(1, "month").toDate();
 
-    await tx.subscription.create({
+    const subscription = await tx.subscription.create({
       data: {
         userId,
         planId: freePlan.id,
@@ -249,13 +250,26 @@ class AuthService {
       },
     });
 
-    await tx.userWallet.create({
+    const wallet = await tx.userWallet.create({
       data: {
         userId,
         tokensRemaining: freePlan.tokenLimit,
         tokensUsed: 0,
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
+      },
+    });
+
+    await createWalletTransaction(tx, {
+      userId,
+      walletId: wallet.id,
+      amount: freePlan.tokenLimit,
+      type: "CREDIT",
+      referenceId: `free_plan_signup_${subscription.id}`,
+      meta: {
+        reason: "FREE_PLAN_SIGNUP_CREDIT",
+        planId: freePlan.id,
+        subscriptionId: subscription.id,
       },
     });
 
