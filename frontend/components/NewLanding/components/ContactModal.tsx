@@ -39,7 +39,7 @@ export function ContactModal({ children }: ContactModalProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 transition-all focus-within:ring-1 focus-within:ring-primary/20 p-8">
+      <DialogContent className="sm:max-w-md border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 dark:backdrop-blur-xl transition-all focus-within:ring-1 focus-within:ring-primary/20 p-8">
         <DialogHeader className="text-center space-y-2 mb-4">
           <DialogTitle className="text-2xl font-bold text-landing-primary">
             Contact Support

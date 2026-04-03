@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, KeyRound, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -123,7 +123,7 @@ export default function ForgotPasswordPage() {
             {step === "request" ? "Forgot password" : "Reset password"}
           </CardTitle>
           <CardDescription className="-mt-3">
-            {step === "request" ? "Get OTP to reset your password" : `Enter OTP sent to ${email}`}
+            {step === "request" ? "Get OTP for password-based accounts. Google sign-in accounts should continue with Google." : `Enter OTP sent to ${email}`}
           </CardDescription>
         </CardHeader>
         <CardContent>

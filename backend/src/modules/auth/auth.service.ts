@@ -685,6 +685,13 @@ class AuthService {
 
     if (user) {
       if (user.authProvider === "GOOGLE") {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            passwordResetOtpHash: null,
+            passwordResetOtpExpiresAt: null,
+          },
+        });
         return { sent: true };
       }
 
@@ -712,15 +719,8 @@ class AuthService {
       where: { email, isDeleted: false },
     });
 
-    if (!user) {
-      throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
-    }
-
-    if (user.authProvider === "GOOGLE") {
-      throw new ApiError(
-        "This account uses Google sign-in. Please continue with Google",
-        STATUS_CODES.BAD_REQUEST,
-      );
+    if (!user || user.authProvider === "GOOGLE") {
+      throw new ApiError("Invalid or expired OTP", STATUS_CODES.BAD_REQUEST);
     }
 
     if (
@@ -728,10 +728,7 @@ class AuthService {
       !user.passwordResetOtpExpiresAt ||
       user.passwordResetOtpExpiresAt.getTime() < Date.now()
     ) {
-      throw new ApiError(
-        "OTP expired. Please request a new OTP",
-        STATUS_CODES.BAD_REQUEST,
-      );
+      throw new ApiError("Invalid or expired OTP", STATUS_CODES.BAD_REQUEST);
     }
 
     const isOtpValid = await comparePassword(
@@ -739,7 +736,7 @@ class AuthService {
       user.passwordResetOtpHash,
     );
     if (!isOtpValid) {
-      throw new ApiError("Invalid OTP", STATUS_CODES.BAD_REQUEST);
+      throw new ApiError("Invalid or expired OTP", STATUS_CODES.BAD_REQUEST);
     }
 
     const nextPasswordHash = await hashPassword(data.newPassword);
