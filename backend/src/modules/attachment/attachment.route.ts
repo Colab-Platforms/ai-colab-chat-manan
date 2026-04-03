@@ -21,6 +21,12 @@ router.post(
   attachmentController.uploadAttachment,
 );
 
+// Public download route — streams the file with the original filename.
+router.get(
+  "/:id/download",
+  attachmentController.downloadAttachment,
+);
+
 // Delete presend attachment
 router.delete(
   "/:id",

@@ -21,6 +21,12 @@ const ALLOWED_MIME_TYPES = [
   // PowerPoint
   "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  // Excel / CSV
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+  "text/csv",
+  "application/csv",
 ];
 
 const storage = multer.memoryStorage();
@@ -31,7 +37,7 @@ const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
   } else {
     cb(
       new ApiError(
-        "File type not supported. Allowed: images, PDF, PPT, Word.",
+        "File type not supported. Allowed: images, PDF, PPT, Word, Excel, CSV.",
         STATUS_CODES.BAD_REQUEST,
       ),
     );

@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Bot, Copy, ThumbsUp, ThumbsDown, Share2, RefreshCw,
   ChevronLeft, ChevronRight, Check, Loader2, Pencil, X,
-  FileText, File, Image as ImageIcon, Star
+  FileText, File, Image as ImageIcon, Star, FileSpreadsheet
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "@/components/ui/button";
@@ -792,6 +792,16 @@ function Attachments({ message, isUser }: { message: Message; isUser?: boolean }
     if (lowerMime.startsWith("image/")) return "image";
     if (lowerMime === "application/pdf" || ext === "pdf") return "pdf";
     if (
+      lowerMime.includes("spreadsheet") ||
+      lowerMime.includes("excel") ||
+      ext === "csv" ||
+      ext === "xls" ||
+      ext === "xlsx" ||
+      ext === "xlsm"
+    ) {
+      return "spreadsheet";
+    }
+    if (
       lowerMime.includes("msword") ||
       lowerMime.includes("wordprocessingml") ||
       ext === "doc" ||
@@ -830,6 +840,13 @@ function Attachments({ message, isUser }: { message: Message; isUser?: boolean }
           chipClass:
             "bg-pink-50/90 border-pink-200/80 text-pink-900 dark:bg-pink-500/10 dark:border-pink-400/30 dark:text-pink-100",
           iconWrapClass: "bg-pink-100/90 dark:bg-pink-500/20",
+        };
+      case "spreadsheet":
+        return {
+          icon: <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />,
+          chipClass:
+            "bg-emerald-50/90 border-emerald-200/80 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100",
+          iconWrapClass: "bg-emerald-100/80 dark:bg-emerald-500/20",
         };
       case "word":
         return {
@@ -895,11 +912,7 @@ function Attachments({ message, isUser }: { message: Message; isUser?: boolean }
             );
           }
 
-          // Cloudinary fl_attachment cannot include the file extension, it automatically infers it.
-          const dotIndex = att.fileName.lastIndexOf('.');
-          const baseName = dotIndex !== -1 ? att.fileName.substring(0, dotIndex) : att.fileName;
-          const safeFileName = baseName.replace(/[^a-zA-Z0-9-]/g, '_');
-          const downloadUrl = att.fileUrl.replace('/upload/', `/upload/fl_attachment:${safeFileName}/`);
+          const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/attachments/${att.id}/download`;
           return (
             <a
               key={att.id}

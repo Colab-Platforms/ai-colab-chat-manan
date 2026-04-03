@@ -152,6 +152,12 @@ class AttachmentService {
     });
   }
 
+  async findById(id: number) {
+    return prisma.attachment.findUnique({
+      where: { id },
+    });
+  }
+
   async create(userId: number, messageId: number, file: Express.Multer.File) {
     const message = await prisma.message.findFirst({
       where: { id: messageId, isDeleted: false },

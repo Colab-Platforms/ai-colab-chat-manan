@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare, Square,
-  FileText, File, Upload
+  FileText, File, Upload, FileSpreadsheet
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -151,6 +151,16 @@ function getAttachmentCategory(fileName: string, mimeType: string) {
   if (lowerMime.startsWith("image/")) return "image";
   if (lowerMime === "application/pdf" || ext === "pdf") return "pdf";
   if (
+    lowerMime.includes("spreadsheet") ||
+    lowerMime.includes("excel") ||
+    ext === "csv" ||
+    ext === "xls" ||
+    ext === "xlsx" ||
+    ext === "xlsm"
+  ) {
+    return "spreadsheet";
+  }
+  if (
     lowerMime.includes("msword") ||
     lowerMime.includes("wordprocessingml") ||
     ext === "doc" ||
@@ -189,6 +199,13 @@ function getAttachmentVisual(fileName: string, mimeType: string) {
         chipClass:
           "bg-pink-50/90 border-pink-200/80 text-pink-900 dark:bg-pink-500/10 dark:border-pink-400/30 dark:text-pink-100",
         iconWrapClass: "bg-pink-100/90 dark:bg-pink-500/20",
+      };
+    case "spreadsheet":
+      return {
+        icon: <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />,
+        chipClass:
+          "bg-emerald-50/90 border-emerald-200/80 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100",
+        iconWrapClass: "bg-emerald-100/80 dark:bg-emerald-500/20",
       };
     case "word":
       return {

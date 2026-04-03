@@ -1,10 +1,28 @@
 import { Request, Response } from "express";
+import { Readable } from "node:stream";
 import { sendResponse } from "@/utils/responseUtils.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import AttachmentService from "./attachment.service.js";
 import { validateCreateAttachmentSchema } from "./attachment.validators.js";
 
 const attachmentService = new AttachmentService();
+
+function buildDownloadFileName(fileName: string, mimeType: string) {
+  const hasExtension = /\.[a-z0-9]+$/i.test(fileName);
+  if (hasExtension) return fileName;
+
+  const lowerMime = mimeType.toLowerCase();
+  const extension =
+    lowerMime.includes("spreadsheetml.sheet") ? "xlsx" :
+    lowerMime.includes("sheet.macroenabled.12") ? "xlsm" :
+    lowerMime.includes("ms-excel") || lowerMime.includes("excel") ? "xls" :
+    lowerMime === "text/csv" || lowerMime === "application/csv" ? "csv" :
+    lowerMime.includes("pdf") ? "pdf" :
+    lowerMime.startsWith("image/") ? lowerMime.split("/")[1] || "png" :
+    "bin";
+
+  return `${fileName}.${extension}`;
+}
 
 export const presendAttachment = async (
   req: Request,
@@ -111,6 +129,74 @@ export const uploadAttachment = async (
     );
   } catch (error: any) {
     console.error("Upload attachment error", error);
+    sendResponse(
+      res,
+      false,
+      null,
+      error.message,
+      error.statusCode ?? STATUS_CODES.SERVER_ERROR,
+    );
+  }
+};
+
+/** GET /attachments/:id/download — stream an attachment from Cloudinary. */
+export const downloadAttachment = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (Number.isNaN(id)) {
+      sendResponse(res, false, null, "Invalid ID", STATUS_CODES.BAD_REQUEST);
+      return;
+    }
+
+    const attachment = await attachmentService.findById(id);
+    if (!attachment) {
+      sendResponse(res, false, null, "Attachment not found", STATUS_CODES.NOT_FOUND);
+      return;
+    }
+
+    const response = await fetch(attachment.fileUrl);
+    if (!response.ok || !response.body) {
+      sendResponse(
+        res,
+        false,
+        null,
+        "Failed to fetch attachment",
+        STATUS_CODES.SERVER_ERROR,
+      );
+      return;
+    }
+
+    const downloadFileName = buildDownloadFileName(
+      attachment.fileName,
+      attachment.mimeType,
+    );
+
+    res.setHeader("Content-Type", attachment.mimeType || response.headers.get("content-type") || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${downloadFileName.replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`,
+    );
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      res.setHeader("Content-Length", contentLength);
+    }
+
+    const stream = Readable.fromWeb(response.body as any);
+    stream.on("error", (error) => {
+      console.error("Attachment download stream error", error);
+      if (!res.headersSent) {
+        res.status(STATUS_CODES.SERVER_ERROR).end();
+      } else {
+        res.destroy(error as Error);
+      }
+    });
+
+    stream.pipe(res);
+  } catch (error: any) {
+    console.error("Download attachment error", error);
     sendResponse(
       res,
       false,

@@ -11,6 +11,11 @@ import {
 import AttachmentService from "@/modules/attachment/attachment.service.js";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
+import {
+  SPREADSHEET_MIME_TYPES,
+  inferRequiredColumnsFromPrompt,
+  parseSpreadsheetFromUrl,
+} from "@/utils/spreadsheet.js";
 
 const attachmentService = new AttachmentService();
 
@@ -136,6 +141,8 @@ const PPT_MIME_TYPES = [
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 const TEXT_MIME_TYPES = ["text/plain", "text/markdown", "text/x-markdown"];
+const SPREADSHEET_PREVIEW_ROWS = 200;
+const SPREADSHEET_MAX_AI_CHARS = 90_000;
 
 interface AttachmentRecord {
   id: number;
@@ -211,6 +218,7 @@ async function buildAttachmentContentParts(
   const extraPlugins: any[] = [];
   let hasPdf = false;
   let extraText = "";
+  const requestedColumns = inferRequiredColumnsFromPrompt(textContent);
 
   for (const att of attachments) {
     const mime = att.mimeType;
@@ -302,6 +310,22 @@ async function buildAttachmentContentParts(
         }
       } catch (e) {
         console.error("Failed to fetch text attachment", att.fileName, e);
+      }
+    } else if (SPREADSHEET_MIME_TYPES.includes(mime)) {
+      try {
+        const spreadsheetReport = await parseSpreadsheetFromUrl(
+          att.fileUrl,
+          att.fileName,
+          mime,
+          {
+            requiredColumns: requestedColumns,
+            maxPreviewRows: SPREADSHEET_PREVIEW_ROWS,
+            maxAiChars: SPREADSHEET_MAX_AI_CHARS,
+          },
+        );
+        extraText += `\n\n${spreadsheetReport.aiText}`;
+      } catch (e) {
+        console.error("Failed to parse spreadsheet attachment", att.fileName, e);
       }
     }
   }

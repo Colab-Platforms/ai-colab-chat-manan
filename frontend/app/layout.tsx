@@ -84,6 +84,7 @@ export default function RootLayout({
           theme="light"
           toastClassName="!text-sm"
           style={{ zIndex: 99999 }}
+          className={"max-md:m-2" }
         />
         <ThemeProvider>
           <AuthProvider>
