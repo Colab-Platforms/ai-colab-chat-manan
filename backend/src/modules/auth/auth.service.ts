@@ -321,7 +321,7 @@ class AuthService {
         select: userSelectFields,
       });
 
-      return updatedUser;
+      return { user: updatedUser, isNewUser: false };
     }
 
     const tempPasswordHash = await hashPassword(randomUUID());
@@ -355,7 +355,7 @@ class AuthService {
       throw new ApiError("Failed to create user session", STATUS_CODES.SERVER_ERROR);
     }
 
-    return createdUser;
+    return { user: createdUser, isNewUser: true };
   }
 
   private createToken(user: { id: number; role?: string; timezone?: string; userRoles?: Array<{ role: { name: string } }> }) {
@@ -430,7 +430,7 @@ class AuthService {
     const parsedState = this.parseGoogleState(state);
     const idToken = await this.exchangeGoogleCodeForIdToken(code);
     const profile = await this.verifyGoogleIdToken(idToken);
-    const user = await this.findOrCreateUserFromGoogleProfile(profile);
+    const { user, isNewUser } = await this.findOrCreateUserFromGoogleProfile(profile);
     const token = this.createToken(user as any);
 
     const { frontendGoogleCallbackUrl } = this.getGoogleOauthConfig();
@@ -440,6 +440,9 @@ class AuthService {
       "redirect",
       this.sanitizeRedirectPath(parsedState.redirectPath),
     );
+    if (isNewUser) {
+      redirectUrl.searchParams.set("newUser", "1");
+    }
 
     return redirectUrl.toString();
   }

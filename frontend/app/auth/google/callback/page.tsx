@@ -23,6 +23,7 @@ export default function GoogleAuthCallbackPage() {
   const token = searchParams.get("token");
   const errorCode = searchParams.get("error");
   const errorMessage = searchParams.get("message");
+  const isNewUser = searchParams.get("newUser") === "1";
   const redirectPath = useMemo(
     () => getSafeRedirectPath(searchParams.get("redirect")),
     [searchParams],
@@ -59,6 +60,11 @@ export default function GoogleAuthCallbackPage() {
           sessionStorage.setItem(processedKey, "1");
         }
 
+        if (isNewUser) {
+          localStorage.setItem("signup_free_plan_prompt_pending", "1");
+          localStorage.removeItem("signup_free_plan_prompt_seen");
+        }
+
         await completeGoogleLogin(token);
         toast.success("Signed in with Google successfully");
         router.replace(redirectPath);
@@ -71,7 +77,7 @@ export default function GoogleAuthCallbackPage() {
     };
 
     void completeLogin();
-  }, [completeGoogleLogin, errorCode, errorMessage, redirectPath, router, token]);
+  }, [completeGoogleLogin, errorCode, errorMessage, isNewUser, redirectPath, router, token]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40 px-4">
