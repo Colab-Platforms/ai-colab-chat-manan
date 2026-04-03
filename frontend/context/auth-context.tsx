@@ -19,7 +19,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ requiresEmailVerification: boolean; email?: string }>;
-  register: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<void>;
+  register: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<{ requiresEmailVerification: boolean; user?: User; token?: string }>;
   verifyEmailOtp: (email: string, otp: string) => Promise<void>;
   resendEmailOtp: (email: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -93,7 +93,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: { firstName: string; lastName: string; email: string; password: string }) => {
-    await api.post("/auth/register", data);
+    const res = await api.post("/auth/register", data);
+    const responseData = res.data.data;
+
+    if (responseData?.user && responseData?.token) {
+      saveAuth(responseData.user, responseData.token);
+    }
+
+    return {
+      requiresEmailVerification: Boolean(responseData?.requiresEmailVerification),
+      user: responseData?.user,
+      token: responseData?.token,
+    };
   };
 
   const verifyEmailOtp = async (email: string, otp: string) => {

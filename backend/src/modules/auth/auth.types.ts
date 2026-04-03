@@ -7,6 +7,12 @@ export interface RegisterBody {
     password: string;
 }
 
+export interface RegisterResponse {
+    user: any;
+    token: string;
+    requiresEmailVerification: boolean;
+}
+
 export interface LoginBody {
     email: string;
     password: string;

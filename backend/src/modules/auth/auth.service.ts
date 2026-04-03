@@ -14,6 +14,7 @@ import {
   VerifyEmailOtpBody,
   ForgotPasswordBody,
   ResetPasswordBody,
+  RegisterResponse,
   userSelectFields,
 } from "./auth.types.js";
 
@@ -46,11 +47,33 @@ class AuthService {
     return email.trim().toLowerCase();
   }
 
+  private createToken(user: { id: number; role?: string; timezone?: string; userRoles?: Array<{ role: { name: string } }> }) {
+    if (!process.env.JWT_SECRET) {
+      throw new ApiError(
+        "JWT secret is not defined",
+        STATUS_CODES.SERVER_ERROR,
+      );
+    }
+
+    const roleNames = user.userRoles?.map((ur) => ur.role.name) ?? [];
+    const highestRole = getHighestRole(roleNames);
+
+    return jwt.sign(
+      {
+        id: user.id,
+        role: highestRole,
+        timezone: user.timezone ?? "UTC",
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "90d" },
+    );
+  }
+
   private getArchivedEmail(email: string, userId: number) {
     return `${email}__deleted_${userId}_${Date.now()}`;
   }
 
-  async register(data: RegisterBody) {
+  async register(data: RegisterBody): Promise<RegisterResponse> {
     const email = this.normalizeEmail(data.email);
     const existingUser = await prisma.user.findFirst({
       where: { email },
@@ -160,8 +183,15 @@ class AuthService {
       return user;
     });
 
+    if (!user) {
+      throw new ApiError("Failed to create user session", STATUS_CODES.SERVER_ERROR);
+    }
+
+    const token = this.createToken(user as any);
+
     return {
       user: formatUser(user),
+      token,
       requiresEmailVerification: true,
     };
   }
@@ -221,26 +251,7 @@ class AuthService {
       };
     }
 
-    if (!process.env.JWT_SECRET) {
-      throw new ApiError(
-        "JWT secret is not defined",
-        STATUS_CODES.SERVER_ERROR,
-      );
-    }
-
-    // Use highest role so admins/superadmins get full access via single login
-    const roleNames = user.userRoles.map((ur) => ur.role.name);
-    const highestRole = getHighestRole(roleNames);
-
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: highestRole,
-        timezone: user.timezone,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "90d" },
-    );
+    const token = this.createToken(user);
 
     const {
       password: _password,

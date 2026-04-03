@@ -32,7 +32,7 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 };
 
 export default function RegisterPage() {
-  const { register, verifyEmailOtp, resendEmailOtp, user } = useAuth();
+  const { register, verifyEmailOtp, resendEmailOtp, refreshUser, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<"register" | "verify">("register");
@@ -48,11 +48,11 @@ export default function RegisterPage() {
   const [timer, setTimer] = useState(0);
 
   useEffect(() => {
-    if (user) {
+    if (user && step === "register") {
       const redirect = searchParams.get("redirect");
       router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     }
-  }, [user, router, searchParams]);
+  }, [user, step, router, searchParams]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -69,11 +69,17 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await register({ firstName, lastName, email, password });
-      setPendingEmail(email);
-      setStep("verify");
-      toast.success("OTP sent to your email");
-      setTimer(30);
+      const result = await register({ firstName, lastName, email, password });
+      if (result.requiresEmailVerification) {
+        setPendingEmail(email);
+        setStep("verify");
+        toast.success("Account created. OTP sent to your email");
+        setTimer(30);
+        return;
+      }
+      toast.success("Account created and signed in successfully");
+      const redirect = searchParams.get("redirect");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Registration failed"));
     } finally {
@@ -87,12 +93,10 @@ export default function RegisterPage() {
 
     try {
       await verifyEmailOtp(pendingEmail, otp);
-      toast.success("Email verified. Please sign in.");
+      await refreshUser();
+      toast.success("Email verified successfully");
       const redirect = searchParams.get("redirect");
-      const loginHref = redirect && redirect.startsWith("/")
-        ? `/login?redirect=${encodeURIComponent(redirect)}`
-        : "/login";
-      router.push(loginHref);
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "OTP verification failed"));
     } finally {
