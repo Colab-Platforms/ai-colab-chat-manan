@@ -116,7 +116,7 @@ export default function SubscriptionPage() {
     try {
       const [subRes, planRes] = await Promise.all([
         subscriptionService.getCurrent().catch(() => null),
-        planService.list(),
+        planService.list({ isActive: "true" }),
       ]);
       console.debug("[SubscriptionPage] fetchData responses", {
         subRes: subRes?.data,
@@ -149,7 +149,8 @@ export default function SubscriptionPage() {
           setPendingAuthLink(null);
         }
       }
-      setPlans(planRes.data.data?.data || []);
+      const fetchedPlans = planRes.data.data?.data || [];
+      setPlans(fetchedPlans.filter((plan: any) => plan?.isActive !== false));
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
