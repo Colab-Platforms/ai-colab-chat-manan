@@ -192,19 +192,75 @@ The app will be available at `http://localhost:3000`.
 
 ### Backend (`backend/.env`)
 
-| Variable         | Description                     |
-| ---------------- | ------------------------------- |
-| `DATABASE_URL`   | PostgreSQL connection string    |
-| `JWT_SECRET`     | Secret key for signing JWTs     |
-| `JWT_EXPIRES_IN` | JWT expiry duration (e.g. `7d`) |
-| `PORT`           | Server port (default `5000`)    |
-| `FRONTEND_URL`   | Frontend origin for CORS        |
+| Variable                       | Description                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | PostgreSQL connection string                                                 |
+| `JWT_SECRET`                   | Secret key for signing JWTs                                                  |
+| `JWT_EXPIRES_IN`               | JWT expiry duration (e.g. `7d`)                                              |
+| `PORT`                         | Server port (default `5000`)                                                 |
+| `FRONTEND_URL`                 | Frontend origin for CORS                                                     |
+| `GOOGLE_CLIENT_ID`             | Google OAuth client ID                                                       |
+| `GOOGLE_CLIENT_SECRET`         | Google OAuth client secret                                                   |
+| `GOOGLE_CALLBACK_URL`          | Backend callback URL (e.g. `http://localhost:5000/api/auth/google/callback`) |
+| `FRONTEND_GOOGLE_CALLBACK_URL` | Frontend callback URL (e.g. `http://localhost:3000/auth/google/callback`)    |
 
 ### Frontend (`frontend/.env.local`)
 
 | Variable              | Description          |
 | --------------------- | -------------------- |
 | `NEXT_PUBLIC_API_URL` | Backend API base URL |
+
+## Google OAuth Setup
+
+### 1) Add environment variables
+
+Backend (`backend/.env`):
+
+```env
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback
+FRONTEND_GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+```
+
+Frontend (`frontend/.env.local`):
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+```
+
+For production, replace localhost values with your live domains.
+
+### 2) Configure Google Cloud Console
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).
+2. Create or choose a project.
+3. Open **APIs & Services > OAuth consent screen**.
+4. Configure app name, support email, and developer contact.
+5. Add scopes: `openid`, `email`, `profile`.
+6. Add test users if app is in testing mode.
+7. Open **APIs & Services > Credentials** and create **OAuth client ID**.
+8. Choose **Web application**.
+9. Add Authorized redirect URI for backend callback:
+
+- `http://localhost:5000/api/auth/google/callback` (development)
+- `https://your-backend-domain/api/auth/google/callback` (production)
+
+10. Save and copy Client ID / Client Secret to backend env.
+
+### 3) Verify URL alignment
+
+- Google redirect URI must exactly match `GOOGLE_CALLBACK_URL`.
+- Backend redirect target after success/failure must match `FRONTEND_GOOGLE_CALLBACK_URL`.
+- Frontend Google callback page path is `/auth/google/callback`.
+
+### 4) Local test flow
+
+1. Start backend and frontend.
+2. Open login or register page.
+3. Click **Continue with Google**.
+4. Complete Google consent.
+5. Ensure you are redirected back and logged in.
 
 ---
 

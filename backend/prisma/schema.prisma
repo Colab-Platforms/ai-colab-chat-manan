@@ -24,6 +24,8 @@ model User {
   email                         String              @unique
   phoneNumber                   String?             @unique
   password                      String
+  authProvider                  AuthProvider        @default(LOCAL)
+  googleId                      String?
   emailVerificationOtpHash      String?
   emailVerificationOtpExpiresAt DateTime?
   passwordResetOtpHash          String?
@@ -45,6 +47,11 @@ model User {
   preference                    UserPreference?
   walletTransactions            WalletTransaction[]
   contexts                      ContextMemory[]
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
 }
 
 model UserPreference {

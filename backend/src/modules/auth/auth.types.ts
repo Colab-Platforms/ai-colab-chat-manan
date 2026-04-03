@@ -18,6 +18,20 @@ export interface LoginBody {
     password: string;
 }
 
+export interface GoogleStatePayload {
+    nonce: string;
+    redirectPath?: string;
+}
+
+export interface GoogleProfile {
+    email: string;
+    emailVerified: boolean;
+    firstName: string;
+    lastName: string;
+    picture?: string;
+    googleId: string;
+}
+
 export interface VerifyEmailOtpBody {
     email: string;
     otp: string;

@@ -24,6 +24,7 @@ interface AuthContextType {
   resendEmailOtp: (email: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
+  completeGoogleLogin: (token: string) => Promise<void>;
   logout: () => void;
   hasRole: (role: string) => boolean;
   refreshUser: () => void;
@@ -49,12 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!storedToken) return null;
     return storedToken;
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return Boolean(localStorage.getItem("token"));
+  });
 
   useEffect(() => {
     const storedToken = localStorage.getItem("token");
     if (!storedToken) {
-      setIsLoading(false);
       return;
     }
     // Fetch fresh profile from server on every page load so cross-device
@@ -119,6 +122,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post("/auth/reset-password", { email, otp, newPassword });
   };
 
+  const completeGoogleLogin = useCallback(async (tokenData: string) => {
+    localStorage.setItem("token", tokenData);
+    const response = await api.get("/users/profile", {
+      headers: {
+        Authorization: `Bearer ${tokenData}`,
+      },
+    });
+
+    const userData = response.data.data as User;
+    saveAuth(userData, tokenData);
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
@@ -164,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, verifyEmailOtp, resendEmailOtp, forgotPassword, resetPassword, logout, hasRole, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, verifyEmailOtp, resendEmailOtp, forgotPassword, resetPassword, completeGoogleLogin, logout, hasRole, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

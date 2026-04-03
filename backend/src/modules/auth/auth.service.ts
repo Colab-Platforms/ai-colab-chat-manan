@@ -3,6 +3,8 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
 import jwt from "jsonwebtoken";
+import { randomUUID } from "node:crypto";
+import { OAuth2Client } from "google-auth-library";
 import { hashPassword, comparePassword } from "@/utils/auth.js";
 import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
@@ -13,6 +15,8 @@ import {
   LoginBody,
   VerifyEmailOtpBody,
   ForgotPasswordBody,
+  GoogleProfile,
+  GoogleStatePayload,
   ResetPasswordBody,
   RegisterResponse,
   userSelectFields,
@@ -43,18 +47,318 @@ const getHighestRole = (
 };
 
 class AuthService {
+  private readonly googleOauthClient = new OAuth2Client();
+
   private normalizeEmail(email: string) {
     return email.trim().toLowerCase();
   }
 
-  private createToken(user: { id: number; role?: string; timezone?: string; userRoles?: Array<{ role: { name: string } }> }) {
-    if (!process.env.JWT_SECRET) {
+  private sanitizeRedirectPath(path?: string) {
+    if (!path || !path.startsWith("/") || path.startsWith("//")) {
+      return "/";
+    }
+
+    return path;
+  }
+
+  private getGoogleOauthConfig() {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
+    const frontendBaseUrl = process.env.FRONTEND_URL;
+    const frontendGoogleCallbackUrl =
+      process.env.FRONTEND_GOOGLE_CALLBACK_URL ??
+      `${frontendBaseUrl?.replace(/\/+$/, "")}/auth/google/callback`;
+
+    if (
+      !clientId ||
+      !clientSecret ||
+      !callbackUrl ||
+      !frontendBaseUrl ||
+      !frontendGoogleCallbackUrl
+    ) {
       throw new ApiError(
-        "JWT secret is not defined",
+        "Google auth is not configured on server",
         STATUS_CODES.SERVER_ERROR,
       );
     }
 
+    return {
+      clientId,
+      clientSecret,
+      callbackUrl,
+      frontendGoogleCallbackUrl,
+    };
+  }
+
+  private getJwtSecret() {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+      throw new ApiError("JWT secret is not defined", STATUS_CODES.SERVER_ERROR);
+    }
+
+    return secret;
+  }
+
+  private createGoogleState(redirectPath?: string) {
+    const payload: GoogleStatePayload = {
+      nonce: randomUUID(),
+      redirectPath: this.sanitizeRedirectPath(redirectPath),
+    };
+
+    return jwt.sign(payload, this.getJwtSecret(), { expiresIn: "10m" });
+  }
+
+  private parseGoogleState(state: string): GoogleStatePayload {
+    try {
+      const decoded = jwt.verify(state, this.getJwtSecret());
+
+      if (typeof decoded !== "object" || decoded === null) {
+        throw new ApiError("Invalid OAuth state", STATUS_CODES.BAD_REQUEST);
+      }
+
+      const nonce =
+        "nonce" in decoded && typeof decoded.nonce === "string"
+          ? decoded.nonce
+          : "";
+      const redirectPath =
+        "redirectPath" in decoded && typeof decoded.redirectPath === "string"
+          ? this.sanitizeRedirectPath(decoded.redirectPath)
+          : "/";
+
+      if (!nonce) {
+        throw new ApiError("Invalid OAuth state", STATUS_CODES.BAD_REQUEST);
+      }
+
+      return {
+        nonce,
+        redirectPath,
+      };
+    } catch {
+      const error = new ApiError("Invalid OAuth state", STATUS_CODES.BAD_REQUEST);
+      (error as ApiError & { code?: string }).code = "invalid_oauth_state";
+      throw error;
+    }
+  }
+
+  private async exchangeGoogleCodeForIdToken(code: string) {
+    const { clientId, clientSecret, callbackUrl } = this.getGoogleOauthConfig();
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: callbackUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = new ApiError(
+        "Failed to exchange Google auth code",
+        STATUS_CODES.UNAUTHORIZED,
+      );
+      (error as ApiError & { code?: string }).code = "google_exchange_failed";
+      throw error;
+    }
+
+    const tokenResponse = (await response.json()) as {
+      id_token?: string;
+    };
+
+    if (!tokenResponse.id_token) {
+      const error = new ApiError(
+        "Google ID token was not returned",
+        STATUS_CODES.UNAUTHORIZED,
+      );
+      (error as ApiError & { code?: string }).code = "google_token_missing";
+      throw error;
+    }
+
+    return tokenResponse.id_token;
+  }
+
+  private async verifyGoogleIdToken(idToken: string): Promise<GoogleProfile> {
+    const { clientId } = this.getGoogleOauthConfig();
+    const ticket = await this.googleOauthClient.verifyIdToken({
+      idToken,
+      audience: clientId,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload?.email || !payload.sub) {
+      const error = new ApiError("Invalid Google profile", STATUS_CODES.UNAUTHORIZED);
+      (error as ApiError & { code?: string }).code = "google_profile_invalid";
+      throw error;
+    }
+
+    const firstName =
+      payload.given_name?.trim() || payload.name?.split(" ")[0] || "Google";
+    const fallbackLastName = payload.name?.split(" ").slice(1).join(" ").trim();
+
+    return {
+      email: this.normalizeEmail(payload.email),
+      emailVerified: Boolean(payload.email_verified),
+      firstName,
+      lastName: payload.family_name?.trim() || fallbackLastName || "User",
+      picture: payload.picture,
+      googleId: payload.sub,
+    };
+  }
+
+  private async bootstrapNewUser(tx: any, userId: number, fullName: string) {
+    const roleRecord = await tx.role.findUnique({
+      where: { name: "USER" },
+    });
+
+    if (!roleRecord) {
+      throw new ApiError("USER role not found", STATUS_CODES.SERVER_ERROR);
+    }
+
+    await tx.userRole.create({
+      data: {
+        userId,
+        roleId: roleRecord.id,
+      },
+    });
+
+    const freePlan = await tx.plan.findFirst({ where: { name: "Free" } });
+    if (!freePlan) {
+      return;
+    }
+
+    const now = new Date();
+    const periodEnd = dayjs(now).add(1, "month").toDate();
+
+    await tx.subscription.create({
+      data: {
+        userId,
+        planId: freePlan.id,
+        status: "ACTIVE",
+        billingCycle: "MONTHLY",
+        startedAt: now,
+        expiresAt: periodEnd,
+        autoRenew: true,
+      },
+    });
+
+    await tx.userWallet.create({
+      data: {
+        userId,
+        tokensRemaining: freePlan.tokenLimit,
+        tokensUsed: 0,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+      },
+    });
+
+    await tx.userPreference.create({
+      data: {
+        userId,
+        enableFollowUpQuestions: true,
+      },
+    });
+
+    await tx.contextMemory.create({
+      data: {
+        userId,
+        type: "GLOBAL",
+        title: "My Name",
+        memory: `My name is ${fullName}`,
+        isAutoSelected: true,
+        isAutoGenerated: true,
+      },
+    });
+  }
+
+  private async findOrCreateUserFromGoogleProfile(profile: GoogleProfile) {
+    if (!profile.emailVerified) {
+      const error = new ApiError(
+        "Google email is not verified",
+        STATUS_CODES.UNAUTHORIZED,
+      );
+      (error as ApiError & { code?: string }).code = "google_email_unverified";
+      throw error;
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: { email: profile.email },
+      include: {
+        userRoles: {
+          include: { role: true },
+        },
+      },
+    });
+
+    if (existingUser && existingUser.isDeleted) {
+      throw new ApiError("Account is deactivated", STATUS_CODES.FORBIDDEN);
+    }
+
+    if (existingUser) {
+      if (existingUser.googleId && existingUser.googleId !== profile.googleId) {
+        const error = new ApiError(
+          "Google account does not match existing account",
+          STATUS_CODES.CONFLICT,
+        );
+        (error as ApiError & { code?: string }).code = "google_account_conflict";
+        throw error;
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          googleId: existingUser.googleId ?? profile.googleId,
+          isVerified: true,
+          profileImage: existingUser.profileImage ?? profile.picture,
+        },
+        select: userSelectFields,
+      });
+
+      return updatedUser;
+    }
+
+    const tempPasswordHash = await hashPassword(randomUUID());
+    const createdUser = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          email: profile.email,
+          password: tempPasswordHash,
+          profileImage: profile.picture,
+          isVerified: true,
+          authProvider: "GOOGLE",
+          googleId: profile.googleId,
+        },
+      });
+
+      await this.bootstrapNewUser(
+        tx,
+        created.id,
+        `${profile.firstName} ${profile.lastName}`,
+      );
+
+      return tx.user.findUnique({
+        where: { id: created.id },
+        select: userSelectFields,
+      });
+    });
+
+    if (!createdUser) {
+      throw new ApiError("Failed to create user session", STATUS_CODES.SERVER_ERROR);
+    }
+
+    return createdUser;
+  }
+
+  private createToken(user: { id: number; role?: string; timezone?: string; userRoles?: Array<{ role: { name: string } }> }) {
     const roleNames = user.userRoles?.map((ur) => ur.role.name) ?? [];
     const highestRole = getHighestRole(roleNames);
 
@@ -64,13 +368,80 @@ class AuthService {
         role: highestRole,
         timezone: user.timezone ?? "UTC",
       },
-      process.env.JWT_SECRET,
+      this.getJwtSecret(),
       { expiresIn: "90d" },
     );
   }
 
   private getArchivedEmail(email: string, userId: number) {
     return `${email}__deleted_${userId}_${Date.now()}`;
+  }
+
+  async getGoogleAuthUrl(redirectPath?: string) {
+    const { clientId, callbackUrl } = this.getGoogleOauthConfig();
+    const state = this.createGoogleState(redirectPath);
+
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", callbackUrl);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", "openid email profile");
+    authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("prompt", "select_account");
+
+    return authUrl.toString();
+  }
+
+  buildGoogleErrorRedirect(code: string, message?: string) {
+    const fallbackUrl =
+      process.env.FRONTEND_GOOGLE_CALLBACK_URL ??
+      "http://localhost:3000/auth/google/callback";
+    const url = new URL(fallbackUrl);
+    url.searchParams.set("error", code);
+    if (message) {
+      url.searchParams.set("message", message);
+    }
+
+    return url.toString();
+  }
+
+  async handleGoogleCallback({
+    code,
+    state,
+  }: {
+    code?: string;
+    state?: string;
+  }) {
+    if (!code) {
+      const error = new ApiError(
+        "Google auth code is missing",
+        STATUS_CODES.BAD_REQUEST,
+      );
+      (error as ApiError & { code?: string }).code = "google_code_missing";
+      throw error;
+    }
+
+    if (!state) {
+      const error = new ApiError("OAuth state is missing", STATUS_CODES.BAD_REQUEST);
+      (error as ApiError & { code?: string }).code = "oauth_state_missing";
+      throw error;
+    }
+
+    const parsedState = this.parseGoogleState(state);
+    const idToken = await this.exchangeGoogleCodeForIdToken(code);
+    const profile = await this.verifyGoogleIdToken(idToken);
+    const user = await this.findOrCreateUserFromGoogleProfile(profile);
+    const token = this.createToken(user as any);
+
+    const { frontendGoogleCallbackUrl } = this.getGoogleOauthConfig();
+    const redirectUrl = new URL(frontendGoogleCallbackUrl);
+    redirectUrl.searchParams.set("token", token);
+    redirectUrl.searchParams.set(
+      "redirect",
+      this.sanitizeRedirectPath(parsedState.redirectPath),
+    );
+
+    return redirectUrl.toString();
   }
 
   async register(data: RegisterBody): Promise<RegisterResponse> {
@@ -98,15 +469,6 @@ class AuthService {
     const otpHash = await hashPassword(otp);
     const otpExpiresAt = getOtpExpiry();
 
-    const roleRecord = await prisma.role.findUnique({
-      where: { name: "USER" },
-    });
-    if (!roleRecord)
-      throw new ApiError("USER role not found", STATUS_CODES.SERVER_ERROR);
-
-    // Find Free plan for auto-assignment
-    const freePlan = await prisma.plan.findFirst({ where: { name: "Free" } });
-
     const user = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
@@ -116,72 +478,21 @@ class AuthService {
           password: hashedPassword,
           emailVerificationOtpHash: otpHash,
           emailVerificationOtpExpiresAt: otpExpiresAt,
-        },
-        select: userSelectFields,
-      });
-
-      await tx.userRole.create({
-        data: {
-          userId: createdUser.id,
-          roleId: roleRecord.id,
+          authProvider: "LOCAL",
         },
       });
 
-      // Auto-assign Free plan subscription + wallet
-      if (freePlan) {
-        const now = new Date();
-        const periodEnd = dayjs(now).add(1, "month").toDate();
-
-        await tx.subscription.create({
-          data: {
-            userId: createdUser.id,
-            planId: freePlan.id,
-            status: "ACTIVE",
-            billingCycle: "MONTHLY",
-            startedAt: now,
-            expiresAt: periodEnd,
-            autoRenew: true,
-          },
-        });
-
-        await tx.userWallet.create({
-          data: {
-            userId: createdUser.id,
-            tokensRemaining: freePlan.tokenLimit,
-            tokensUsed: 0,
-            currentPeriodStart: now,
-            currentPeriodEnd: periodEnd,
-          },
-        });
-
-        await tx.userPreference.create({
-          data: {
-            userId: createdUser.id,
-            enableFollowUpQuestions: true,
-          },
-        });
-
-        await tx.contextMemory.create({
-          data: {
-            userId: createdUser.id,
-            type: "GLOBAL",
-            title: "My Name",
-            memory: `My name is ${data.firstName} ${data.lastName}`,
-            isAutoSelected: true,
-            isAutoGenerated: true,
-          },
-        });
-      }
+      await this.bootstrapNewUser(tx, createdUser.id, `${data.firstName} ${data.lastName}`);
 
       const user = await tx.user.findUnique({
         where: { id: createdUser.id },
         select: userSelectFields,
       });
 
-      await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
-
       return user;
     });
+
+    await sendOtpEmail(email, otp, "EMAIL_VERIFICATION");
 
     if (!user) {
       throw new ApiError("Failed to create user session", STATUS_CODES.SERVER_ERROR);
@@ -219,6 +530,13 @@ class AuthService {
       throw new ApiError(
         "Access denied. You do not have user privileges",
         STATUS_CODES.FORBIDDEN,
+      );
+    }
+
+    if (user.authProvider === "GOOGLE") {
+      throw new ApiError(
+        "This account uses Google sign-in. Please continue with Google",
+        STATUS_CODES.BAD_REQUEST,
       );
     }
 
@@ -349,6 +667,10 @@ class AuthService {
     });
 
     if (user) {
+      if (user.authProvider === "GOOGLE") {
+        return { sent: true };
+      }
+
       const otp = generateOtp();
       const otpHash = await hashPassword(otp);
       const otpExpiresAt = getOtpExpiry();
@@ -375,6 +697,13 @@ class AuthService {
 
     if (!user) {
       throw new ApiError("User not found", STATUS_CODES.NOT_FOUND);
+    }
+
+    if (user.authProvider === "GOOGLE") {
+      throw new ApiError(
+        "This account uses Google sign-in. Please continue with Google",
+        STATUS_CODES.BAD_REQUEST,
+      );
     }
 
     if (

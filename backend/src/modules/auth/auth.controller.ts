@@ -70,6 +70,57 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+export const startGoogleAuth = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const redirectPath =
+      typeof req.query.redirect === "string" ? req.query.redirect : undefined;
+    const authUrl = await authService.getGoogleAuthUrl(redirectPath);
+    res.redirect(authUrl);
+  } catch (error: any) {
+    sendResponse(
+      res,
+      false,
+      null,
+      error.message,
+      error.statusCode ?? STATUS_CODES.SERVER_ERROR,
+    );
+  }
+};
+
+export const googleAuthCallback = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const code =
+      typeof req.query.code === "string" ? req.query.code : undefined;
+    const state =
+      typeof req.query.state === "string" ? req.query.state : undefined;
+    const oauthError =
+      typeof req.query.error === "string" ? req.query.error : undefined;
+
+    if (oauthError) {
+      const redirectUrl = authService.buildGoogleErrorRedirect(
+        "google_auth_denied",
+      );
+      res.redirect(redirectUrl);
+      return;
+    }
+
+    const redirectUrl = await authService.handleGoogleCallback({ code, state });
+    res.redirect(redirectUrl);
+  } catch (error: any) {
+    const redirectUrl = authService.buildGoogleErrorRedirect(
+      error.code ?? "google_auth_failed",
+      error.message,
+    );
+    res.redirect(redirectUrl);
+  }
+};
+
 export const verifyEmailOtp = async (
   req: Request,
   res: Response,
