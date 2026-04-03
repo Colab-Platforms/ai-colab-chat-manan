@@ -572,6 +572,10 @@ interface OpenRouterSseAccumulator {
   finishReason: string | null;
 }
 
+interface OpenRouterStreamError extends Error {
+  partialAcc?: OpenRouterSseAccumulator;
+}
+
 function createEmptyOpenRouterAccumulator(): OpenRouterSseAccumulator {
   return {
     fullContent: "",
@@ -581,6 +585,22 @@ function createEmptyOpenRouterAccumulator(): OpenRouterSseAccumulator {
     selectedImageUrl: null,
     finishReason: null,
   };
+}
+
+function hasStreamAccumulatorData(acc: OpenRouterSseAccumulator): boolean {
+  return Boolean(
+    acc.fullContent ||
+      acc.promptTokens > 0 ||
+      acc.completionTokens > 0 ||
+      acc.imagesToUpload.length > 0 ||
+      acc.finishReason,
+  );
+}
+
+function getPartialAccumulatorFromError(
+  error: any,
+): OpenRouterSseAccumulator | null {
+  return (error as OpenRouterStreamError)?.partialAcc || null;
 }
 
 function shouldRetryEmptyOpenRouterAttempt(
@@ -691,15 +711,23 @@ async function runOpenRouterStreamWithEmptyRetry(params: {
       acc = createEmptyOpenRouterAccumulator();
     }
 
-    const stream = await params.createStream();
-    await pipeOpenRouterStreamToClient(
-      stream,
-      params.chatType,
-      params.res,
-      params.isClientAborted,
-      acc,
-      params.streamOptions,
-    );
+    try {
+      const stream = await params.createStream();
+      await pipeOpenRouterStreamToClient(
+        stream,
+        params.chatType,
+        params.res,
+        params.isClientAborted,
+        acc,
+        params.streamOptions,
+      );
+    } catch (error: any) {
+      const streamError = error as OpenRouterStreamError;
+      if (hasStreamAccumulatorData(acc)) {
+        streamError.partialAcc = { ...acc };
+      }
+      throw streamError;
+    }
 
     if (
       !shouldRetryEmptyOpenRouterAttempt(
@@ -1182,27 +1210,103 @@ export async function streamChat(req: Request, res: Response) {
       imagesToUpload = acc.imagesToUpload;
       finishReason = acc.finishReason;
     } catch (aiError: any) {
+      const partialAcc = getPartialAccumulatorFromError(aiError);
+      if (partialAcc) {
+        fullContent = partialAcc.fullContent || fullContent;
+        promptTokens = partialAcc.promptTokens || promptTokens;
+        completionTokens = partialAcc.completionTokens || completionTokens;
+        if (partialAcc.imagesToUpload.length > 0) {
+          imagesToUpload = partialAcc.imagesToUpload;
+        }
+        finishReason = partialAcc.finishReason || finishReason;
+      }
+
       if (isClientAborted() || isAbortError(aiError)) {
         const stoppedContent =
           fullContent.trim() || "Generation stopped by user.";
         try {
-          await prisma.message.update({
-            where: { id: assistantMessage.id },
-            data: { content: fullContent },
-          });
-          await prisma.modelResponse.create({
-            data: {
-              chatId,
-              messageId: assistantMessage.id,
-              modelId: model.id,
-              content: stoppedContent,
-              promptTokens: promptTokens || 0,
-              completionTokens: completionTokens || 0,
-              totalTokens: (promptTokens || 0) + (completionTokens || 0),
-              status: "FAILED",
-              finishReason,
-              completedAt: new Date(),
-            },
+          const tokenMultiplier = model.tokenMultiplier || 1.0;
+          const billablePromptTokens = Math.ceil(
+            (promptTokens || 0) * tokenMultiplier,
+          );
+          const billableCompletionTokens = Math.ceil(
+            (completionTokens || 0) * tokenMultiplier,
+          );
+
+          await prisma.$transaction(async (tx) => {
+            const walletRecord = await tx.userWallet.findUnique({
+              where: { userId },
+            });
+            const availableTokens = walletRecord?.tokensRemaining || 0;
+
+            const adjusted = calculateAdjustedTokens(
+              availableTokens,
+              billablePromptTokens,
+              billableCompletionTokens,
+              tokenMultiplier,
+            );
+
+            await tx.message.update({
+              where: { id: assistantMessage.id },
+              data: { content: stoppedContent },
+            });
+
+            await tx.modelResponse.create({
+              data: {
+                chatId,
+                messageId: assistantMessage.id,
+                modelId: model.id,
+                content: stoppedContent,
+                promptTokens: adjusted.finalRawPrompt,
+                completionTokens: adjusted.finalRawCompletion,
+                totalTokens: adjusted.finalRawTotal,
+                status: "FAILED",
+                finishReason: finishReason || "user_aborted",
+                completedAt: new Date(),
+              },
+            });
+
+            if (adjusted.finalBillableTotal > 0) {
+              await tx.usageLog.create({
+                data: {
+                  userId,
+                  modelId: model.id,
+                  chatId,
+                  messageId: assistantMessage.id,
+                  capability: (chatType || "STANDARD") as any,
+                  promptTokens: adjusted.finalRawPrompt,
+                  completionTokens: adjusted.finalRawCompletion,
+                  totalTokens: adjusted.finalRawTotal,
+                  billablePromptTokens: adjusted.finalBillablePrompt,
+                  billableCompletionTokens:
+                    adjusted.finalBillableCompletion,
+                  billableTotalTokens: adjusted.finalBillableTotal,
+                },
+              });
+
+              const updatedWallet = await tx.userWallet.update({
+                where: { userId },
+                data: {
+                  tokensRemaining: {
+                    decrement: adjusted.finalBillableTotal,
+                  },
+                  tokensUsed: { increment: adjusted.finalBillableTotal },
+                },
+              });
+
+              await createWalletTransaction(tx, {
+                userId,
+                walletId: updatedWallet.id,
+                amount: adjusted.finalBillableTotal,
+                type: "DEBIT",
+                referenceId: `chat_usage_${assistantMessage.id}_aborted`,
+                meta: {
+                  reason: "STREAM_ABORTED_BY_USER",
+                  chatId,
+                  messageId: assistantMessage.id,
+                },
+              });
+            }
           });
         } catch {}
         if (!res.writableEnded) {
@@ -1738,23 +1842,103 @@ export async function regenerateChat(req: Request, res: Response) {
       imagesToUpload = acc.imagesToUpload;
       finishReason = acc.finishReason;
     } catch (aiError: any) {
+      const partialAcc = getPartialAccumulatorFromError(aiError);
+      if (partialAcc) {
+        fullContent = partialAcc.fullContent || fullContent;
+        promptTokens = partialAcc.promptTokens || promptTokens;
+        completionTokens = partialAcc.completionTokens || completionTokens;
+        if (partialAcc.imagesToUpload.length > 0) {
+          imagesToUpload = partialAcc.imagesToUpload;
+        }
+        finishReason = partialAcc.finishReason || finishReason;
+      }
+
       if (isClientAborted() || isAbortError(aiError)) {
         const stoppedContent =
           fullContent.trim() || "Generation stopped by user.";
         try {
-          await prisma.modelResponse.create({
-            data: {
-              chatId,
-              messageId,
-              modelId: model.id,
-              content: stoppedContent,
-              promptTokens: promptTokens || 0,
-              completionTokens: completionTokens || 0,
-              totalTokens: (promptTokens || 0) + (completionTokens || 0),
-              status: "FAILED",
-              finishReason,
-              completedAt: new Date(),
-            },
+          const tokenMultiplier = model.tokenMultiplier || 1.0;
+          const billablePromptTokens = Math.ceil(
+            (promptTokens || 0) * tokenMultiplier,
+          );
+          const billableCompletionTokens = Math.ceil(
+            (completionTokens || 0) * tokenMultiplier,
+          );
+
+          await prisma.$transaction(async (tx) => {
+            const walletRecord = await tx.userWallet.findUnique({
+              where: { userId },
+            });
+            const availableTokens = walletRecord?.tokensRemaining || 0;
+
+            const adjusted = calculateAdjustedTokens(
+              availableTokens,
+              billablePromptTokens,
+              billableCompletionTokens,
+              tokenMultiplier,
+            );
+
+            await tx.message.update({
+              where: { id: messageId },
+              data: { content: stoppedContent },
+            });
+
+            await tx.modelResponse.create({
+              data: {
+                chatId,
+                messageId,
+                modelId: model.id,
+                content: stoppedContent,
+                promptTokens: adjusted.finalRawPrompt,
+                completionTokens: adjusted.finalRawCompletion,
+                totalTokens: adjusted.finalRawTotal,
+                status: "FAILED",
+                finishReason: finishReason || "user_aborted",
+                completedAt: new Date(),
+              },
+            });
+
+            if (adjusted.finalBillableTotal > 0) {
+              await tx.usageLog.create({
+                data: {
+                  userId,
+                  modelId: model.id,
+                  chatId,
+                  messageId,
+                  capability: (chatType || "STANDARD") as any,
+                  promptTokens: adjusted.finalRawPrompt,
+                  completionTokens: adjusted.finalRawCompletion,
+                  totalTokens: adjusted.finalRawTotal,
+                  billablePromptTokens: adjusted.finalBillablePrompt,
+                  billableCompletionTokens:
+                    adjusted.finalBillableCompletion,
+                  billableTotalTokens: adjusted.finalBillableTotal,
+                },
+              });
+
+              const updatedWallet = await tx.userWallet.update({
+                where: { userId },
+                data: {
+                  tokensRemaining: {
+                    decrement: adjusted.finalBillableTotal,
+                  },
+                  tokensUsed: { increment: adjusted.finalBillableTotal },
+                },
+              });
+
+              await createWalletTransaction(tx, {
+                userId,
+                walletId: updatedWallet.id,
+                amount: adjusted.finalBillableTotal,
+                type: "DEBIT",
+                referenceId: `chat_usage_${messageId}_aborted`,
+                meta: {
+                  reason: "STREAM_ABORTED_BY_USER",
+                  chatId,
+                  messageId,
+                },
+              });
+            }
           });
         } catch {}
         if (!res.writableEnded) {
@@ -2239,27 +2423,103 @@ export async function editAndResend(req: Request, res: Response) {
       imagesToUpload = acc.imagesToUpload;
       finishReason = acc.finishReason;
     } catch (aiError: any) {
+      const partialAcc = getPartialAccumulatorFromError(aiError);
+      if (partialAcc) {
+        fullContent = partialAcc.fullContent || fullContent;
+        promptTokens = partialAcc.promptTokens || promptTokens;
+        completionTokens = partialAcc.completionTokens || completionTokens;
+        if (partialAcc.imagesToUpload.length > 0) {
+          imagesToUpload = partialAcc.imagesToUpload;
+        }
+        finishReason = partialAcc.finishReason || finishReason;
+      }
+
       if (isClientAborted() || isAbortError(aiError)) {
         const stoppedContent =
           fullContent.trim() || "Generation stopped by user.";
         try {
-          await prisma.message.update({
-            where: { id: assistantMessage.id },
-            data: { content: fullContent },
-          });
-          await prisma.modelResponse.create({
-            data: {
-              chatId,
-              messageId: assistantMessage.id,
-              modelId: model.id,
-              content: stoppedContent,
-              promptTokens: promptTokens || 0,
-              completionTokens: completionTokens || 0,
-              totalTokens: (promptTokens || 0) + (completionTokens || 0),
-              status: "FAILED",
-              finishReason,
-              completedAt: new Date(),
-            },
+          const tokenMultiplier = model.tokenMultiplier || 1.0;
+          const billablePromptTokens = Math.ceil(
+            (promptTokens || 0) * tokenMultiplier,
+          );
+          const billableCompletionTokens = Math.ceil(
+            (completionTokens || 0) * tokenMultiplier,
+          );
+
+          await prisma.$transaction(async (tx) => {
+            const walletRecord = await tx.userWallet.findUnique({
+              where: { userId },
+            });
+            const availableTokens = walletRecord?.tokensRemaining || 0;
+
+            const adjusted = calculateAdjustedTokens(
+              availableTokens,
+              billablePromptTokens,
+              billableCompletionTokens,
+              tokenMultiplier,
+            );
+
+            await tx.message.update({
+              where: { id: assistantMessage.id },
+              data: { content: stoppedContent },
+            });
+
+            await tx.modelResponse.create({
+              data: {
+                chatId,
+                messageId: assistantMessage.id,
+                modelId: model.id,
+                content: stoppedContent,
+                promptTokens: adjusted.finalRawPrompt,
+                completionTokens: adjusted.finalRawCompletion,
+                totalTokens: adjusted.finalRawTotal,
+                status: "FAILED",
+                finishReason: finishReason || "user_aborted",
+                completedAt: new Date(),
+              },
+            });
+
+            if (adjusted.finalBillableTotal > 0) {
+              await tx.usageLog.create({
+                data: {
+                  userId,
+                  modelId: model.id,
+                  chatId,
+                  messageId: assistantMessage.id,
+                  capability: (chatType || "STANDARD") as any,
+                  promptTokens: adjusted.finalRawPrompt,
+                  completionTokens: adjusted.finalRawCompletion,
+                  totalTokens: adjusted.finalRawTotal,
+                  billablePromptTokens: adjusted.finalBillablePrompt,
+                  billableCompletionTokens:
+                    adjusted.finalBillableCompletion,
+                  billableTotalTokens: adjusted.finalBillableTotal,
+                },
+              });
+
+              const updatedWallet = await tx.userWallet.update({
+                where: { userId },
+                data: {
+                  tokensRemaining: {
+                    decrement: adjusted.finalBillableTotal,
+                  },
+                  tokensUsed: { increment: adjusted.finalBillableTotal },
+                },
+              });
+
+              await createWalletTransaction(tx, {
+                userId,
+                walletId: updatedWallet.id,
+                amount: adjusted.finalBillableTotal,
+                type: "DEBIT",
+                referenceId: `chat_usage_${assistantMessage.id}_aborted`,
+                meta: {
+                  reason: "STREAM_ABORTED_BY_USER",
+                  chatId,
+                  messageId: assistantMessage.id,
+                },
+              });
+            }
           });
         } catch {}
         if (!res.writableEnded) {
@@ -2792,6 +3052,14 @@ export async function continueChatStream(req: Request, res: Response) {
       completionTokens = acc.completionTokens;
       finishReason = acc.finishReason;
     } catch (aiError: any) {
+      const partialAcc = getPartialAccumulatorFromError(aiError);
+      if (partialAcc) {
+        fullContent = partialAcc.fullContent || fullContent;
+        promptTokens = partialAcc.promptTokens || promptTokens;
+        completionTokens = partialAcc.completionTokens || completionTokens;
+        finishReason = partialAcc.finishReason || finishReason;
+      }
+
       // Stream failed but we might have partial content
       if (fullContent.trim()) {
         try {
