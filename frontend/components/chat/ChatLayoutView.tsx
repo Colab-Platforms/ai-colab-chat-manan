@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Menu, Settings, LogOut, Sun, Moon, ArrowRight } from "lucide-react";
-import { chatService, folderService, assistantService } from "@/lib/services";
+import { chatService, folderService, assistantService, subscriptionService } from "@/lib/services";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -271,7 +271,28 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
     if (!pendingSignup || seenSignup) return;
 
-    setPlanPopupOpen(true);
+    // Check if used already has a paid subscription — if so, silently clear the
+    // flag without showing the free-plan modal (e.g. user paid during signup).
+    subscriptionService
+      .getCurrent()
+      .then((res) => {
+        const current = res?.data?.data?.subscription;
+        const isPaid =
+          current &&
+          ["ACTIVE", "TRIAL"].includes(String(current.status)) &&
+          Number(current.plan?.monthlyPrice ?? 0) > 0;
+
+        if (isPaid) {
+          // Already on a paid plan — dismiss silently.
+          localStorage.removeItem("signup_free_plan_prompt_pending");
+          localStorage.setItem("signup_free_plan_prompt_seen", "1");
+        } else {
+          setPlanPopupOpen(true);
+        }
+      })
+      .catch(() => {
+        setPlanPopupOpen(true);
+      });
   }, [user, isProfileRoute, pathname]);
 
   const dismissPlanPopup = useCallback(() => {
