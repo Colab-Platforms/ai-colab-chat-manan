@@ -192,10 +192,30 @@ export function StartupGuide({ userId }: { userId?: number }) {
         sessionStorage.removeItem(stateKey(numericUserId));
       }
     }
+    
+    // Wait if the free plan prompt is pending handling so modals don't overlap
+    const pendingSignup = localStorage.getItem("signup_free_plan_prompt_pending") === "1";
+    const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
+    if (pendingSignup && !seenSignup && !replayRequested) {
+      return; 
+    }
 
     if (replayRequested || !completed) {
       startGuide(0);
     }
+  }, [isMounted, numericUserId, startGuide]);
+
+  // Listen for when the plan popup is handled (either closed or silently dismissed)
+  useEffect(() => {
+    if (!isMounted || !numericUserId) return;
+    const onPlanPopupHandled = () => {
+      const completed = localStorage.getItem(completionKey(numericUserId)) === "1";
+      if (!completed) {
+        startGuide(0);
+      }
+    };
+    window.addEventListener("ai-colab:plan-popup-handled", onPlanPopupHandled);
+    return () => window.removeEventListener("ai-colab:plan-popup-handled", onPlanPopupHandled);
   }, [isMounted, numericUserId, startGuide]);
 
   useEffect(() => {

@@ -286,6 +286,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
           // Already on a paid plan — dismiss silently.
           localStorage.removeItem("signup_free_plan_prompt_pending");
           localStorage.setItem("signup_free_plan_prompt_seen", "1");
+          window.dispatchEvent(new Event("ai-colab:plan-popup-handled"));
         } else {
           setPlanPopupOpen(true);
         }
@@ -299,6 +300,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     setPlanPopupOpen(false);
     localStorage.removeItem("signup_free_plan_prompt_pending");
     localStorage.setItem("signup_free_plan_prompt_seen", "1");
+    window.dispatchEvent(new Event("ai-colab:plan-popup-handled"));
   }, []);
 
   const handleUpgradeFromPopup = useCallback(() => {
