@@ -195,6 +195,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               key={item.href}
               href={item.href}
               onClick={() => setMobileOpen(false)}
+              data-guide={item.href === "/profile/my-usage" ? "profile-my-usage" : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer
                 ${isActive
                   ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary shadow-sm"

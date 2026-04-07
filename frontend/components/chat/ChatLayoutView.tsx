@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StartupGuide } from "./startup-guide";
 
 interface Chat {
   id: number;
@@ -454,7 +455,31 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     );
   }, [fetchFolders]);
 
-  const handleMobileClose = useCallback(() => setMobileOpen(false), []);
+  const handleMobileClose = useCallback(() => {
+    setMobileOpen(false);
+    window.dispatchEvent(new Event("ai-colab:mobile-sidebar-closed"));
+  }, []);
+
+  // Notify the startup guide when the mobile sidebar opens/closes
+  useEffect(() => {
+    if (mobileOpen) {
+      window.dispatchEvent(new Event("ai-colab:mobile-sidebar-opened"));
+    } else {
+      window.dispatchEvent(new Event("ai-colab:mobile-sidebar-closed"));
+    }
+  }, [mobileOpen]);
+
+  // Allow the startup guide to close the mobile sidebar (e.g. when user clicks Back)
+  useEffect(() => {
+    const onClose = () => setMobileOpen(false);
+    const onOpen = () => setMobileOpen(true);
+    window.addEventListener("ai-colab:close-mobile-sidebar", onClose);
+    window.addEventListener("ai-colab:open-mobile-sidebar", onOpen);
+    return () => {
+      window.removeEventListener("ai-colab:close-mobile-sidebar", onClose);
+      window.removeEventListener("ai-colab:open-mobile-sidebar", onOpen);
+    };
+  }, []);
 
   const handleLoadMoreChats = useCallback(() => {
     if (hasMoreRef.current) fetchChats(pageRef.current + 1);
@@ -480,6 +505,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         <main className="flex-1 flex flex-col min-w-0 relative z-[1]">
           {children}
         </main>
+        <StartupGuide userId={typeof user?.id === "number" ? user.id : undefined} />
       </div>
     );
   }
@@ -572,6 +598,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
             sidebarCollapsed ? "w-[64px]" : "w-[280px]"
           }`}
           style={{ contain: "layout style paint", willChange: "transform" }}
+          data-guide="sidebar"
         >
           {renderSidebar(false)}
         </aside>
@@ -581,7 +608,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="icon"
             className="cursor-pointer -ml-2 text-foreground"
-            onClick={() => setMobileOpen(true)}
+            onClick={() => {
+              setMobileOpen(true);
+            }}
+            data-guide="mobile-menu"
           >
             <Menu className="w-5 h-5" />
           </Button>
@@ -591,7 +621,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
           <div className="flex-shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden">
+                <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden" data-guide="profile-menu">
                   <Avatar className="w-8 h-8 border border-border/50">
                     {user?.profileImage && <AvatarImage src={user.profileImage} alt={`${user?.firstName} ${user?.lastName}`} />}
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -600,7 +630,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuContent align="end" className="w-[200px] z-[9500]" style={{ zIndex: 9500 }}>
                 <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex flex-col items-start min-w-0">
                   <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
                   {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
@@ -635,6 +665,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
               bg-background flex flex-col transition-all duration-300 ease-in-out translate-x-0
             `}
             style={{ contain: "layout style paint" }}
+            data-guide="sidebar"
           >
             {renderSidebar(true)}
           </aside>
@@ -643,6 +674,8 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         <main className="flex-1 flex flex-col min-w-0 md:pt-0 pt-14">
           {children}
         </main>
+
+        <StartupGuide userId={typeof user?.id === "number" ? user.id : undefined} />
       </div>
     </>
   );

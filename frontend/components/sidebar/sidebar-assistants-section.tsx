@@ -26,7 +26,7 @@ export const AssistantsSection = memo(function AssistantsSection({
 
   return (
     <>
-      <div className={`${SIDEBAR_SECTION_HEADER_ROW}`}>
+      <div className={`${SIDEBAR_SECTION_HEADER_ROW}`} data-guide="assistants">
         <button
           type="button"
           className="min-w-0 flex-1 py-2.5 px-3 text-left"

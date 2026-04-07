@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, Plus, Eye, Edit2, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Sparkles, Plus, Eye, Edit2, Trash2, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import { contextService, folderService, userPreferenceService } from "@/lib/serv
 import { toast } from "react-toastify";
 
 export default function PreferencesPage() {
+  const router = useRouter();
   // ── Context state ────────────────────────────────────────────────────────
   const [contexts, setContexts] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
@@ -229,6 +231,17 @@ export default function PreferencesPage() {
     }
   };
 
+  const handleStartGuide = () => {
+    if (typeof window === "undefined") return;
+
+    localStorage.setItem("ai_colab_startup_guide_replay", "1");
+    window.dispatchEvent(new Event("ai-colab:start-guide"));
+
+    const lastPath = localStorage.getItem("last_chat_path") || "/";
+    router.push(lastPath);
+    toast.info("Interactive startup guide started.");
+  };
+
   // ── Table columns ─────────────────────────────────────────────────────────
 
   const getFolderName = (folderId: number) => {
@@ -381,6 +394,25 @@ export default function PreferencesPage() {
                 id="follow-up-toggle"
               />
             </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Compass className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-semibold">Startup Guide</h2>
+        </div>
+
+        <Card className="border-border/30 bg-card/80 backdrop-blur-sm">
+          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">Interactive onboarding walkthrough</p>
+              <p className="text-xs text-muted-foreground">
+                Re-run the guide anytime to learn chat basics, capabilities, multi-model flow, contexts, assistants, enhancer, files, and mic.
+              </p>
+            </div>
+            <Button onClick={handleStartGuide} className="sm:self-start">Start Guide</Button>
           </CardContent>
         </Card>
       </section>

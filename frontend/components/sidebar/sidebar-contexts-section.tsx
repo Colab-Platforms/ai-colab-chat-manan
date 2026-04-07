@@ -199,7 +199,7 @@ const ContextsSection = memo(function ContextsSection({
 }) {
   return (
     <>
-      <div className={`${SIDEBAR_SECTION_HEADER_ROW}`}>
+      <div className={`${SIDEBAR_SECTION_HEADER_ROW}`} data-guide="contexts">
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-2 py-2.5 px-3 text-left"

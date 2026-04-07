@@ -10,9 +10,10 @@ interface MicButtonProps {
   onStart?: () => void;
   onStop?: () => void;
   hasText?: boolean; // used for mobile visibility control
+  guideId?: string;
 }
 
-export function MicButton({ onResult, onStart, onStop, hasText }: MicButtonProps) {
+export function MicButton({ onResult, onStart, onStop, hasText, guideId }: MicButtonProps) {
   const onResultRef = useRef(onResult);
   const onStartRef = useRef(onStart);
   const onStopRef = useRef(onStop);
@@ -87,6 +88,7 @@ export function MicButton({ onResult, onStart, onStop, hasText }: MicButtonProps
       }`}
       onClick={handleClick}
       title={listening ? "Stop listening" : "Start voice input"}
+      data-guide={guideId}
     >
       {listening ? (
         <Square className="w-4 h-4 fill-current" />

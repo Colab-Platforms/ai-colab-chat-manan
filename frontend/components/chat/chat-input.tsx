@@ -684,7 +684,7 @@ export function ChatInput({
       )}
       <div className="pt-2 pb-6 px-4 w-full">
         <div className="max-w-3xl mx-auto">
-          <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all max-h-[50vh] md:max-h-[60vh]">
+          <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all max-h-[50vh] md:max-h-[60vh]" data-guide="chat-input-area">
 
           {/* Scrollable Context Area */}
           <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar min-h-0">
@@ -817,7 +817,7 @@ export function ChatInput({
           </div>
 
           {/* Middle Row: input & actions */}
-          <div className="flex items-end gap-2 relative pb-1 flex-shrink-0">
+          <div className="flex items-end gap-2 relative pb-1 flex-shrink-0" data-guide="composer-actions">
             <input
               ref={fileInputRef}
               type="file"
@@ -833,6 +833,7 @@ export function ChatInput({
               onClick={() => fileInputRef.current?.click()}
               title="Attach files"
               disabled={isSending}
+              data-guide="attach"
             >
               <Plus className="w-5 h-5" />
             </Button>
@@ -846,6 +847,7 @@ export function ChatInput({
               maxLength={10000}
               rows={1}
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-h-[40px] max-h-[112px] leading-relaxed py-2.5 text-[15px] self-center overflow-y-auto"
+              data-guide="chat-input"
             />
 
             <div className="flex items-center gap-0.5 flex-shrink-0 mb-0.5 mr-1">
@@ -858,6 +860,7 @@ export function ChatInput({
                 onClick={handleEnhance}
                 disabled={!content.trim() || isSending || isEnhancing || hasUploadingFiles || !onEnhancePrompt}
                 title={hasUploadingFiles ? "Wait for files to finish uploading" : "Enhance prompt with GPT-4.1"}
+                data-guide="enhance"
               >
                 {isEnhancing ? (
                   <Loader2 className="h-3.5 w-3.5 sm:mr-1.5 animate-spin" />
@@ -872,6 +875,7 @@ export function ChatInput({
                 onStart={handleMicStart}
                 onStop={handleMicStop}
                 hasText={!!content.trim()}
+                guideId="mic"
               />
 
               <Button
@@ -903,8 +907,14 @@ export function ChatInput({
 
           {/* Bottom Row: Model & Chat Type Selector Dropdown */}
           <div className="flex items-center mt-2 px-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted/60 outline-none">
+            <DropdownMenu onOpenChange={(open) => {
+              if (open) {
+                window.dispatchEvent(new Event("ai-colab:capability-menu-opened"));
+              } else {
+                window.dispatchEvent(new Event("ai-colab:capability-menu-closed"));
+              }
+            }}>
+              <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted/60 outline-none" data-guide="model-capability-trigger">
                 {(() => {
                   const singleModel = selectedModels.length === 1
                     ? models.find(m => m.id === selectedModels[0])
@@ -921,16 +931,16 @@ export function ChatInput({
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-50" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[300px] p-2 rounded-xl">
+              <DropdownMenuContent align="start" className="w-[300px] p-2 rounded-xl z-[9500]" style={{ zIndex: 9500 }} data-guide="capability-menu">
                 <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2">Capabilities</DropdownMenuLabel>
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("STANDARD")}>
+                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => { handleChatTypeChange("STANDARD"); window.dispatchEvent(new Event("ai-colab:capability-selected")); }}>
                   <div className="w-4 flex justify-center">{chatType === "STANDARD" && <Check className="w-3 h-3 text-primary" />}</div>
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-muted-foreground mr-1" />
                     <span>Standard Chat</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("WEB_SEARCH")}>
+                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => { handleChatTypeChange("WEB_SEARCH"); window.dispatchEvent(new Event("ai-colab:capability-selected")); }}>
                   <div className="w-4 flex justify-center">{chatType === "WEB_SEARCH" && <Check className="w-3 h-3 text-primary" />}</div>
                   <div className="flex items-center gap-2">
                     <Search className="w-4 h-4 text-muted-foreground mr-1" />
@@ -946,7 +956,7 @@ export function ChatInput({
                   </div>
                 </DropdownMenuItem>
                 */}
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("IMAGE_GENERATION")}>
+                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => { handleChatTypeChange("IMAGE_GENERATION"); window.dispatchEvent(new Event("ai-colab:capability-selected")); }}>
                   <div className="w-4 flex justify-center">{chatType === "IMAGE_GENERATION" && <Check className="w-3 h-3 text-primary" />}</div>
                   <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-muted-foreground mr-1" />
@@ -976,6 +986,7 @@ export function ChatInput({
                       onClick={(e) => {
                         e.preventDefault();
                         toggleModel(model.id);
+                        window.dispatchEvent(new Event("ai-colab:model-selected"));
                       }}
                     >
                       <div className="w-4 flex justify-center mt-0.5">{selectedModels.includes(model.id) && <Check className="w-3 h-3 text-primary" />}</div>

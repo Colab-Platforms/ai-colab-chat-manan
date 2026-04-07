@@ -102,7 +102,7 @@ export function AppSidebar({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full cursor-pointer p-0">
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full cursor-pointer p-0" data-guide="profile-menu">
                 <Avatar className="w-8 h-8 border border-border/50">
                   {user?.profileImage && <AvatarImage src={user.profileImage} alt="Profile" className="object-cover" />}
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -111,7 +111,7 @@ export function AppSidebar({
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" className="w-[200px]">
+            <DropdownMenuContent side="right" align="end" className="w-[200px] z-[9500]" style={{ zIndex: 9500 }}>
               <div className="px-2 py-1.5 border-b border-border/50 mb-1">
                 <span className="font-medium text-sm">{user?.firstName} {user?.lastName}</span>
                 {user?.email && <p className="text-xs text-muted-foreground mt-0.5">{user?.email}</p>}
@@ -200,10 +200,10 @@ export function AppSidebar({
 
       <Separator className="opacity-50" />
 
-      <div className="p-3">
+      <div className="p-3" data-guide="sidebar-user-menu">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-2 text-sm cursor-pointer hover:bg-sidebar-accent overflow-hidden">
+            <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-2 text-sm cursor-pointer hover:bg-sidebar-accent overflow-hidden" data-guide="profile-menu">
               <Avatar className="w-9 h-9 border border-border/50">
                 {user?.profileImage && <AvatarImage src={user.profileImage} alt="Profile" className="object-cover" />}
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -217,7 +217,7 @@ export function AppSidebar({
               <MoreHorizontal className="w-4 h-4 ml-auto text-muted-foreground flex-shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[240px]">
+          <DropdownMenuContent align="end" className="w-[240px] z-[9500]" style={{ zIndex: 9500 }}>
             <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               {theme === "dark" ? "Light Mode" : "Dark Mode"}
