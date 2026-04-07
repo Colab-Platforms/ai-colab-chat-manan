@@ -177,6 +177,14 @@ export function StartupGuide({ userId }: { userId?: number }) {
   useEffect(() => {
     if (!isMounted || !numericUserId) return;
 
+    // 1. Strict block: Wait if the free plan prompt is pending handling so modals don't overlap.
+    const pendingSignup = localStorage.getItem("signup_free_plan_prompt_pending") === "1";
+    const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
+    if (pendingSignup && !seenSignup) {
+      return; 
+    }
+
+    // 2. Now safe to evaluate if we should restore or start the guide
     const completed = localStorage.getItem(completionKey(numericUserId)) === "1";
     const replayRequested = localStorage.getItem(REPLAY_FLAG_KEY) === "1";
     const savedStateRaw = sessionStorage.getItem(stateKey(numericUserId));
@@ -191,13 +199,6 @@ export function StartupGuide({ userId }: { userId?: number }) {
       } catch {
         sessionStorage.removeItem(stateKey(numericUserId));
       }
-    }
-    
-    // Wait if the free plan prompt is pending handling so modals don't overlap
-    const pendingSignup = localStorage.getItem("signup_free_plan_prompt_pending") === "1";
-    const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
-    if (pendingSignup && !seenSignup && !replayRequested) {
-      return; 
     }
 
     if (replayRequested || !completed) {
