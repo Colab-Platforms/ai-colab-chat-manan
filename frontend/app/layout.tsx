@@ -8,6 +8,7 @@ import { ChatRootShell } from "@/components/chat/chat-root-shell";
 import { ToastContainer } from "react-toastify";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { PwaInstallPrompt } from "@/components/pwa/install-prompt";
+import Script from "next/script";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -26,13 +27,16 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'ColabPlatforms AI - Multi-Model LLM Chat Platform | Gemini, Claude, Perplexity',
- description: 'Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more. Experience the future of AI conversation with our multichat interface.',
-  keywords: 'AI, ColabPlatforms, LLM, models, Multichat, chatbot, colab, gemini, claude, perplexity, artificial intelligence, machine learning, natural language processing, AI chat, multi-model AI, conversational AI, AI platform',
-  authors: [{ name: 'ColabPlatforms' }],
-  creator: 'ColabPlatforms',
-  publisher: 'ColabPlatforms',
-  robots: 'index, follow',
+  title:
+    "ColabPlatforms AI - Multi-Model LLM Chat Platform | Gemini, Claude, Perplexity",
+  description:
+    "Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more. Experience the future of AI conversation with our multichat interface.",
+  keywords:
+    "AI, ColabPlatforms, LLM, models, Multichat, chatbot, colab, gemini, claude, perplexity, artificial intelligence, machine learning, natural language processing, AI chat, multi-model AI, conversational AI, AI platform",
+  authors: [{ name: "ColabPlatforms" }],
+  creator: "ColabPlatforms",
+  publisher: "ColabPlatforms",
+  robots: "index, follow",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -44,25 +48,29 @@ export const metadata: Metadata = {
     icon: "/icons/icon.svg",
   },
   openGraph: {
-    title: 'ColabPlatforms AI - Multi-Model LLM Chat Platform',
-    description: 'Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more.',
-    url: 'https://chat.colabplatforms.ai',
-    siteName: 'ColabPlatforms AI',
-    type: 'website',
+    title: "ColabPlatforms AI - Multi-Model LLM Chat Platform",
+    description:
+      "Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more.",
+    url: "https://chat.colabplatforms.ai",
+    siteName: "ColabPlatforms AI",
+    type: "website",
     images: [
       {
-        url: 'https://cdn.shopify.com/s/files/1/0636/5226/6115/files/CP_white_logo_new.png?v=1762234933',
+        url: "https://cdn.shopify.com/s/files/1/0636/5226/6115/files/CP_white_logo_new.png?v=1762234933",
         width: 1200,
         height: 630,
-        alt: 'ColabPlatforms AI - Multi-Model LLM Chat Platform',
+        alt: "ColabPlatforms AI - Multi-Model LLM Chat Platform",
       },
     ],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'ColabPlatforms AI - Multi-Model LLM Chat Platform',
-    description: 'Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously.',
-    images: ['https://cdn.shopify.com/s/files/1/0636/5226/6115/files/CP_white_logo_new.png?v=1762234933'],
+    card: "summary_large_image",
+    title: "ColabPlatforms AI - Multi-Model LLM Chat Platform",
+    description:
+      "Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously.",
+    images: [
+      "https://cdn.shopify.com/s/files/1/0636/5226/6115/files/CP_white_logo_new.png?v=1762234933",
+    ],
   },
 };
 
@@ -73,6 +81,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script
+          id="ms-clarity"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `(function(c,l,a,r,i,t,y){
+  c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+  t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+  y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+})(window, document, "clarity", "script", "w8ygd5tzgk");`,
+          }}
+        />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <ToastContainer
           position="top-right"
@@ -84,7 +105,7 @@ export default function RootLayout({
           theme="light"
           toastClassName="!text-sm"
           style={{ zIndex: 99999 }}
-          className={"max-md:m-2" }
+          className={"max-md:m-2"}
         />
         <ThemeProvider>
           <AuthProvider>
