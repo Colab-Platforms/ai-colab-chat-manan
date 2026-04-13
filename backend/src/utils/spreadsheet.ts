@@ -8,6 +8,7 @@ export interface SpreadsheetParseOptions {
   requiredColumns?: string[];
   maxPreviewRows?: number;
   maxAiChars?: number;
+  maxRowsToParse?: number;
 }
 
 export interface SpreadsheetReport {
@@ -16,6 +17,7 @@ export interface SpreadsheetReport {
   headers: string[];
   selectedColumns: string[];
   totalRowsParsed: number;
+  isRowLimitHit: boolean;
   previewRows: Array<Record<string, PrimitiveCell>>;
   numericSummary: Record<
     string,
@@ -35,7 +37,8 @@ interface ColumnMap {
 }
 
 const DEFAULT_MAX_PREVIEW_ROWS = 200;
-const DEFAULT_MAX_AI_CHARS = 100_000;
+const DEFAULT_MAX_AI_CHARS = 25_000;
+const DEFAULT_MAX_ROWS_TO_PARSE = 3000;
 
 const CSV_MIME_TYPES = [
   "text/csv",
@@ -66,7 +69,9 @@ function toPrimitiveCell(value: unknown): PrimitiveCell {
   if (typeof value === "object") {
     const maybeRichText = value as { richText?: Array<{ text?: string }> };
     if (Array.isArray(maybeRichText.richText)) {
-      const combined = maybeRichText.richText.map((part) => part.text || "").join("");
+      const combined = maybeRichText.richText
+        .map((part) => part.text || "")
+        .join("");
       const trimmed = combined.trim();
       return trimmed.length > 0 ? trimmed : null;
     }
@@ -93,7 +98,9 @@ function extractColumnMap(
 
   return requiredColumns
     .map((required) => normalizedHeaders.get(normalizeHeader(required)))
-    .filter((value): value is { name: string; index: number } => Boolean(value));
+    .filter((value): value is { name: string; index: number } =>
+      Boolean(value),
+    );
 }
 
 function rowHasContent(values: unknown[]): boolean {
@@ -142,13 +149,23 @@ function parseCsvLine(line: string): string[] {
   return result;
 }
 
-function buildAiText(report: Omit<SpreadsheetReport, "aiText">, maxAiChars: number): string {
+function buildAiText(
+  report: Omit<SpreadsheetReport, "aiText">,
+  maxAiChars: number,
+): string {
   const lines: string[] = [];
 
   lines.push(`[Attached Spreadsheet: ${report.sourceFileName}]`);
   lines.push(`Worksheet: ${report.worksheetName}`);
   lines.push(`Rows Parsed: ${report.totalRowsParsed}`);
-  lines.push(`Columns Used: ${report.selectedColumns.join(", ") || "(none matched)"}`);
+  if (report.isRowLimitHit) {
+    lines.push(
+      "Row limit reached: file was partially analyzed to control token usage.",
+    );
+  }
+  lines.push(
+    `Columns Used: ${report.selectedColumns.join(", ") || "(none matched)"}`,
+  );
 
   if (report.previewRows.length > 0) {
     lines.push("Preview Rows:");
@@ -198,8 +215,7 @@ export async function parseSpreadsheetFromUrl(
 
   const nodeStream = Readable.fromWeb(response.body as any);
   const lowerName = fileName.toLowerCase();
-  const isCsv =
-    CSV_MIME_TYPES.includes(mimeType) || lowerName.endsWith(".csv");
+  const isCsv = CSV_MIME_TYPES.includes(mimeType) || lowerName.endsWith(".csv");
   const isXlsx =
     XLSX_MIME_TYPES.includes(mimeType) ||
     lowerName.endsWith(".xlsx") ||
@@ -224,6 +240,7 @@ async function parseCsvStream(
 ): Promise<SpreadsheetReport> {
   const maxPreviewRows = options.maxPreviewRows ?? DEFAULT_MAX_PREVIEW_ROWS;
   const maxAiChars = options.maxAiChars ?? DEFAULT_MAX_AI_CHARS;
+  const maxRowsToParse = options.maxRowsToParse ?? DEFAULT_MAX_ROWS_TO_PARSE;
 
   const rl = readline.createInterface({
     input,
@@ -233,6 +250,7 @@ async function parseCsvStream(
   let headers: string[] = [];
   let columnMap: ColumnMap[] = [];
   let totalRowsParsed = 0;
+  let isRowLimitHit = false;
   const previewRows: Array<Record<string, PrimitiveCell>> = [];
   const numericAccumulator = new Map<
     string,
@@ -255,6 +273,11 @@ async function parseCsvStream(
     }
 
     if (!rowHasContent(values)) continue;
+
+    if (totalRowsParsed >= maxRowsToParse) {
+      isRowLimitHit = true;
+      break;
+    }
 
     totalRowsParsed += 1;
     const rowObject: Record<string, PrimitiveCell> = {};
@@ -290,7 +313,10 @@ async function parseCsvStream(
   for (const [columnName, metrics] of numericAccumulator.entries()) {
     numericSummary[columnName] = {
       ...metrics,
-      avg: metrics.count > 0 ? Number((metrics.sum / metrics.count).toFixed(4)) : 0,
+      avg:
+        metrics.count > 0
+          ? Number((metrics.sum / metrics.count).toFixed(4))
+          : 0,
     };
   }
 
@@ -300,6 +326,7 @@ async function parseCsvStream(
     headers,
     selectedColumns: columnMap.map((column) => column.name),
     totalRowsParsed,
+    isRowLimitHit,
     previewRows,
     numericSummary,
   };
@@ -317,6 +344,7 @@ async function parseXlsxStream(
 ): Promise<SpreadsheetReport> {
   const maxPreviewRows = options.maxPreviewRows ?? DEFAULT_MAX_PREVIEW_ROWS;
   const maxAiChars = options.maxAiChars ?? DEFAULT_MAX_AI_CHARS;
+  const maxRowsToParse = options.maxRowsToParse ?? DEFAULT_MAX_ROWS_TO_PARSE;
 
   const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(input, {
     entries: "emit",
@@ -330,6 +358,7 @@ async function parseXlsxStream(
   let headers: string[] = [];
   let columnMap: ColumnMap[] = [];
   let totalRowsParsed = 0;
+  let isRowLimitHit = false;
   const previewRows: Array<Record<string, PrimitiveCell>> = [];
   const numericAccumulator = new Map<
     string,
@@ -356,6 +385,11 @@ async function parseXlsxStream(
         });
         columnMap = extractColumnMap(headers, options.requiredColumns);
         continue;
+      }
+
+      if (totalRowsParsed >= maxRowsToParse) {
+        isRowLimitHit = true;
+        break;
       }
 
       totalRowsParsed += 1;
@@ -396,7 +430,10 @@ async function parseXlsxStream(
   for (const [columnName, metrics] of numericAccumulator.entries()) {
     numericSummary[columnName] = {
       ...metrics,
-      avg: metrics.count > 0 ? Number((metrics.sum / metrics.count).toFixed(4)) : 0,
+      avg:
+        metrics.count > 0
+          ? Number((metrics.sum / metrics.count).toFixed(4))
+          : 0,
     };
   }
 
@@ -406,6 +443,7 @@ async function parseXlsxStream(
     headers,
     selectedColumns: columnMap.map((column) => column.name),
     totalRowsParsed,
+    isRowLimitHit,
     previewRows,
     numericSummary,
   };
@@ -456,11 +494,26 @@ export async function writeStructuredReportToExcel(
     { header: "Value", key: "value", width: 60 },
   ];
 
-  summarySheet.addRow({ metric: "Source File", value: report.sourceFileName }).commit();
-  summarySheet.addRow({ metric: "Worksheet", value: report.worksheetName }).commit();
-  summarySheet.addRow({ metric: "Rows Parsed", value: report.totalRowsParsed }).commit();
   summarySheet
-    .addRow({ metric: "Selected Columns", value: report.selectedColumns.join(", ") })
+    .addRow({ metric: "Source File", value: report.sourceFileName })
+    .commit();
+  summarySheet
+    .addRow({ metric: "Worksheet", value: report.worksheetName })
+    .commit();
+  summarySheet
+    .addRow({ metric: "Rows Parsed", value: report.totalRowsParsed })
+    .commit();
+  summarySheet
+    .addRow({
+      metric: "Row Limit Hit",
+      value: report.isRowLimitHit ? "Yes (partial parse)" : "No",
+    })
+    .commit();
+  summarySheet
+    .addRow({
+      metric: "Selected Columns",
+      value: report.selectedColumns.join(", "),
+    })
     .commit();
 
   for (const [columnName, metrics] of Object.entries(report.numericSummary)) {
@@ -475,4 +528,6 @@ export async function writeStructuredReportToExcel(
   await workbook.commit();
 }
 
-export const SPREADSHEET_MIME_TYPES = [...new Set([...CSV_MIME_TYPES, ...XLSX_MIME_TYPES])];
+export const SPREADSHEET_MIME_TYPES = [
+  ...new Set([...CSV_MIME_TYPES, ...XLSX_MIME_TYPES]),
+];
