@@ -59,13 +59,16 @@ class UserService {
         firstName: data.firstName,
         lastName: data.lastName,
         phoneNumber: data.phoneNumber?.trim() || null,
+        isGuideTaken: data.isGuideTaken,
         ...(data.profileImage && { profileImage: data.profileImage }),
       },
       select: userProfileSelectFields,
     });
 
     // Keep system-generated personalization context in sync with the profile name.
-    const fullName = [updatedUser.firstName, updatedUser.lastName].filter(Boolean).join(" ");
+    const fullName = [updatedUser.firstName, updatedUser.lastName]
+      .filter(Boolean)
+      .join(" ");
     const newMyNameMemory = `My name is ${fullName}`;
 
     const existingMyNameContext = await prisma.contextMemory.findFirst({
@@ -305,12 +308,14 @@ class UserService {
       where: { userId },
       skip,
       take,
-      distinct: ['groupId'],
+      distinct: ["groupId"],
       orderBy: { createdAt: "desc" },
       select: { groupId: true },
     });
 
-    const groupsToFetch = groupIdentifiers.map((g) => g.groupId).filter(Boolean) as string[];
+    const groupsToFetch = groupIdentifiers
+      .map((g) => g.groupId)
+      .filter(Boolean) as string[];
 
     // 2. Fetch all components of those specific groups in 1 query
     const rawLogs = await prisma.usageLog.findMany({
@@ -348,20 +353,25 @@ class UserService {
 
       const group = grouped.get(log.groupId);
       if (log.model) group.models.push(log.model);
-      group.promptTokens += (log.promptTokens || 0);
-      group.completionTokens += (log.completionTokens || 0);
-      group.totalTokens += (log.totalTokens || 0);
-      group.billablePromptTokens += (log.billablePromptTokens || 0);
-      group.billableCompletionTokens += (log.billableCompletionTokens || 0);
-      group.billableTotalTokens += (log.billableTotalTokens || 0);
+      group.promptTokens += log.promptTokens || 0;
+      group.completionTokens += log.completionTokens || 0;
+      group.totalTokens += log.totalTokens || 0;
+      group.billablePromptTokens += log.billablePromptTokens || 0;
+      group.billableCompletionTokens += log.billableCompletionTokens || 0;
+      group.billableTotalTokens += log.billableTotalTokens || 0;
       group.subLogs.push(log);
     }
 
     // Preserve sorting
-    const paginatedLogs = groupsToFetch.map((g) => grouped.get(g)).filter(Boolean);
+    const paginatedLogs = groupsToFetch
+      .map((g) => grouped.get(g))
+      .filter(Boolean);
 
     // Get total distinct groups reliably
-    const distinctGroups = await prisma.usageLog.groupBy({ by: ['groupId'], where: { userId } });
+    const distinctGroups = await prisma.usageLog.groupBy({
+      by: ["groupId"],
+      where: { userId },
+    });
     const totalRecords = distinctGroups.length;
 
     return {
@@ -374,7 +384,12 @@ class UserService {
         billableTotalTokens: summary._sum.billableTotalTokens || 0,
         totalPrompts: summary._count || 0,
       },
-      usage: formatPaginationResponse(paginatedLogs, totalRecords, page, pageSize),
+      usage: formatPaginationResponse(
+        paginatedLogs,
+        totalRecords,
+        page,
+        pageSize,
+      ),
     };
   }
 

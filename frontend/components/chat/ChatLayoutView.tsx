@@ -1,11 +1,22 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, startTransition } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  startTransition,
+} from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Menu, Settings, LogOut, Sun, Moon, ArrowRight } from "lucide-react";
-import { chatService, folderService, assistantService, subscriptionService } from "@/lib/services";
+import {
+  chatService,
+  folderService,
+  assistantService,
+  subscriptionService,
+} from "@/lib/services";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,7 +78,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   const layoutRenderCountRef = useRef(0);
   layoutRenderCountRef.current += 1;
   if (process.env.NODE_ENV === "development") {
-    console.debug("[ChatLayoutView render]", { count: layoutRenderCountRef.current, pathname });
+    console.debug("[ChatLayoutView render]", {
+      count: layoutRenderCountRef.current,
+      pathname,
+    });
   }
 
   useEffect(() => {
@@ -83,18 +97,20 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   const [assistants, setAssistants] = useState<Assistant[]>([]);
   const [assistantsPage, setAssistantsPage] = useState(1);
   const [assistantsHasMore, setAssistantsHasMore] = useState(false);
-  const [activeAssistantId, setActiveAssistantId] = useState<number | null>(null);
-  const [activeAssistantTheme, setActiveAssistantTheme] = useState<Assistant | null>(
+  const [activeAssistantId, setActiveAssistantId] = useState<number | null>(
     null,
   );
+  const [activeAssistantTheme, setActiveAssistantTheme] =
+    useState<Assistant | null>(null);
   const [planPopupOpen, setPlanPopupOpen] = useState(false);
   const chatsRef = useRef<Chat[]>([]);
   const chatAssistantCacheRef = useRef<Map<number, number | null>>(new Map());
-  const chatAssistantInflightRef = useRef<Map<number, Promise<number | null>>>(new Map());
+  const chatAssistantInflightRef = useRef<Map<number, Promise<number | null>>>(
+    new Map(),
+  );
   useEffect(() => {
     chatsRef.current = chats;
   }, [chats]);
-
 
   const chatSearchRef = useRef(chatSearch);
   chatSearchRef.current = chatSearch;
@@ -130,26 +146,33 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         page: pageNum.toString(),
         pageSize: "6",
         isArchived: "false",
-        ...(effectiveSearch ? { search: effectiveSearch } : { folderId: "null" }),
+        ...(effectiveSearch
+          ? { search: effectiveSearch }
+          : { folderId: "null" }),
       });
       const result = res.data.data;
       const fetched = result?.data || [];
 
-      setChats(prev => {
+      setChats((prev) => {
         if (pageNum === 1) {
           const merged = fetched.map((bc: any) => {
             const existing = prev.find((pc: any) => pc.id === bc.id);
             if (!existing) return bc;
-            if (existing.title === bc.title &&
-                existing.folderId === bc.folderId &&
-                existing.isPinned === bc.isPinned &&
-                existing.isArchived === bc.isArchived &&
-                existing.assistantId === bc.assistantId) {
+            if (
+              existing.title === bc.title &&
+              existing.folderId === bc.folderId &&
+              existing.isPinned === bc.isPinned &&
+              existing.isArchived === bc.isArchived &&
+              existing.assistantId === bc.assistantId
+            ) {
               return existing;
             }
             return { ...existing, ...bc };
           });
-          if (prev.length === merged.length && merged.every((m: any, i: number) => prev[i] === m)) {
+          if (
+            prev.length === merged.length &&
+            merged.every((m: any, i: number) => prev[i] === m)
+          ) {
             return prev;
           }
           return merged;
@@ -160,7 +183,9 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
 
       setPage(pageNum);
       setHasMore(Boolean(result?.hasNextPage));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const fetchFolders = useCallback(async () => {
@@ -169,8 +194,13 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       const data = res.data?.data;
       const foldersArray = Array.isArray(data?.data) ? data.data : [];
       setFolders((prev: Folder[]) => {
-        if (prev.length === foldersArray.length &&
-            prev.every((f: Folder, i: number) => f.id === foldersArray[i]?.id && f.name === foldersArray[i]?.name)) {
+        if (
+          prev.length === foldersArray.length &&
+          prev.every(
+            (f: Folder, i: number) =>
+              f.id === foldersArray[i]?.id && f.name === foldersArray[i]?.name,
+          )
+        ) {
           return prev;
         }
         return foldersArray;
@@ -193,8 +223,15 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
 
       setAssistants((prev) => {
         if (pageNum === 1) {
-          if (prev.length === fetched.length &&
-              prev.every((a: any, i: number) => a.id === fetched[i]?.id && a.name === fetched[i]?.name && a.isActive === fetched[i]?.isActive)) {
+          if (
+            prev.length === fetched.length &&
+            prev.every(
+              (a: any, i: number) =>
+                a.id === fetched[i]?.id &&
+                a.name === fetched[i]?.name &&
+                a.isActive === fetched[i]?.isActive,
+            )
+          ) {
             return prev;
           }
           return fetched;
@@ -203,7 +240,9 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       });
       setAssistantsPage(pageNum);
       setAssistantsHasMore(Boolean(result?.hasNextPage));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -243,7 +282,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       fetchFolders();
       fetchChats(1);
       fetchAssistants(1);
-      
+
       // Clear models cache and trigger refresh so any settings changes take effect
       sessionStorage.removeItem("models_cache_v1");
       window.dispatchEvent(new CustomEvent("refresh-models"));
@@ -267,8 +306,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const pendingSignup = localStorage.getItem("signup_free_plan_prompt_pending") === "1";
-    const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
+    const pendingSignup =
+      localStorage.getItem("signup_free_plan_prompt_pending") === "1";
+    const seenSignup =
+      localStorage.getItem("signup_free_plan_prompt_seen") === "1";
     if (!pendingSignup || seenSignup) return;
 
     // Check if used already has a paid subscription — if so, silently clear the
@@ -308,7 +349,9 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     router.push("/profile/subscription");
   }, [dismissPlanPopup, router]);
 
-  const chatListRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatListRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const runChatListRefresh = useCallback(
     (immediate: boolean) => {
@@ -344,7 +387,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener("refresh-chats", handleRefresh as EventListener);
     return () => {
-      window.removeEventListener("refresh-chats", handleRefresh as EventListener);
+      window.removeEventListener(
+        "refresh-chats",
+        handleRefresh as EventListener,
+      );
       if (chatListRefreshTimerRef.current) {
         clearTimeout(chatListRefreshTimerRef.current);
         chatListRefreshTimerRef.current = null;
@@ -369,7 +415,9 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
 
       setActiveAssistantId((prev) => (prev === nextId ? prev : nextId));
       if (assistant) {
-        setActiveAssistantTheme((prev) => (prev?.id === assistant.id ? prev : assistant));
+        setActiveAssistantTheme((prev) =>
+          prev?.id === assistant.id ? prev : assistant,
+        );
       } else {
         setActiveAssistantTheme((prev) => (prev === null ? prev : null));
       }
@@ -415,8 +463,11 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
                     .getById(chatId)
                     .then((res) => res.data.data?.assistantId ?? null)
                     .catch(() => null)
-                    .finally(() => chatAssistantInflightRef.current.delete(chatId));
-                if (!inflight) chatAssistantInflightRef.current.set(chatId, fetchPromise);
+                    .finally(() =>
+                      chatAssistantInflightRef.current.delete(chatId),
+                    );
+                if (!inflight)
+                  chatAssistantInflightRef.current.set(chatId, fetchPromise);
                 newId = await fetchPromise;
                 chatAssistantCacheRef.current.set(chatId, newId);
               } catch {
@@ -451,7 +502,9 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     };
 
     resolveAndApply();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -459,7 +512,9 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     if (!id) return;
     const listMatch = assistants.find((a) => a.id === id);
     if (listMatch) {
-      setActiveAssistantTheme((prev) => (prev?.id === listMatch.id ? prev : listMatch));
+      setActiveAssistantTheme((prev) =>
+        prev?.id === listMatch.id ? prev : listMatch,
+      );
     }
   }, [assistants]);
 
@@ -509,7 +564,8 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   }, [fetchChats]);
 
   const handleLoadMoreAssistants = useCallback(() => {
-    if (assistantsHasMoreRef.current) fetchAssistants(assistantsPageRef.current + 1);
+    if (assistantsHasMoreRef.current)
+      fetchAssistants(assistantsPageRef.current + 1);
   }, [fetchAssistants]);
 
   if (isLoading) {
@@ -528,7 +584,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         <main className="flex-1 flex flex-col min-w-0 relative z-[1]">
           {children}
         </main>
-        <StartupGuide userId={typeof user?.id === "number" ? user.id : undefined} />
+        <StartupGuide
+          userId={typeof user?.id === "number" ? user.id : undefined}
+          isGuideTaken={Boolean(user?.isGuideTaken)}
+        />
       </div>
     );
   }
@@ -586,21 +645,34 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
       >
         <DialogContent className="sm:max-w-md border-border/40 bg-background/95 backdrop-blur-xl">
           <DialogHeader className="space-y-3 text-left">
-            <Badge variant="default" className="w-fit rounded-full px-3 py-1 text-xs">
+            <Badge
+              variant="default"
+              className="w-fit rounded-full px-3 py-1 text-xs"
+            >
               Free plan activated 🎉
             </Badge>
             <div className="space-y-1">
-              <DialogTitle className="text-xl sm:text-2xl text-balance">You’ve got 30 days of free access to get started.</DialogTitle>
+              <DialogTitle className="text-xl sm:text-2xl text-balance">
+                You’ve got 30 days of free access to get started.
+              </DialogTitle>
               <DialogDescription className="text-sm leading-6 text-muted-foreground">
-                Need more power? Upgrade anytime for higher limits, priority speed, and full access.
+                Need more power? Upgrade anytime for higher limits, priority
+                speed, and full access.
               </DialogDescription>
             </div>
           </DialogHeader>
           <DialogFooter className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button variant="outline" onClick={dismissPlanPopup} className="sm:flex-1">
+            <Button
+              variant="outline"
+              onClick={dismissPlanPopup}
+              className="sm:flex-1"
+            >
               Start chatting
             </Button>
-            <Button onClick={handleUpgradeFromPopup} className="sm:flex-1 gap-2 bg-landing-primary hover:bg-landing-primary-hover text-white">
+            <Button
+              onClick={handleUpgradeFromPopup}
+              className="sm:flex-1 gap-2 bg-landing-primary hover:bg-landing-primary-hover text-white"
+            >
               Upgrade plan
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -644,29 +716,63 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
           <div className="flex-shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden" data-guide="profile-menu">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-8 h-8 rounded-full cursor-pointer hover:opacity-80 flex items-center justify-center p-0 overflow-hidden"
+                  data-guide="profile-menu"
+                >
                   <Avatar className="w-8 h-8 border border-border/50">
-                    {user?.profileImage && <AvatarImage src={user.profileImage} alt={`${user?.firstName} ${user?.lastName}`} />}
+                    {user?.profileImage && (
+                      <AvatarImage
+                        src={user.profileImage}
+                        alt={`${user?.firstName} ${user?.lastName}`}
+                      />
+                    )}
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                      {user?.firstName?.[0]?.toUpperCase()}{user?.lastName?.[0]?.toUpperCase()}
+                      {user?.firstName?.[0]?.toUpperCase()}
+                      {user?.lastName?.[0]?.toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px] z-[9500]" style={{ zIndex: 9500 }}>
+              <DropdownMenuContent
+                align="end"
+                className="w-[200px] z-[9500]"
+                style={{ zIndex: 9500 }}
+              >
                 <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex flex-col items-start min-w-0">
-                  <span className="truncate w-full text-left font-medium text-sm leading-tight">{user?.firstName} {user?.lastName}</span>
-                  {user?.email && <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">{user?.email}</span>}
+                  <span className="truncate w-full text-left font-medium text-sm leading-tight">
+                    {user?.firstName} {user?.lastName}
+                  </span>
+                  {user?.email && (
+                    <span className="truncate w-full text-left text-xs text-muted-foreground leading-tight mt-0.5">
+                      {user?.email}
+                    </span>
+                  )}
                 </div>
-                <DropdownMenuItem onClick={toggleTheme} className="gap-2 cursor-pointer">
-                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                <DropdownMenuItem
+                  onClick={toggleTheme}
+                  className="gap-2 cursor-pointer"
+                >
+                  {theme === "dark" ? (
+                    <Sun className="w-4 h-4" />
+                  ) : (
+                    <Moon className="w-4 h-4" />
+                  )}
                   {theme === "dark" ? "Light Mode" : "Dark Mode"}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/profile")} className="gap-2 cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => router.push("/profile")}
+                  className="gap-2 cursor-pointer"
+                >
                   <Settings className="w-4 h-4" /> Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                >
                   <LogOut className="w-4 h-4" /> Logout
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -698,7 +804,10 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        <StartupGuide userId={typeof user?.id === "number" ? user.id : undefined} />
+        <StartupGuide
+          userId={typeof user?.id === "number" ? user.id : undefined}
+          isGuideTaken={Boolean(user?.isGuideTaken)}
+        />
       </div>
     </>
   );

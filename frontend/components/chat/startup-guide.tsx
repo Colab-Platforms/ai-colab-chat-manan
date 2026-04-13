@@ -9,6 +9,8 @@ import {
   type EventData,
   type Step,
 } from "react-joyride";
+import { userService } from "@/lib/services";
+import { useAuth } from "@/context/auth-context";
 
 type DeviceType = "mobile" | "tablet" | "desktop";
 
@@ -19,10 +21,6 @@ type GuideStep = Step & {
 
 const GUIDE_VERSION = "v4";
 const REPLAY_FLAG_KEY = "ai_colab_startup_guide_replay";
-
-function completionKey(userId: number | null) {
-  return `ai_colab_startup_guide_${GUIDE_VERSION}_${userId ?? "anon"}`;
-}
 
 function stateKey(userId: number | null) {
   return `ai_colab_startup_guide_state_${GUIDE_VERSION}_${userId ?? "anon"}`;
@@ -105,7 +103,14 @@ const BASE_STEPS: GuideStep[] = [
   },
 ];
 
-export function StartupGuide({ userId }: { userId?: number }) {
+export function StartupGuide({
+  userId,
+  isGuideTaken = false,
+}: {
+  userId?: number;
+  isGuideTaken?: boolean;
+}) {
+  const { refreshUser } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -114,22 +119,34 @@ export function StartupGuide({ userId }: { userId?: number }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   // Track navigation direction so TARGET_NOT_FOUND skips the right way
   const navDirectionRef = useRef<"forward" | "backward">("forward");
+  const isGuideTakenRef = useRef(Boolean(isGuideTaken));
 
   const numericUserId = typeof userId === "number" ? userId : null;
   const device = useMemo(() => getDeviceType(viewportWidth), [viewportWidth]);
 
+  useEffect(() => {
+    isGuideTakenRef.current = Boolean(isGuideTaken);
+  }, [isGuideTaken]);
+
   const steps = useMemo(() => {
-    const filtered = BASE_STEPS.filter((step) => !step.devices || step.devices.includes(device));
+    const filtered = BASE_STEPS.filter(
+      (step) => !step.devices || step.devices.includes(device),
+    );
 
     // Capability dropdown open → spotlight shifts to open dropdown menu, tooltip to the right
     if (isCapabilityMenuOpen) {
       return filtered.map((step) =>
         step.id === "capability-model"
-          ? { ...step, target: '[data-guide="capability-menu"]', placement: "right" as const, offset: 12 }
+          ? {
+              ...step,
+              target: '[data-guide="capability-menu"]',
+              placement: "right" as const,
+              offset: 12,
+            }
           : step,
       );
     }
-    
+
     if (isMobileSidebarOpen) {
       return filtered.map((step) =>
         step.id === "sidebar-mobile"
@@ -146,17 +163,41 @@ export function StartupGuide({ userId }: { userId?: number }) {
       );
     }
 
-
     return filtered;
   }, [device, isCapabilityMenuOpen, isMobileSidebarOpen]);
 
   const finishGuide = useCallback(() => {
     setRun(false);
     setStepIndex(0);
-    localStorage.setItem(completionKey(numericUserId), "1");
     localStorage.removeItem(REPLAY_FLAG_KEY);
     sessionStorage.removeItem(stateKey(numericUserId));
-  }, [numericUserId]);
+
+    if (!numericUserId || isGuideTakenRef.current) {
+      return;
+    }
+
+    isGuideTakenRef.current = true;
+
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser) as Record<string, unknown>;
+        localStorage.setItem(
+          "user",
+          JSON.stringify({ ...parsed, isGuideTaken: true }),
+        );
+      } catch {
+        // Ignore malformed cached user payload.
+      }
+    }
+
+    void userService
+      .updateGuideStatus(true)
+      .then(() => refreshUser())
+      .catch(() => {
+        // Ignore transient failures; backend value will sync on next profile refresh.
+      });
+  }, [numericUserId, refreshUser]);
 
   const startGuide = useCallback(
     (index = 0) => {
@@ -178,22 +219,28 @@ export function StartupGuide({ userId }: { userId?: number }) {
     if (!isMounted || !numericUserId) return;
 
     // 1. Strict block: Wait if the free plan prompt is pending handling so modals don't overlap.
-    const pendingSignup = localStorage.getItem("signup_free_plan_prompt_pending") === "1";
-    const seenSignup = localStorage.getItem("signup_free_plan_prompt_seen") === "1";
+    const pendingSignup =
+      localStorage.getItem("signup_free_plan_prompt_pending") === "1";
+    const seenSignup =
+      localStorage.getItem("signup_free_plan_prompt_seen") === "1";
     if (pendingSignup && !seenSignup) {
-      return; 
+      return;
     }
 
     // 2. Now safe to evaluate if we should restore or start the guide
-    const completed = localStorage.getItem(completionKey(numericUserId)) === "1";
     const replayRequested = localStorage.getItem(REPLAY_FLAG_KEY) === "1";
     const savedStateRaw = sessionStorage.getItem(stateKey(numericUserId));
 
     if (savedStateRaw) {
       try {
-        const parsed = JSON.parse(savedStateRaw) as { running?: boolean; stepIndex?: number };
+        const parsed = JSON.parse(savedStateRaw) as {
+          running?: boolean;
+          stepIndex?: number;
+        };
         if (parsed.running) {
-          startGuide(typeof parsed.stepIndex === "number" ? parsed.stepIndex : 0);
+          startGuide(
+            typeof parsed.stepIndex === "number" ? parsed.stepIndex : 0,
+          );
           return;
         }
       } catch {
@@ -201,7 +248,7 @@ export function StartupGuide({ userId }: { userId?: number }) {
       }
     }
 
-    if (replayRequested || !completed) {
+    if (replayRequested || !isGuideTakenRef.current) {
       startGuide(0);
     }
   }, [isMounted, numericUserId, startGuide]);
@@ -210,13 +257,16 @@ export function StartupGuide({ userId }: { userId?: number }) {
   useEffect(() => {
     if (!isMounted || !numericUserId) return;
     const onPlanPopupHandled = () => {
-      const completed = localStorage.getItem(completionKey(numericUserId)) === "1";
-      if (!completed) {
+      if (!isGuideTakenRef.current) {
         startGuide(0);
       }
     };
     window.addEventListener("ai-colab:plan-popup-handled", onPlanPopupHandled);
-    return () => window.removeEventListener("ai-colab:plan-popup-handled", onPlanPopupHandled);
+    return () =>
+      window.removeEventListener(
+        "ai-colab:plan-popup-handled",
+        onPlanPopupHandled,
+      );
   }, [isMounted, numericUserId, startGuide]);
 
   useEffect(() => {
@@ -228,7 +278,8 @@ export function StartupGuide({ userId }: { userId?: number }) {
     };
 
     window.addEventListener("ai-colab:start-guide", onStartGuide);
-    return () => window.removeEventListener("ai-colab:start-guide", onStartGuide);
+    return () =>
+      window.removeEventListener("ai-colab:start-guide", onStartGuide);
   }, [isMounted, startGuide]);
 
   // Listen for the capability dropdown open/close to dynamically reposition the guide
@@ -252,8 +303,14 @@ export function StartupGuide({ userId }: { userId?: number }) {
     window.addEventListener("ai-colab:mobile-sidebar-opened", onSidebarOpen);
     window.addEventListener("ai-colab:mobile-sidebar-closed", onSidebarClose);
     return () => {
-      window.removeEventListener("ai-colab:mobile-sidebar-opened", onSidebarOpen);
-      window.removeEventListener("ai-colab:mobile-sidebar-closed", onSidebarClose);
+      window.removeEventListener(
+        "ai-colab:mobile-sidebar-opened",
+        onSidebarOpen,
+      );
+      window.removeEventListener(
+        "ai-colab:mobile-sidebar-closed",
+        onSidebarClose,
+      );
     };
   }, [isMounted]);
 

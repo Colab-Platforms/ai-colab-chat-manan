@@ -30,6 +30,7 @@ model User {
   emailVerificationOtpExpiresAt DateTime?
   passwordResetOtpHash          String?
   passwordResetOtpExpiresAt     DateTime?
+  isGuideTaken                  Boolean             @default(false)
   isActive                      Boolean             @default(true)
   isVerified                    Boolean             @default(false)
   isDeleted                     Boolean             @default(false)

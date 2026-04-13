@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from "react";
 import api from "@/lib/api";
 
 interface User {
@@ -10,6 +17,7 @@ interface User {
   email: string;
   phoneNumber?: string;
   profileImage?: string;
+  isGuideTaken: boolean;
   timezone: string;
   userRoles: { role: { id: number; name: string } }[];
 }
@@ -18,12 +26,28 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ requiresEmailVerification: boolean; email?: string }>;
-  register: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<{ requiresEmailVerification: boolean; user?: User; token?: string }>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ requiresEmailVerification: boolean; email?: string }>;
+  register: (data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+  }) => Promise<{
+    requiresEmailVerification: boolean;
+    user?: User;
+    token?: string;
+  }>;
   verifyEmailOtp: (email: string, otp: string) => Promise<void>;
   resendEmailOtp: (email: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
-  resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
+  resetPassword: (
+    email: string,
+    otp: string,
+    newPassword: string,
+  ) => Promise<void>;
   completeGoogleLogin: (token: string) => Promise<void>;
   logout: () => void;
   hasRole: (role: string) => boolean;
@@ -95,12 +119,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { requiresEmailVerification: false };
   };
 
-  const register = async (data: { firstName: string; lastName: string; email: string; password: string }) => {
+  const register = async (data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+  }) => {
     const res = await api.post("/auth/register", data);
     const responseData = res.data.data;
 
     return {
-      requiresEmailVerification: Boolean(responseData?.requiresEmailVerification),
+      requiresEmailVerification: Boolean(
+        responseData?.requiresEmailVerification,
+      ),
       user: responseData?.user,
       token: responseData?.token,
     };
@@ -118,7 +149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post("/auth/forgot-password", { email });
   };
 
-  const resetPassword = async (email: string, otp: string, newPassword: string) => {
+  const resetPassword = async (
+    email: string,
+    otp: string,
+    newPassword: string,
+  ) => {
     await api.post("/auth/reset-password", { email, otp, newPassword });
   };
 
@@ -153,7 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
     };
     window.addEventListener("auth:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
+    return () =>
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
   }, []);
 
   const hasRole = useCallback(
@@ -163,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const target = normalize(role);
       return user.userRoles.some((ur) => normalize(ur.role.name) === target);
     },
-    [user]
+    [user],
   );
 
   const refreshUser = useCallback(async () => {
@@ -179,7 +215,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, verifyEmailOtp, resendEmailOtp, forgotPassword, resetPassword, completeGoogleLogin, logout, hasRole, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isLoading,
+        login,
+        register,
+        verifyEmailOtp,
+        resendEmailOtp,
+        forgotPassword,
+        resetPassword,
+        completeGoogleLogin,
+        logout,
+        hasRole,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -7,40 +7,19 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "lib": [
-      "esnext"
-    ],
+    "lib": ["esnext"],
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ],
-      "@root/*": [
-        "./*"
-      ],
-      "@prisma": [
-        "./prisma"
-      ],
-      "@utils/*": [
-        "src/utils/*"
-      ],
-      "@modules/*": [
-        "src/modules/*"
-      ],
-      "@validators/*": [
-        "src/validators/*"
-      ]
+      "@/*": ["./src/*"],
+      "@root/*": ["./*"],
+      "@prisma": ["./prisma"],
+      "@utils/*": ["./src/utils/*"],
+      "@modules/*": ["./src/modules/*"],
+      "@validators/*": ["./src/validators/*"]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "src/types/**/*.ts",
-    "src",
-    "prisma",
-    "prisma.ts"
-  ],
+  "include": ["src/**/*.ts", "src/types/**/*.ts", "src", "prisma", "prisma.ts"],
   "ts-node": {
     "transpileOnly": true,
     "esm": true

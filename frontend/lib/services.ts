@@ -75,6 +75,8 @@ export const userService = {
     api.put("/users/profile", data, {
       headers: { "Content-Type": "multipart/form-data" },
     }),
+  updateGuideStatus: (isGuideTaken: boolean) =>
+    api.put("/users/profile", { isGuideTaken }),
   list: (params?: Record<string, string>) => api.get("/users", { params }),
   update: (id: number, data: any) => api.put(`/users/${id}`, data),
   delete: (id: number) => api.delete(`/users/${id}`),
@@ -85,12 +87,16 @@ export const userService = {
 
 export const walletService = {
   get: () => api.get("/wallet"),
-  getTransactions: (params?: Record<string, string>) => api.get("/wallet/transactions", { params }),
+  getTransactions: (params?: Record<string, string>) =>
+    api.get("/wallet/transactions", { params }),
 };
 
 export const subscriptionService = {
-  create: (data: { planId: number; billingCycle: string; forceRetry?: boolean }) =>
-    api.post("/subscription/create", data),
+  create: (data: {
+    planId: number;
+    billingCycle: string;
+    forceRetry?: boolean;
+  }) => api.post("/subscription/create", data),
   enableAutoPay: (data: { planId: number; billingCycle: string }) =>
     api.post("/subscription/enable-autopay", data),
   disableAutoPay: () => api.post("/subscription/disable-autopay"),
@@ -148,9 +154,8 @@ export const attachmentService = {
 
 export const userPreferenceService = {
   getPreferences: () => api.get("/preferences"),
-  updatePreferences: (data: {
-    enableFollowUpQuestions?: boolean;
-  }) => api.put("/preferences", data),
+  updatePreferences: (data: { enableFollowUpQuestions?: boolean }) =>
+    api.put("/preferences", data),
 };
 
 export const assistantService = {
@@ -168,7 +173,8 @@ export const dashboardService = {
 
 export const contextService = {
   list: (params?: Record<string, string>) => api.get("/contexts", { params }),
-  getSidebar: (params?: Record<string, string>) => api.get("/contexts/sidebar", { params }),
+  getSidebar: (params?: Record<string, string>) =>
+    api.get("/contexts/sidebar", { params }),
   getById: (id: number) => api.get(`/contexts/${id}`),
   create: (data: any) => api.post("/contexts", data),
   update: (id: number, data: any) => api.put(`/contexts/${id}`, data),
