@@ -16,6 +16,7 @@ import {
   inferRequiredColumnsFromPrompt,
   parseSpreadsheetFromUrl,
 } from "@/utils/spreadsheet.js";
+import { parsePdfFromUrl } from "@/utils/pdf.js";
 
 const attachmentService = new AttachmentService();
 
@@ -64,10 +65,18 @@ async function touchChat(chatId: number) {
   });
 }
 
-async function getDefaultContextIdsForChat(userId: number, folderId?: number | null) {
+async function getDefaultContextIdsForChat(
+  userId: number,
+  folderId?: number | null,
+) {
   const globalContextsQuery = folderId
     ? prisma.contextMemory.findMany({
-        where: { userId, type: "GLOBAL", isAutoSelected: true, isDeleted: false },
+        where: {
+          userId,
+          type: "GLOBAL",
+          isAutoSelected: true,
+          isDeleted: false,
+        },
         select: { id: true },
       })
     : prisma.contextMemory.findMany({
@@ -89,8 +98,8 @@ async function getDefaultContextIdsForChat(userId: number, folderId?: number | n
 
   return Array.from(
     new Set([
-      ...globalContexts.map((ctx) => ctx.id),
-      ...folderContexts.map((ctx) => ctx.id),
+      ...globalContexts.map((ctx: any) => ctx.id),
+      ...folderContexts.map((ctx: any) => ctx.id),
     ]),
   );
 }
@@ -109,7 +118,10 @@ async function getSelectedContextsForChat(userId: number, chatId: number) {
     });
 
     if (chat) {
-      const defaultIds = await getDefaultContextIdsForChat(userId, chat.folderId);
+      const defaultIds = await getDefaultContextIdsForChat(
+        userId,
+        chat.folderId,
+      );
       if (defaultIds.length > 0) {
         await prisma.chatContext.createMany({
           data: defaultIds.map((contextId) => ({ chatId, contextId })),
@@ -123,7 +135,7 @@ async function getSelectedContextsForChat(userId: number, chatId: number) {
     }
   }
 
-  return links.map((link) => link.context);
+  return links.map((link: any) => link.context);
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +154,11 @@ const PPT_MIME_TYPES = [
 ];
 const TEXT_MIME_TYPES = ["text/plain", "text/markdown", "text/x-markdown"];
 const SPREADSHEET_PREVIEW_ROWS = 200;
-const SPREADSHEET_MAX_AI_CHARS = 90_000;
+const SPREADSHEET_MAX_AI_CHARS = 22_000;
+const SPREADSHEET_MAX_ROWS_TO_PARSE = 3000;
+const PDF_MAX_PAGES = 24;
+const PDF_MAX_AI_CHARS = 20_000;
+const PDF_MAX_BYTES = 8 * 1024 * 1024;
 
 interface AttachmentRecord {
   id: number;
@@ -171,8 +187,11 @@ async function urlToBase64DataUrl(
  * Useful for history building so models can see previous generated images.
  * Fetches the URL and converts to base64 for reliability in OpenRouter calls.
  */
-async function detectAndConvertImages(content: string): Promise<string | any[]> {
+async function detectAndConvertImages(
+  content: string | any[],
+): Promise<string | any[]> {
   if (!content) return content;
+  if (Array.isArray(content)) return content;
   const imageMarkdownRegex = /!\[[^\]]*]\((https?:\/\/[^\)]+)\)/g;
   const matches = [...content.matchAll(imageMarkdownRegex)];
   if (matches.length === 0) return content;
@@ -188,15 +207,23 @@ async function detectAndConvertImages(content: string): Promise<string | any[]> 
       // Determine probable mime type from extension, or default to image/webp (common for Cloudinary)
       let mime = "image/webp";
       if (imageUrl.toLowerCase().endsWith(".png")) mime = "image/png";
-      else if (imageUrl.toLowerCase().endsWith(".jpg") || imageUrl.toLowerCase().endsWith(".jpeg")) mime = "image/jpeg";
-      
+      else if (
+        imageUrl.toLowerCase().endsWith(".jpg") ||
+        imageUrl.toLowerCase().endsWith(".jpeg")
+      )
+        mime = "image/jpeg";
+
       const dataUrl = await urlToBase64DataUrl(imageUrl, mime);
       parts.push({ type: "image_url", image_url: { url: dataUrl } });
     } catch (e) {
-      console.error("Failed to fetch image for history conversion:", imageUrl, e);
+      console.error(
+        "Failed to fetch image for history conversion:",
+        imageUrl,
+        e,
+      );
       parts.push({ type: "image_url", image_url: { url: imageUrl } });
     }
-    
+
     lastIndex = match.index! + match[0].length;
   }
   const textAfter = content.substring(lastIndex).trim();
@@ -208,7 +235,7 @@ async function detectAndConvertImages(content: string): Promise<string | any[]> 
  * Build the OpenRouter content-parts array for a user message that has attachments.
  * Returns:
  *   - contentParts  : array to use as message.content
- *   - extraPlugins  : any plugins needed (e.g. file-parser for PDFs)
+ *   - extraPlugins  : plugin list (reserved for future use)
  */
 async function buildAttachmentContentParts(
   textContent: string,
@@ -216,7 +243,6 @@ async function buildAttachmentContentParts(
 ): Promise<{ contentParts: any[]; extraPlugins: any[] }> {
   const parts: any[] = [];
   const extraPlugins: any[] = [];
-  let hasPdf = false;
   let extraText = "";
   const requestedColumns = inferRequiredColumnsFromPrompt(textContent);
 
@@ -234,25 +260,16 @@ async function buildAttachmentContentParts(
         parts.push({ type: "image_url", image_url: { url: att.fileUrl } });
       }
     } else if (PDF_MIME_TYPES.includes(mime)) {
-      hasPdf = true;
-      // Fetch PDF from Cloudinary and send as base64 data URL
-      // This is more reliable than relying on OpenRouter to fetch the Cloudinary URL
       try {
-        const dataUrl = await urlToBase64DataUrl(
-          att.fileUrl,
-          "application/pdf",
-        );
-        parts.push({
-          type: "file",
-          file: { filename: att.fileName, file_data: dataUrl },
+        const pdfReport = await parsePdfFromUrl(att.fileUrl, att.fileName, {
+          maxPages: PDF_MAX_PAGES,
+          maxAiChars: PDF_MAX_AI_CHARS,
+          maxBytes: PDF_MAX_BYTES,
         });
+        extraText += `\n\n${pdfReport.aiText}`;
       } catch (e) {
-        console.error("Failed to fetch PDF attachment", att.fileName, e);
-        // Fallback: send URL directly
-        parts.push({
-          type: "file",
-          file: { filename: att.fileName, file_data: att.fileUrl },
-        });
+        console.error("Failed to parse PDF attachment", att.fileName, e);
+        extraText += `\n\n[Attached PDF: ${att.fileName}]\nUnable to extract PDF text. Please summarize the PDF based on user instructions only if sufficient context is available.`;
       }
     } else if (WORD_MIME_TYPES.includes(mime)) {
       try {
@@ -321,17 +338,18 @@ async function buildAttachmentContentParts(
             requiredColumns: requestedColumns,
             maxPreviewRows: SPREADSHEET_PREVIEW_ROWS,
             maxAiChars: SPREADSHEET_MAX_AI_CHARS,
+            maxRowsToParse: SPREADSHEET_MAX_ROWS_TO_PARSE,
           },
         );
         extraText += `\n\n${spreadsheetReport.aiText}`;
       } catch (e) {
-        console.error("Failed to parse spreadsheet attachment", att.fileName, e);
+        console.error(
+          "Failed to parse spreadsheet attachment",
+          att.fileName,
+          e,
+        );
       }
     }
-  }
-
-  if (hasPdf) {
-    extraPlugins.push({ id: "file-parser", pdf: { engine: "pdf-text" } });
   }
 
   // Text part always comes first so the model reads the user's question before files
@@ -590,10 +608,10 @@ function createEmptyOpenRouterAccumulator(): OpenRouterSseAccumulator {
 function hasStreamAccumulatorData(acc: OpenRouterSseAccumulator): boolean {
   return Boolean(
     acc.fullContent ||
-      acc.promptTokens > 0 ||
-      acc.completionTokens > 0 ||
-      acc.imagesToUpload.length > 0 ||
-      acc.finishReason,
+    acc.promptTokens > 0 ||
+    acc.completionTokens > 0 ||
+    acc.imagesToUpload.length > 0 ||
+    acc.finishReason,
   );
 }
 
@@ -951,13 +969,13 @@ export async function streamChat(req: Request, res: Response) {
     }
 
     const selectedContexts = await getSelectedContextsForChat(userId, chatId);
-    const contextStrings = selectedContexts.map((c) => c.memory);
+    const contextStrings = selectedContexts.map((c: any) => c.memory);
 
     if (contextStrings.length > 0) {
       console.log(
         `[DEBUG] Adding User Context (${contextStrings.length} items)`,
       );
-      const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c) => `- ${c}`).join("\n")}`;
+      const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c: any) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({
         role: "system",
         content: [
@@ -1101,7 +1119,7 @@ export async function streamChat(req: Request, res: Response) {
       let finalCompletion = cTokens;
       let finalTotal = tTokens;
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const walletRecord = await tx.userWallet.findUnique({
           where: { userId },
         });
@@ -1233,7 +1251,7 @@ export async function streamChat(req: Request, res: Response) {
             (completionTokens || 0) * tokenMultiplier,
           );
 
-          await prisma.$transaction(async (tx) => {
+          await prisma.$transaction(async (tx: any) => {
             const walletRecord = await tx.userWallet.findUnique({
               where: { userId },
             });
@@ -1278,8 +1296,7 @@ export async function streamChat(req: Request, res: Response) {
                   completionTokens: adjusted.finalRawCompletion,
                   totalTokens: adjusted.finalRawTotal,
                   billablePromptTokens: adjusted.finalBillablePrompt,
-                  billableCompletionTokens:
-                    adjusted.finalBillableCompletion,
+                  billableCompletionTokens: adjusted.finalBillableCompletion,
                   billableTotalTokens: adjusted.finalBillableTotal,
                 },
               });
@@ -1358,7 +1375,7 @@ export async function streamChat(req: Request, res: Response) {
 
     if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
       const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.message.update({
           where: { id: assistantMessage.id },
           data: { content: failureMessage },
@@ -1388,7 +1405,7 @@ export async function streamChat(req: Request, res: Response) {
 
     if (!fullContent.trim() && chatType !== "IMAGE_GENERATION") {
       const failureMessage = FAILED_GENERATION_USER_MESSAGE;
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.message.update({
           where: { id: assistantMessage.id },
           data: { content: failureMessage },
@@ -1447,7 +1464,7 @@ export async function streamChat(req: Request, res: Response) {
     let finalTotal = promptTokens + completionTokens;
 
     // Update assistant message + create model response + deduct tokens in transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       const walletRecord = await tx.userWallet.findUnique({
         where: { userId },
       });
@@ -1606,7 +1623,7 @@ export async function regenerateChat(req: Request, res: Response) {
       },
     });
 
-    const targetIndex = allMessages.findIndex((m) => m.id === messageId);
+    const targetIndex = allMessages.findIndex((m: any) => m.id === messageId);
     if (targetIndex === -1 || allMessages[targetIndex].role !== "ASSISTANT") {
       res
         .status(404)
@@ -1649,11 +1666,14 @@ export async function regenerateChat(req: Request, res: Response) {
       userPreference?.enableFollowUpQuestions !== false;
 
     // Prepend context memory as a system message
-    const selectedContextsRegen = await getSelectedContextsForChat(userId, chatId);
-    const contextStringsRegen = selectedContextsRegen.map((c) => c.memory);
+    const selectedContextsRegen = await getSelectedContextsForChat(
+      userId,
+      chatId,
+    );
+    const contextStringsRegen = selectedContextsRegen.map((c: any) => c.memory);
 
     if (contextStringsRegen.length > 0) {
-      const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c) => `- ${c}`).join("\n")}`;
+      const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c: any) => `- ${c}`).join("\n")}`;
       conversationHistory.unshift({ role: "system", content: systemContent });
     }
 
@@ -1744,7 +1764,7 @@ export async function regenerateChat(req: Request, res: Response) {
       let finalCompletion = cTokens;
       let finalTotal = tTokens;
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const walletRecord = await tx.userWallet.findUnique({
           where: { userId },
         });
@@ -1865,7 +1885,7 @@ export async function regenerateChat(req: Request, res: Response) {
             (completionTokens || 0) * tokenMultiplier,
           );
 
-          await prisma.$transaction(async (tx) => {
+          await prisma.$transaction(async (tx: any) => {
             const walletRecord = await tx.userWallet.findUnique({
               where: { userId },
             });
@@ -1910,8 +1930,7 @@ export async function regenerateChat(req: Request, res: Response) {
                   completionTokens: adjusted.finalRawCompletion,
                   totalTokens: adjusted.finalRawTotal,
                   billablePromptTokens: adjusted.finalBillablePrompt,
-                  billableCompletionTokens:
-                    adjusted.finalBillableCompletion,
+                  billableCompletionTokens: adjusted.finalBillableCompletion,
                   billableTotalTokens: adjusted.finalBillableTotal,
                 },
               });
@@ -2000,7 +2019,7 @@ export async function regenerateChat(req: Request, res: Response) {
 
     if (!fullContent.trim() && chatType !== "IMAGE_GENERATION") {
       const failureMessage = FAILED_GENERATION_USER_MESSAGE;
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.message.update({
           where: { id: messageId },
           data: { content: failureMessage },
@@ -2058,7 +2077,7 @@ export async function regenerateChat(req: Request, res: Response) {
     let finalCompletion = completionTokens;
     let finalTotal = promptTokens + completionTokens;
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       const walletRecord = await tx.userWallet.findUnique({
         where: { userId },
       });
@@ -2446,7 +2465,7 @@ export async function editAndResend(req: Request, res: Response) {
             (completionTokens || 0) * tokenMultiplier,
           );
 
-          await prisma.$transaction(async (tx) => {
+          await prisma.$transaction(async (tx: any) => {
             const walletRecord = await tx.userWallet.findUnique({
               where: { userId },
             });
@@ -2491,8 +2510,7 @@ export async function editAndResend(req: Request, res: Response) {
                   completionTokens: adjusted.finalRawCompletion,
                   totalTokens: adjusted.finalRawTotal,
                   billablePromptTokens: adjusted.finalBillablePrompt,
-                  billableCompletionTokens:
-                    adjusted.finalBillableCompletion,
+                  billableCompletionTokens: adjusted.finalBillableCompletion,
                   billableTotalTokens: adjusted.finalBillableTotal,
                 },
               });
@@ -2561,7 +2579,7 @@ export async function editAndResend(req: Request, res: Response) {
 
     if (chatType === "IMAGE_GENERATION" && !fullContent.trim()) {
       const failureMessage = EMPTY_IMAGE_RESPONSE_ERROR;
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.message.update({
           where: { id: assistantMessage.id },
           data: { content: failureMessage },
@@ -2591,7 +2609,7 @@ export async function editAndResend(req: Request, res: Response) {
 
     if (!fullContent.trim() && chatType !== "IMAGE_GENERATION") {
       const failureMessage = FAILED_GENERATION_USER_MESSAGE;
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.message.update({
           where: { id: assistantMessage.id },
           data: { content: failureMessage },
@@ -2651,7 +2669,7 @@ export async function editAndResend(req: Request, res: Response) {
     let finalTotal = promptTokens + completionTokens;
 
     // Save response + deduct tokens
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       const walletRecord = await tx.userWallet.findUnique({
         where: { userId },
       });
@@ -2913,7 +2931,7 @@ export async function continueChatStream(req: Request, res: Response) {
       },
     });
 
-    const targetIndex = allMessages.findIndex((m) => m.id === messageId);
+    const targetIndex = allMessages.findIndex((m: any) => m.id === messageId);
     if (targetIndex === -1 || allMessages[targetIndex].role !== "ASSISTANT") {
       res
         .status(404)
@@ -2957,7 +2975,10 @@ export async function continueChatStream(req: Request, res: Response) {
       if (msg.role === "USER") {
         if (msg.attachments && msg.attachments.length > 0) {
           const { contentParts, extraPlugins } =
-            await buildAttachmentContentParts(msg.content, msg.attachments as any);
+            await buildAttachmentContentParts(
+              msg.content,
+              msg.attachments as any,
+            );
           conversationHistory.push({ role: "user", content: contentParts });
           if (i === previousMessages.length - 1) {
             attachmentPlugins = extraPlugins;
@@ -3043,7 +3064,8 @@ export async function continueChatStream(req: Request, res: Response) {
             messages: trimmedHistory,
             chatType: "STANDARD",
             max_tokens: maxCompletionTokens,
-            plugins: attachmentPlugins.length > 0 ? attachmentPlugins : undefined,
+            plugins:
+              attachmentPlugins.length > 0 ? attachmentPlugins : undefined,
             signal: abortController.signal,
           }),
       });
@@ -3107,7 +3129,7 @@ export async function continueChatStream(req: Request, res: Response) {
     // Update the message by combining old text + new text
     const newCombinedText = modelResponse.content + fullContent;
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       const adjusted = calculateAdjustedTokens(
         wallet.tokensRemaining,
         billablePromptTokens,
@@ -3176,12 +3198,10 @@ export async function continueChatStream(req: Request, res: Response) {
     res.end();
   } catch (error: any) {
     if (!res.headersSent) {
-      res
-        .status(500)
-        .json({
-          status: false,
-          message: error.message || "Internal server error",
-        });
+      res.status(500).json({
+        status: false,
+        message: error.message || "Internal server error",
+      });
     } else {
       res.write(
         `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
