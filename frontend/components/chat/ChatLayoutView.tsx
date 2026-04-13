@@ -581,7 +581,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
   if (isProfileRoute) {
     return (
       <div className="h-dvh flex bg-background overflow-hidden">
-        <main className="flex-1 flex flex-col min-w-0 relative z-[1]">
+        <main className="flex-1 flex flex-col min-w-0 relative z-1">
           {children}
         </main>
         <StartupGuide
@@ -684,13 +684,13 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         className={`h-dvh flex overflow-hidden text-foreground ${
           hasAssistantGradient
             ? "bg-background"
-            : "bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
+            : "bg-linear-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
         }`}
         style={dynamicBackgroundStyle}
       >
         <aside
-          className={`hidden md:flex flex-shrink-0 border-r border-border/50 transition-[width] duration-300 ease-in-out ${
-            sidebarCollapsed ? "w-[64px]" : "w-[280px]"
+          className={`hidden md:flex shrink-0 border-r border-border/50 transition-[width] duration-300 ease-in-out ${
+            sidebarCollapsed ? "w-16" : "w-70"
           }`}
           style={{ contain: "layout style paint", willChange: "transform" }}
           data-guide="sidebar"
@@ -713,7 +713,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
           <span className="font-semibold text-sm">
             {activeAssistantTheme?.name || "AI Colab"}
           </span>
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -738,7 +738,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-[200px] z-[9500]"
+                className="w-50 z-9500"
                 style={{ zIndex: 9500 }}
               >
                 <div className="px-2 py-1.5 border-b border-border/50 mb-1 flex flex-col items-start min-w-0">
@@ -790,7 +790,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         {mobileOpen && (
           <aside
             className={`
-              md:hidden fixed z-50 h-full w-[280px] flex-shrink-0 border-r border-border/40
+              md:hidden fixed z-50 h-full w-70 shrink-0 border-r border-border/40
               bg-background flex flex-col transition-all duration-300 ease-in-out translate-x-0
             `}
             style={{ contain: "layout style paint" }}
