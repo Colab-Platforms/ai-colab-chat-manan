@@ -8,10 +8,11 @@ import { Footer } from "./components/Footer";
 import { Navbar } from "./components/Navbar";
 import { Testimonials } from "./components/Testimonials";
 import { PricingSection } from "./components/PricingSection";
+import SmoothScrollLayout from "@/components/SmoothScrollLayout";
 
 export function NewLandingPage() {
   return (
-    <>
+    <SmoothScrollLayout>
       <Navbar />
       <HoverBlurSurface className="w-full dark:bg-[#230713] pb-20">
         <HeroSection />
@@ -22,6 +23,6 @@ export function NewLandingPage() {
       <Testimonials />
       <FAQSection />
       <Footer />
-    </>
+    </SmoothScrollLayout>
   );
 }
