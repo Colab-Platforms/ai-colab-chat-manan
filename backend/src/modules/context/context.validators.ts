@@ -1,8 +1,8 @@
 import Joi from "joi";
 
-const createContextSchema = Joi.object({
+export const createContextSchema = Joi.object({
   folderId: Joi.number().integer().optional().allow(null),
-  type: Joi.string().valid('GLOBAL', 'FOLDER', 'CUSTOM').optional(),
+  type: Joi.string().valid("GLOBAL", "FOLDER", "CUSTOM").optional(),
   title: Joi.string().trim().required().messages({
     "string.empty": "Title is required",
     "any.required": "Title is required",
@@ -16,9 +16,9 @@ const createContextSchema = Joi.object({
   isAutoSelected: Joi.boolean().optional(),
 });
 
-const updateContextSchema = Joi.object({
+export const updateContextSchema = Joi.object({
   folderId: Joi.number().integer().optional().allow(null),
-  type: Joi.string().valid('GLOBAL', 'FOLDER', 'CUSTOM').optional(),
+  type: Joi.string().valid("GLOBAL", "FOLDER", "CUSTOM").optional(),
   title: Joi.string().trim().optional(),
   memory: Joi.string().trim().optional(),
   priority: Joi.number().integer().optional(),

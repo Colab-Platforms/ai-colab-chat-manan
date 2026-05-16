@@ -1,6 +1,6 @@
 import Joi from "joi";
 
-const createModelSchema = Joi.object({
+export const createModelSchema = Joi.object({
   name: Joi.string().trim().required(),
   modelProviderId: Joi.number().integer().positive().required(),
   externalId: Joi.string().trim().required(),
@@ -32,7 +32,7 @@ const createModelSchema = Joi.object({
     .optional(),
 });
 
-const updateModelSchema = Joi.object({
+export const updateModelSchema = Joi.object({
   name: Joi.string().trim().optional(),
   modelProviderId: Joi.number().integer().positive().optional(),
   externalId: Joi.string().trim().optional(),
