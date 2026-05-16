@@ -1,6 +1,6 @@
 import Joi from "joi";
 
-const createAssistantSchema = Joi.object({
+export const createAssistantSchema = Joi.object({
   name: Joi.string().trim().required(),
   description: Joi.string().trim().allow(null, "").optional(),
   icon: Joi.string().trim().optional(),
@@ -19,7 +19,7 @@ const createAssistantSchema = Joi.object({
     .optional(),
 });
 
-const updateAssistantSchema = Joi.object({
+export const updateAssistantSchema = Joi.object({
   name: Joi.string().trim().optional(),
   description: Joi.string().trim().allow(null, "").optional(),
   icon: Joi.string().trim().optional(),
