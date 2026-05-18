@@ -81,10 +81,8 @@ export function MicButton({ onResult, onStart, onStop, hasText, guideId }: MicBu
       size="icon"
       className={`h-10 w-10 rounded-full transition-all duration-200 ${
         listening
-          ? "inline-flex text-white bg-destructive hover:bg-destructive/90 shadow-md animate-pulse"
-          : hasText
-          ? "hidden sm:inline-flex text-muted-foreground hover:bg-muted"
-          : "inline-flex text-muted-foreground hover:bg-muted"
+          ? "text-white bg-destructive hover:bg-destructive/90 shadow-md animate-pulse"
+          : "text-muted-foreground hover:bg-muted"
       }`}
       onClick={handleClick}
       title={listening ? "Stop listening" : "Start voice input"}

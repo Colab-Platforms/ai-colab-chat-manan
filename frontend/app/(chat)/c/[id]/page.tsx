@@ -76,10 +76,22 @@ export default function ChatPage() {
   const streamAbortControllersRef = useRef<AbortController[]>([]);
   const stopRequestedRef = useRef(false);
   const [chatCapability, setChatCapability] = useState<any>("STANDARD");
+  const [maxModels, setMaxModels] = useState<number>(1); // 1 = single mode (default)
 
   useEffect(() => {
     selectedModelsRef.current = selectedModels;
   }, [selectedModels]);
+
+  // Single / Multiple mode toggle listener
+  useEffect(() => {
+    const handleModeChange = (e: Event) => {
+      const mode = (e as CustomEvent).detail?.mode;
+      if (mode === "single") setMaxModels(1);
+      else if (mode === "multiple") setMaxModels(-1);
+    };
+    window.addEventListener("ai-colab:mode-change", handleModeChange);
+    return () => window.removeEventListener("ai-colab:mode-change", handleModeChange);
+  }, []);
 
   const clearStreamAbortControllers = useCallback(() => {
     streamAbortControllersRef.current = [];
@@ -1298,7 +1310,7 @@ export default function ChatPage() {
         models={models}
         selectedModels={selectedModels}
         onModelChange={handleModelChange}
-        maxModels={-1}
+        maxModels={maxModels}
         onSend={(content, attachmentIds, chatType, attachmentObjects) => sendMessage(content, attachmentIds, undefined, chatType, attachmentObjects)}
         onEnhancePrompt={handleEnhancePrompt}
         isSending={isSending}

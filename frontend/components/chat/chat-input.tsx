@@ -4,9 +4,25 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Plus, Loader2, ArrowUp, Search, X, Globe, ChevronDown, Check, Sparkles, Image as ImageIcon, MessageSquare, Square,
-  FileText, File, Upload, FileSpreadsheet
+import {
+  Plus,
+  Loader2,
+  ArrowUp,
+  Search,
+  X,
+  Check,
+  Sparkles,
+  Image as ImageIcon,
+  MessageSquare,
+  Square,
+  FileText,
+  File,
+  Upload,
+  FileSpreadsheet,
+  Camera,
+  Paperclip,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -23,8 +39,11 @@ import { toast } from "react-toastify";
 
 // Dynamically imported so react-speech-recognition never runs on the server
 const MicButton = dynamic(
-  () => import("@/components/chat/mic-button").then((m) => ({ default: m.MicButton })),
-  { ssr: false, loading: () => null }
+  () =>
+    import("@/components/chat/mic-button").then((m) => ({
+      default: m.MicButton,
+    })),
+  { ssr: false, loading: () => null },
 );
 
 interface Model {
@@ -52,7 +71,12 @@ interface ChatInputProps {
   selectedModels: number[];
   onModelChange: (ids: number[]) => void;
   maxModels: number;
-  onSend: (content: string, attachmentIds?: number[], chatType?: ChatType, attachmentObjects?: UploadedAttachment[]) => void;
+  onSend: (
+    content: string,
+    attachmentIds?: number[],
+    chatType?: ChatType,
+    attachmentObjects?: UploadedAttachment[],
+  ) => void;
   onEnhancePrompt?: (content: string) => Promise<{
     enhancedPrompt: string;
   }>;
@@ -66,9 +90,19 @@ interface ChatInputProps {
   chatType?: ChatType;
 }
 
-type ChatType = "STANDARD" | "DEEP_RESEARCH" | "IMAGE_GENERATION" | "WEB_SEARCH";
+type ChatType =
+  | "STANDARD"
+  | "DEEP_RESEARCH"
+  | "IMAGE_GENERATION"
+  | "WEB_SEARCH";
 
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
+const IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+];
 const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt,.md,.ppt,.pptx";
 
 const CAPABILITY_PATTERNS: Record<Exclude<ChatType, "STANDARD">, RegExp[]> = {
@@ -119,7 +153,11 @@ function inferChatTypeFromPrompt(prompt: string): ChatType {
   const text = prompt.trim();
   if (!text) return "STANDARD";
 
-  const orderedTypes = ["IMAGE_GENERATION", "DEEP_RESEARCH", "WEB_SEARCH"] as const;
+  const orderedTypes = [
+    "IMAGE_GENERATION",
+    "DEEP_RESEARCH",
+    "WEB_SEARCH",
+  ] as const;
   const scores: Record<(typeof orderedTypes)[number], number> = {
     IMAGE_GENERATION: 0,
     DEEP_RESEARCH: 0,
@@ -176,7 +214,11 @@ function getAttachmentCategory(fileName: string, mimeType: string) {
   ) {
     return "presentation";
   }
-  if (lowerMime === "text/markdown" || lowerMime === "text/x-markdown" || ext === "md") {
+  if (
+    lowerMime === "text/markdown" ||
+    lowerMime === "text/x-markdown" ||
+    ext === "md"
+  ) {
     return "markdown";
   }
   if (lowerMime.startsWith("text/") || ext === "txt") return "text";
@@ -188,7 +230,9 @@ function getAttachmentVisual(fileName: string, mimeType: string) {
   switch (category) {
     case "image":
       return {
-        icon: <ImageIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />,
+        icon: (
+          <ImageIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+        ),
         chipClass:
           "bg-violet-50/90 border-violet-200/80 text-violet-900 dark:bg-violet-500/10 dark:border-violet-400/30 dark:text-violet-100",
         iconWrapClass: "bg-violet-100/80 dark:bg-violet-500/20",
@@ -202,28 +246,42 @@ function getAttachmentVisual(fileName: string, mimeType: string) {
       };
     case "spreadsheet":
       return {
-        icon: <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />,
+        icon: (
+          <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />
+        ),
         chipClass:
           "bg-emerald-50/90 border-emerald-200/80 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100",
         iconWrapClass: "bg-emerald-100/80 dark:bg-emerald-500/20",
       };
     case "word":
       return {
-        icon: <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">W</span>,
+        icon: (
+          <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">
+            W
+          </span>
+        ),
         chipClass:
           "bg-slate-100/90 border-slate-300/80 text-slate-900 dark:bg-slate-800/50 dark:border-slate-600/50 dark:text-slate-100",
-        iconWrapClass: "bg-white border border-black/20 dark:bg-black dark:border-white/25",
+        iconWrapClass:
+          "bg-white border border-black/20 dark:bg-black dark:border-white/25",
       };
     case "presentation":
       return {
-        icon: <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">P</span>,
+        icon: (
+          <span className="text-[10px] font-extrabold leading-none text-black dark:text-white">
+            P
+          </span>
+        ),
         chipClass:
           "bg-fuchsia-50/90 border-fuchsia-200/80 text-fuchsia-900 dark:bg-fuchsia-500/10 dark:border-fuchsia-400/30 dark:text-fuchsia-100",
-        iconWrapClass: "bg-white border border-black/20 dark:bg-black dark:border-white/25",
+        iconWrapClass:
+          "bg-white border border-black/20 dark:bg-black dark:border-white/25",
       };
     case "markdown":
       return {
-        icon: <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />,
+        icon: (
+          <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+        ),
         chipClass:
           "bg-emerald-50/90 border-emerald-200/80 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100",
         iconWrapClass: "bg-emerald-100/80 dark:bg-emerald-500/20",
@@ -261,11 +319,13 @@ export function ChatInput({
   chatType: propChatType,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [chatType, setChatType] = useState<ChatType>("STANDARD");
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhancedPrompt, setEnhancedPrompt] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const dragCounterRef = useRef(0);
 
   // Speech-to-text: track the text that existed before mic was started
@@ -287,7 +347,7 @@ export function ChatInput({
   const handleMicStop = useCallback(() => {
     // Nothing needed — content is already set by handleSpeechResult
   }, []);
-  
+
   useEffect(() => {
     if (propChatType) {
       setChatType(propChatType);
@@ -300,11 +360,16 @@ export function ChatInput({
       setChatType("STANDARD");
       localStorage.setItem("preferredChatType", "STANDARD");
     } else {
-      const savedType = localStorage.getItem("preferredChatType") as ChatType | null;
+      const savedType = localStorage.getItem(
+        "preferredChatType",
+      ) as ChatType | null;
       if (savedType === "DEEP_RESEARCH") {
         setChatType("STANDARD");
         localStorage.setItem("preferredChatType", "STANDARD");
-      } else if (savedType && ["STANDARD", "IMAGE_GENERATION", "WEB_SEARCH"].includes(savedType)) {
+      } else if (
+        savedType &&
+        ["STANDARD", "IMAGE_GENERATION", "WEB_SEARCH"].includes(savedType)
+      ) {
         setChatType(savedType);
       }
     }
@@ -321,21 +386,29 @@ export function ChatInput({
     }
 
     // Identify models that support the new capability
-    const validModels = models.filter(m => {
-      if (!m.capabilities || m.capabilities.length === 0) return type === "STANDARD";
+    const validModels = models.filter((m) => {
+      if (!m.capabilities || m.capabilities.length === 0)
+        return type === "STANDARD";
       return m.capabilities.includes(type);
     });
 
     // Check currently selected models for compatibility
-    const compatibleSelected = selectedModels.filter(id => validModels.some(vm => vm.id === id));
-    
+    const compatibleSelected = selectedModels.filter((id) =>
+      validModels.some((vm) => vm.id === id),
+    );
+
     // For specialized modes, we generally want exactly one model selected
     const isSpecialized = type !== "STANDARD";
     const forceSingleModel = isSpecialized;
 
-    if (compatibleSelected.length === 0 || (forceSingleModel && compatibleSelected.length > 1)) {
+    if (
+      compatibleSelected.length === 0 ||
+      (forceSingleModel && compatibleSelected.length > 1)
+    ) {
       // Switch to the best single default model for this capability
-      const defaultForType = validModels.find(m => m.defaultForCapabilities?.includes(type));
+      const defaultForType = validModels.find((m) =>
+        m.defaultForCapabilities?.includes(type),
+      );
       if (defaultForType) {
         onModelChange([defaultForType.id]);
       } else if (validModels.length > 0) {
@@ -370,7 +443,9 @@ export function ChatInput({
 
   // Automatically enforce VISION capability if image files are attached
   useEffect(() => {
-    const hasImageAttachment = attachments.some(a => a.mimeType.startsWith('image/'));
+    const hasImageAttachment = attachments.some((a) =>
+      a.mimeType.startsWith("image/"),
+    );
 
     if (hasImageAttachment) {
       const validSelectedModels = selectedModels.filter((id) => {
@@ -383,22 +458,39 @@ export function ChatInput({
           onModelChange(validSelectedModels);
         } else {
           // Fallback to the first VISION-capable model
-          const fallback = models.find((m) => m.capabilities?.includes("VISION"));
+          const fallback = models.find((m) =>
+            m.capabilities?.includes("VISION"),
+          );
           if (fallback) {
             onModelChange([fallback.id]);
-            toast.info(`Switched to ${fallback.name} because it supports reading file attachments.`);
+            toast.info(
+              `Switched to ${fallback.name} because it supports reading file attachments.`,
+            );
           } else {
-            toast.warning("No models found that explicitly support file attachments (VISION capability).");
+            toast.warning(
+              "No models found that explicitly support file attachments (VISION capability).",
+            );
           }
         }
       }
     }
   }, [attachments.length, selectedModels, models, onModelChange]);
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const resolvedDraftStorageKey = draftStorageKey?.trim();
   const skipNextDraftSaveRef = useRef(false);
+
+  // Detect mobile for Enter key behaviour
+  useEffect(() => {
+    const check = () =>
+      setIsMobile(window.matchMedia("(pointer: coarse)").matches);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   useEffect(() => {
     if (!resolvedDraftStorageKey) return;
@@ -422,13 +514,18 @@ export function ChatInput({
 
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      const maxHeight = 112;
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
-      textareaRef.current.style.overflowY =
-        textareaRef.current.scrollHeight > maxHeight ? "auto" : "hidden";
+      if (isExpanded) {
+        textareaRef.current.style.height = "100%";
+        textareaRef.current.style.overflowY = "auto";
+      } else {
+        textareaRef.current.style.height = "auto";
+        const maxHeight = 112;
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
+        textareaRef.current.style.overflowY =
+          textareaRef.current.scrollHeight > maxHeight ? "auto" : "hidden";
+      }
     }
-  }, [content]);
+  }, [content, isExpanded]);
 
   useEffect(() => {
     if (initialPrompt) {
@@ -458,9 +555,9 @@ export function ChatInput({
     if (!content.trim() || isSending) return;
     // Only pass IDs of fully uploaded attachments
     const uploadedIds = attachments
-      .filter(a => !a.uploading)
-      .map(a => a.id);
-    
+      .filter((a) => !a.uploading)
+      .map((a) => a.id);
+
     // Auto-capability detection disabled as per user request to be fully manual.
     let outgoingChatType = chatType;
     /*
@@ -473,21 +570,36 @@ export function ChatInput({
       }
     }
     */
-    
-    onSend(content.trim(), uploadedIds.length > 0 ? uploadedIds : undefined, outgoingChatType, attachments.filter(a => !a.uploading));
+
+    onSend(
+      content.trim(),
+      uploadedIds.length > 0 ? uploadedIds : undefined,
+      outgoingChatType,
+      attachments.filter((a) => !a.uploading),
+    );
     setContent("");
     if (resolvedDraftStorageKey) {
       localStorage.removeItem(resolvedDraftStorageKey);
     }
     setEnhancedPrompt("");
     // Revoke any object URLs to avoid memory leaks
-    attachments.forEach(a => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
+    attachments.forEach((a) => {
+      if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    });
     setAttachments([]);
+    setIsExpanded(false);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
   const handleEnhance = async () => {
-    if (!onEnhancePrompt || !content.trim() || isSending || isEnhancing || hasUploadingFiles) return;
+    if (
+      !onEnhancePrompt ||
+      !content.trim() ||
+      isSending ||
+      isEnhancing ||
+      hasUploadingFiles
+    )
+      return;
 
     try {
       setIsEnhancing(true);
@@ -499,7 +611,11 @@ export function ChatInput({
       }
       setEnhancedPrompt(enhanced);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to enhance prompt");
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to enhance prompt",
+      );
     } finally {
       setIsEnhancing(false);
     }
@@ -518,52 +634,65 @@ export function ChatInput({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      // On mobile/touch devices, Enter creates a new line instead of sending
+      if (isMobile) return;
       e.preventDefault();
       handleSubmit();
     }
   };
 
-  const uploadFiles = useCallback(async (newFiles: File[]) => {
-    if (newFiles.length === 0) return;
-    if (isSending) return;
+  const uploadFiles = useCallback(
+    async (newFiles: File[]) => {
+      if (newFiles.length === 0) return;
+      if (isSending) return;
 
-    if (attachments.length + newFiles.length > 5) {
-      toast.error("You can only attach up to 5 files per message constraint.");
-      return;
-    }
-
-    for (const file of newFiles) {
-      const tempId = Date.now() + Math.random();
-      const previewUrl = IMAGE_TYPES.includes(file.type) ? URL.createObjectURL(file) : undefined;
-
-      const placeholder: UploadedAttachment = {
-        id: tempId as any,
-        fileName: file.name,
-        fileUrl: "",
-        mimeType: file.type,
-        previewUrl,
-        uploading: true,
-      };
-
-      setAttachments(prev => [...prev, placeholder]);
-
-      try {
-        const res = await attachmentService.presend(file);
-        const data = res.data.data;
-        setAttachments(prev =>
-          prev.map(a =>
-            a.id === (tempId as any)
-              ? { ...a, id: data.id, fileUrl: data.fileUrl, uploading: false }
-              : a
-          )
+      if (attachments.length + newFiles.length > 5) {
+        toast.error(
+          "You can only attach up to 5 files per message constraint.",
         );
-      } catch (err: any) {
-        toast.error(`Failed to upload ${file.name}: ${err?.response?.data?.message || err.message}`);
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
-        setAttachments(prev => prev.filter(a => a.id !== (tempId as any)));
+        return;
       }
-    }
-  }, [attachments.length, isSending]);
+
+      for (const file of newFiles) {
+        const tempId = Date.now() + Math.random();
+        const previewUrl = IMAGE_TYPES.includes(file.type)
+          ? URL.createObjectURL(file)
+          : undefined;
+
+        const placeholder: UploadedAttachment = {
+          id: tempId as any,
+          fileName: file.name,
+          fileUrl: "",
+          mimeType: file.type,
+          previewUrl,
+          uploading: true,
+        };
+
+        setAttachments((prev) => [...prev, placeholder]);
+
+        try {
+          const res = await attachmentService.presend(file);
+          const data = res.data.data;
+          setAttachments((prev) =>
+            prev.map((a) =>
+              a.id === (tempId as any)
+                ? { ...a, id: data.id, fileUrl: data.fileUrl, uploading: false }
+                : a,
+            ),
+          );
+        } catch (err: any) {
+          toast.error(
+            `Failed to upload ${file.name}: ${err?.response?.data?.message || err.message}`,
+          );
+          if (previewUrl) URL.revokeObjectURL(previewUrl);
+          setAttachments((prev) =>
+            prev.filter((a) => a.id !== (tempId as any)),
+          );
+        }
+      }
+    },
+    [attachments.length, isSending],
+  );
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -573,7 +702,8 @@ export function ChatInput({
   };
 
   useEffect(() => {
-    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes("Files");
+    const hasFiles = (e: DragEvent) =>
+      Array.from(e.dataTransfer?.types || []).includes("Files");
 
     const onDragEnter = (e: DragEvent) => {
       if (!hasFiles(e)) return;
@@ -621,23 +751,26 @@ export function ChatInput({
   }, [isDragActive, uploadFiles]);
 
   const removeAttachment = (id: number) => {
-    const found = attachments.find(a => a.id === id);
+    const found = attachments.find((a) => a.id === id);
     if (!found) return;
 
     if (found.previewUrl) URL.revokeObjectURL(found.previewUrl);
 
     if (!found.uploading && typeof found.id === "number") {
-      attachmentService.delete(found.id).catch(err => {
+      attachmentService.delete(found.id).catch((err) => {
         console.error("Failed to delete attachment from server", err);
       });
     }
 
-    setAttachments(prev => prev.filter(a => a.id !== id));
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
   const isSingle = maxModels === 1;
+
+  // In single mode: clicking any model switches to it immediately (no deselect needed)
   const toggleModel = (modelId: number) => {
     if (isSingle) {
+      // Always switch — no need to deselect first
       onModelChange([modelId]);
     } else if (selectedModels.includes(modelId)) {
       if (selectedModels.length > 1) {
@@ -646,6 +779,20 @@ export function ChatInput({
     } else if (maxModels === -1 || selectedModels.length < maxModels) {
       onModelChange([...selectedModels, modelId]);
     }
+  };
+
+  // Single / Multiple mode toggle
+  const handleModeToggle = (mode: "single" | "multiple") => {
+    if (mode === "single" && maxModels !== 1) {
+      // Caller controls maxModels; we just reduce selection to 1
+      if (selectedModels.length > 1) {
+        onModelChange([selectedModels[0]]);
+      }
+    }
+    // Propagate so parent can flip maxModels; use a custom event for now
+    window.dispatchEvent(
+      new CustomEvent("ai-colab:mode-change", { detail: { mode } }),
+    );
   };
 
   const selectedModelNames = models
@@ -660,7 +807,7 @@ export function ChatInput({
     WEB_SEARCH: "Web search",
   };
 
-  const hasUploadingFiles = attachments.some(a => a.uploading);
+  const hasUploadingFiles = attachments.some((a) => a.uploading);
 
   return (
     <>
@@ -673,8 +820,12 @@ export function ChatInput({
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl from-primary/25 via-primary/15 to-transparent text-primary">
                 <Upload className="h-7 w-7" />
               </div>
-              <p className="text-xl font-semibold tracking-tight text-foreground">Add anything</p>
-              <p className="mt-2 text-sm">Drop files anywhere to attach them to your message</p>
+              <p className="text-xl font-semibold tracking-tight text-foreground">
+                Add anything
+              </p>
+              <p className="mt-2 text-sm">
+                Drop files anywhere to attach them to your message
+              </p>
               <div className="mt-5 inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                 Max 5 files per message
               </div>
@@ -684,328 +835,573 @@ export function ChatInput({
       )}
       <div className="pt-2 pb-6 px-4 w-full">
         <div className="max-w-3xl mx-auto">
-          <div className="relative border border-border/60 rounded-[28px] bg-background dark:bg-muted/40 shadow-sm flex flex-col pt-3 pb-3 px-3 focus-within:ring-1 focus-within:ring-primary/20 transition-all max-h-[50vh] md:max-h-[60vh]" data-guide="chat-input-area">
-
-          {/* Scrollable Context Area */}
-          <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar min-h-0">
-            {/* Top Row: Chat Type Pill */}
-          {chatType !== "STANDARD" && (
-            <div className="flex items-center mb-1 px-2 mt-1 flex-shrink-0">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 shadow-sm animate-in fade-in zoom-in-95">
-                {chatType === "WEB_SEARCH" && <Search className="w-3.5 h-3.5" />}
-                {chatType === "DEEP_RESEARCH" && <Sparkles className="w-3.5 h-3.5" />}
-                {chatType === "IMAGE_GENERATION" && <ImageIcon className="w-3.5 h-3.5" />}
-                {typeLabels[chatType]}
-                <button 
-                  onClick={() => handleChatTypeChange("STANDARD")} 
-                  className="ml-1 opacity-70 hover:opacity-100 hover:text-primary transition-opacity"
-                  title="Clear type"
+          <div
+            className={`border border-border/60 bg-background dark:bg-muted/40 shadow-sm flex flex-col focus-within:ring-1 focus-within:ring-primary/20 transition-all ${
+              isExpanded
+                ? "fixed inset-0 z-[9999] rounded-none h-[100dvh] pt-4 pb-4 px-4 sm:pt-6 sm:px-6"
+                : "relative rounded-[28px] pt-3 pb-3 px-3 max-h-[50vh] md:max-h-[60vh]"
+            }`}
+            data-guide="chat-input-area"
+          >
+            {isExpanded && (
+              <div className="flex justify-between items-center pb-3 mb-2 border-b border-border/50 shrink-0">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Draft Message
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(false)}
+                  className="p-1.5 text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-full transition-colors"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <Minimize2 className="w-5 h-5" />
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Multi-model selection chips */}
-          {selectedModels.length > 1 && (
-            <div className="flex flex-wrap gap-1.5 px-2 mb-1 mt-1 flex-shrink-0">
-              {models
-                .filter((m) => selectedModels.includes(m.id))
-                .map((model) => (
-                  <div
-                    key={model.id}
-                    className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 animate-in fade-in-0 slide-in-from-left-1 duration-200"
-                  >
-                    {model.externalId && getModelIcon(model.externalId) ? (
-                      <img src={getModelIcon(model.externalId)!} alt="" className="w-3.5 h-3.5 rounded-sm object-contain" />
-                    ) : null}
-                    <span className="max-w-[120px] truncate">{model.name}</span>
-                    {selectedModels.length > 1 && (
-                      <button
-                        onClick={() => onModelChange(selectedModels.filter((id) => id !== model.id))}
-                        className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
-                        title={`Remove ${model.name}`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 h-5 rounded-full bg-muted text-muted-foreground">
-                {selectedModels.length} models
-              </Badge>
-            </div>
-          )}
-
-          {/* Attachment previews */}
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1 flex-shrink-0">
-              {attachments.map((att) => {
-                const visual = getAttachmentVisual(att.fileName, att.mimeType);
-                return (
-                <div
-                  key={att.id}
-                  className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs border group max-w-[200px] ${visual.chipClass}`}
-                >
-                  {/* Image thumbnail or icon */}
-                  {att.previewUrl ? (
-                    <img
-                      src={att.previewUrl}
-                      alt={att.fileName}
-                      className="w-8 h-8 rounded-md object-cover flex-shrink-0"
-                    />
-                  ) : (
-                    <div className={`flex-shrink-0 rounded-md p-1 ${visual.iconWrapClass}`}>
-                      {visual.icon}
-                    </div>
-                  )}
-
-                  <div className="flex flex-col min-w-0">
-                    <span className="truncate max-w-[120px] font-medium leading-tight">{att.fileName}</span>
-                    {att.uploading && (
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading…
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Remove button */}
-                  <button
-                    onClick={() => removeAttachment(att.id)}
-                    className="absolute -top-1.5 -right-1.5 z-10 h-5 w-5 rounded-full border border-white/30 bg-black text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shadow-sm dark:border-white/40 dark:bg-black dark:text-white"
-                    title="Remove"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )})}
-            </div>
-          )}
-
-          {enhancedPrompt && (
-            <div className="mx-2 mb-2 mt-1 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4 flex-shrink-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 w-full">
-                  <p className="text-xs font-semibold text-primary mb-1">Enhanced prompt preview</p>
-                  <div className="max-h-[100px] sm:max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
-                    <p className="whitespace-pre-wrap break-words text-sm text-foreground leading-relaxed">{enhancedPrompt}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 rounded-full px-3"
-                  onClick={applyEnhancedPrompt}
-                >
-                  Use this prompt
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 rounded-full px-3"
-                  onClick={discardEnhancedPrompt}
-                >
-                  Keep original
-                </Button>
-              </div>
-            </div>
-          )}
-          </div>
-
-          {/* Middle Row: input & actions */}
-          <div className="flex items-end gap-2 relative pb-1 flex-shrink-0" data-guide="composer-actions">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPT_TYPES}
-              className="hidden"
-              onChange={handleFileChange}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="flex-shrink-0 h-10 w-10 text-muted-foreground hover:bg-muted hover:text-foreground rounded-full ml-1 mb-0.5"
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach files"
-              disabled={isSending}
-              data-guide="attach"
+            {/* Scrollable Context Area */}
+            <div
+              className={`flex flex-col gap-1 overflow-y-auto custom-scrollbar min-h-0 ${isExpanded ? "hidden" : ""}`}
             >
-              <Plus className="w-5 h-5" />
-            </Button>
+              {/* Top Row: Chat Type Pill */}
+              {chatType !== "STANDARD" && (
+                <div className="flex items-center mb-1 px-2 mt-1 flex-shrink-0">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 shadow-sm animate-in fade-in zoom-in-95">
+                    {chatType === "WEB_SEARCH" && (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    {chatType === "DEEP_RESEARCH" && (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    {chatType === "IMAGE_GENERATION" && (
+                      <ImageIcon className="w-3.5 h-3.5" />
+                    )}
+                    {typeLabels[chatType]}
+                    <button
+                      onClick={() => handleChatTypeChange("STANDARD")}
+                      className="ml-1 opacity-70 hover:opacity-100 hover:text-primary transition-opacity"
+                      title="Clear type"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            <Textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask anything..."
-              maxLength={10000}
-              rows={1}
-              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-h-[40px] max-h-[112px] leading-relaxed py-2.5 text-[15px] self-center overflow-y-auto"
-              data-guide="chat-input"
-            />
+              {/* Multi-model selection chips */}
+              {selectedModels.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 px-2 mb-1 mt-1 flex-shrink-0">
+                  {models
+                    .filter((m) => selectedModels.includes(m.id))
+                    .map((model) => (
+                      <div
+                        key={model.id}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium border border-primary/20 animate-in fade-in-0 slide-in-from-left-1 duration-200"
+                      >
+                        {model.externalId && getModelIcon(model.externalId) ? (
+                          <img
+                            src={getModelIcon(model.externalId)!}
+                            alt=""
+                            className="w-3.5 h-3.5 rounded-sm object-contain"
+                          />
+                        ) : null}
+                        <span className="max-w-[120px] truncate">
+                          {model.name}
+                        </span>
+                        {selectedModels.length > 1 && (
+                          <button
+                            onClick={() =>
+                              onModelChange(
+                                selectedModels.filter((id) => id !== model.id),
+                              )
+                            }
+                            className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                            title={`Remove ${model.name}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0.5 h-5 rounded-full bg-muted text-muted-foreground"
+                  >
+                    {selectedModels.length} models
+                  </Badge>
+                </div>
+              )}
 
-            <div className="flex items-center gap-0.5 flex-shrink-0 mb-0.5 mr-1">
-              <div className="h-6 w-px bg-border/60 mr-1 hidden sm:block" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 rounded-full px-2 text-xs font-medium"
-                onClick={handleEnhance}
-                disabled={!content.trim() || isSending || isEnhancing || hasUploadingFiles || !onEnhancePrompt}
-                title={hasUploadingFiles ? "Wait for files to finish uploading" : "Enhance prompt with GPT-4.1"}
-                data-guide="enhance"
-              >
-                {isEnhancing ? (
-                  <Loader2 className="h-3.5 w-3.5 sm:mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5 sm:mr-1.5" />
-                )}
-                <span className="hidden sm:inline">Enhance</span>
-              </Button>
-              {/* MicButton is dynamically imported with ssr:false — handles all speech logic */}
-              <MicButton
-                onResult={handleSpeechResult}
-                onStart={handleMicStart}
-                onStop={handleMicStop}
-                hasText={!!content.trim()}
-                guideId="mic"
+              {/* Attachment previews */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-2 mb-2 mt-1 flex-shrink-0">
+                  {attachments.map((att) => {
+                    const visual = getAttachmentVisual(
+                      att.fileName,
+                      att.mimeType,
+                    );
+                    return (
+                      <div
+                        key={att.id}
+                        className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs border group max-w-[200px] ${visual.chipClass}`}
+                      >
+                        {/* Image thumbnail or icon */}
+                        {att.previewUrl ? (
+                          <img
+                            src={att.previewUrl}
+                            alt={att.fileName}
+                            className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div
+                            className={`flex-shrink-0 rounded-md p-1 ${visual.iconWrapClass}`}
+                          >
+                            {visual.icon}
+                          </div>
+                        )}
+
+                        <div className="flex flex-col min-w-0">
+                          <span className="truncate max-w-[120px] font-medium leading-tight">
+                            {att.fileName}
+                          </span>
+                          {att.uploading && (
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" />{" "}
+                              Uploading…
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Remove button */}
+                        <button
+                          onClick={() => removeAttachment(att.id)}
+                          className="absolute -top-1.5 -right-1.5 z-10 h-5 w-5 rounded-full border border-white/30 bg-black text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shadow-sm dark:border-white/40 dark:bg-black dark:text-white"
+                          title="Remove"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {enhancedPrompt && (
+                <div className="mx-2 mb-2 mt-1 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4 flex-shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 w-full">
+                      <p className="text-xs font-semibold text-primary mb-1">
+                        Enhanced prompt preview
+                      </p>
+                      <div className="max-h-[100px] sm:max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                        <p className="whitespace-pre-wrap break-words text-sm text-foreground leading-relaxed">
+                          {enhancedPrompt}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 rounded-full px-3"
+                      onClick={applyEnhancedPrompt}
+                    >
+                      Use this prompt
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 rounded-full px-3"
+                      onClick={discardEnhancedPrompt}
+                    >
+                      Keep original
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Full-width Textarea Row */}
+            <div
+              className={`flex gap-2 pb-1 flex-shrink-0 px-1 relative min-w-0 ${isExpanded ? "flex-1 items-stretch min-h-0" : "items-end"}`}
+            >
+              {/* Hidden file inputs */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPT_TYPES}
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
               />
 
-              <Button
-                type="button"
-                size="icon"
-                className={`h-10 w-10 rounded-full transition-all duration-200 ${
-                  content.trim() && !isSending && !hasUploadingFiles
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md scale-100"
-                    : "bg-muted text-muted-foreground scale-95"
-                }`}
-                onClick={isSending ? onStopStreaming : handleSubmit}
-                disabled={!isSending && (!content.trim() || hasUploadingFiles)}
-                title={
-                  isSending
-                    ? "Stop generating"
-                    : hasUploadingFiles
-                      ? "Wait for files to finish uploading"
-                      : "Send message"
-                }
+              <div
+                className={`flex-1 flex min-w-0 relative ${isExpanded ? "h-full items-stretch min-h-0" : "items-start"}`}
               >
-                {isSending ? (
-                  <Square className="w-4 h-4 fill-current" />
-                ) : (
-                  <ArrowUp className="w-5 h-5" />
-                )}
-              </Button>
+                <Textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask anything..."
+                  maxLength={10000}
+                  rows={1}
+                  className={`border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-w-0 min-h-[40px] leading-relaxed py-2.5 text-[15px] overflow-y-auto ${
+                    isExpanded
+                      ? "max-h-full h-full text-[16px] sm:text-[15px]"
+                      : "max-h-[120px] self-center pr-5"
+                  }`}
+                  data-guide="chat-input"
+                />
+
+                {!isExpanded &&
+                  (content.length > 80 || content.split("\n").length >= 3) && (
+                    <button
+                      type="button"
+                      onClick={() => setIsExpanded(true)}
+                      className="absolute top-1 right-0 p-0 text-muted-foreground/40 hover:text-foreground transition-colors z-10 sm:hidden"
+                      title="Expand input"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+              </div>
             </div>
-          </div>
 
-          {/* Bottom Row: Model & Chat Type Selector Dropdown */}
-          <div className="flex items-center mt-2 px-2">
-            <DropdownMenu onOpenChange={(open) => {
-              if (open) {
-                window.dispatchEvent(new Event("ai-colab:capability-menu-opened"));
-              } else {
-                window.dispatchEvent(new Event("ai-colab:capability-menu-closed"));
-              }
-            }}>
-              <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted/60 outline-none" data-guide="model-capability-trigger">
-                {(() => {
-                  const singleModel = selectedModels.length === 1
-                    ? models.find(m => m.id === selectedModels[0])
-                    : null;
-                  const icon = singleModel?.externalId ? getModelIcon(singleModel.externalId) : null;
-                  return icon
-                    ? <img src={icon} alt="" className="w-4 h-4 rounded-sm object-contain opacity-80" />
-                    : <Globe className="w-4 h-4 opacity-70" />;
-                })()}
-                <span className="truncate max-w-[200px] sm:max-w-[300px]">
-                  {chatType !== "STANDARD" ? typeLabels[chatType] : "Standard chat"} 
-                  {" • "} 
-                  {selectedModels.length > 1 ? `${selectedModels.length} models` : (selectedModelNames || "Select a model")}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 opacity-50" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[300px] p-2 rounded-xl z-[9500]" style={{ zIndex: 9500 }} data-guide="capability-menu">
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2">Capabilities</DropdownMenuLabel>
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => { handleChatTypeChange("STANDARD"); window.dispatchEvent(new Event("ai-colab:capability-selected")); }}>
-                  <div className="w-4 flex justify-center">{chatType === "STANDARD" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-muted-foreground mr-1" />
-                    <span>Standard Chat</span>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => { handleChatTypeChange("WEB_SEARCH"); window.dispatchEvent(new Event("ai-colab:capability-selected")); }}>
-                  <div className="w-4 flex justify-center">{chatType === "WEB_SEARCH" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <div className="flex items-center gap-2">
-                    <Search className="w-4 h-4 text-muted-foreground mr-1" />
-                    <span>Web Search</span>
-                  </div>
-                </DropdownMenuItem>
-                {/*
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => handleChatTypeChange("DEEP_RESEARCH")}>
-                  <div className="w-4 flex justify-center">{chatType === "DEEP_RESEARCH" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-muted-foreground mr-1" />
-                    <span>Deep Research</span>
-                  </div>
-                </DropdownMenuItem>
-                */}
-                <DropdownMenuItem className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2" onClick={() => { handleChatTypeChange("IMAGE_GENERATION"); window.dispatchEvent(new Event("ai-colab:capability-selected")); }}>
-                  <div className="w-4 flex justify-center">{chatType === "IMAGE_GENERATION" && <Check className="w-3 h-3 text-primary" />}</div>
-                  <div className="flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-muted-foreground mr-1" />
-                    <span>Image Generation</span>
-                  </div>
-                </DropdownMenuItem>
+            <div
+              className={`flex items-center mt-1 px-1 ${isExpanded ? "justify-end" : ""}`}
+              data-guide="composer-actions"
+            >
+              <div
+                className={`flex items-center gap-1 flex-1 ${isExpanded ? "hidden" : "flex"}`}
+              >
+                <DropdownMenu
+                  onOpenChange={(open) => {
+                    if (open)
+                      window.dispatchEvent(
+                        new Event("ai-colab:capability-menu-opened"),
+                      );
+                    else
+                      window.dispatchEvent(
+                        new Event("ai-colab:capability-menu-closed"),
+                      );
+                  }}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 h-8 w-8 text-muted-foreground bg-muted hover:bg-muted/80 hover:text-foreground rounded-full border border-border/40"
+                      disabled={isSending}
+                      data-guide="attach"
+                      title="Attach / capabilities / models"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="w-[300px] p-2 rounded-xl z-[9500]"
+                    style={{ zIndex: 9500 }}
+                    data-guide="capability-menu"
+                  >
+                    {/* ── ATTACH FILE group ── */}
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2">
+                      Attach File
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2"
+                      onClick={() => cameraInputRef.current?.click()}
+                    >
+                      <div className="w-4 flex justify-center">
+                        <Camera className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <span>Capture Photo</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2"
+                      onClick={() => photoInputRef.current?.click()}
+                    >
+                      <div className="w-4 flex justify-center">
+                        <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <span>Upload a Photo</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <div className="w-4 flex justify-center">
+                        <Paperclip className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <span>Upload a File</span>
+                    </DropdownMenuItem>
 
-                
-                <DropdownMenuSeparator className="my-2" />
-                
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2 flex justify-between items-center">
-                  <span>Models</span>
-                  {!isSingle && selectedModels.length > 0 && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 rounded-md">{selectedModels.length} selected</Badge>}
-                </DropdownMenuLabel>
-                
-                <div className="max-h-[250px] overflow-y-auto scrollbar-thin">
-                  {models
-                    .filter(m => !m.capabilities || m.capabilities.length === 0 || m.capabilities.includes(chatType))
-                    .filter(m => {
-                      const hasImage = attachments.some(a => a.mimeType.startsWith('image/'));
-                      return !hasImage || (m.capabilities && m.capabilities.includes("VISION"));
-                    })
-                    .map((model) => (
-                    <DropdownMenuItem 
-                      key={model.id} 
-                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2 items-start"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleModel(model.id);
-                        window.dispatchEvent(new Event("ai-colab:model-selected"));
+                    <DropdownMenuSeparator className="my-2" />
+
+                    {/* ── CAPABILITIES group ── */}
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2">
+                      Capabilities
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2"
+                      onClick={() => {
+                        handleChatTypeChange("STANDARD");
+                        window.dispatchEvent(
+                          new Event("ai-colab:capability-selected"),
+                        );
                       }}
                     >
-                      <div className="w-4 flex justify-center mt-0.5">{selectedModels.includes(model.id) && <Check className="w-3 h-3 text-primary" />}</div>
-                      <div className="flex items-center gap-2 flex-1">
-                        {model.externalId && getModelIcon(model.externalId)
-                          ? <img src={getModelIcon(model.externalId)!} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" />
-                          : <div className="w-4 h-4" />}
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium text-[13px] leading-tight">{model.name}</span>
-                          {model.description && <span className="text-[11px] text-muted-foreground leading-tight line-clamp-2">{model.description}</span>}
-                        </div>
+                      <div className="w-4 flex justify-center">
+                        {chatType === "STANDARD" && (
+                          <Check className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-muted-foreground mr-1" />
+                        <span>Standard Chat</span>
                       </div>
                     </DropdownMenuItem>
-                  ))}
+                    <DropdownMenuItem
+                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2"
+                      onClick={() => {
+                        handleChatTypeChange("WEB_SEARCH");
+                        window.dispatchEvent(
+                          new Event("ai-colab:capability-selected"),
+                        );
+                      }}
+                    >
+                      <div className="w-4 flex justify-center">
+                        {chatType === "WEB_SEARCH" && (
+                          <Check className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Search className="w-4 h-4 text-muted-foreground mr-1" />
+                        <span>Web Search</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2"
+                      onClick={() => {
+                        handleChatTypeChange("IMAGE_GENERATION");
+                        window.dispatchEvent(
+                          new Event("ai-colab:capability-selected"),
+                        );
+                      }}
+                    >
+                      <div className="w-4 flex justify-center">
+                        {chatType === "IMAGE_GENERATION" && (
+                          <Check className="w-3 h-3 text-primary" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4 text-muted-foreground mr-1" />
+                        <span>Image Generation</span>
+                      </div>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator className="my-2" />
+
+                    {/* ── MODELS group ── */}
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 px-2 flex justify-between items-center">
+                      <span>Models</span>
+                      {!isSingle && selectedModels.length > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0 h-4 rounded-md"
+                        >
+                          {selectedModels.length} selected
+                        </Badge>
+                      )}
+                    </DropdownMenuLabel>
+
+                    <div className="max-h-[250px] overflow-y-auto scrollbar-thin">
+                      {models
+                        .filter(
+                          (m) =>
+                            !m.capabilities ||
+                            m.capabilities.length === 0 ||
+                            m.capabilities.includes(chatType),
+                        )
+                        .filter((m) => {
+                          const hasImage = attachments.some((a) =>
+                            a.mimeType.startsWith("image/"),
+                          );
+                          return (
+                            !hasImage ||
+                            (m.capabilities &&
+                              m.capabilities.includes("VISION"))
+                          );
+                        })
+                        .map((model) => (
+                          <DropdownMenuItem
+                            key={model.id}
+                            className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2 items-start"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              toggleModel(model.id);
+                              window.dispatchEvent(
+                                new Event("ai-colab:model-selected"),
+                              );
+                            }}
+                          >
+                            <div className="w-4 flex justify-center mt-0.5">
+                              {selectedModels.includes(model.id) && (
+                                <Check className="w-3 h-3 text-primary" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-1">
+                              {model.externalId &&
+                              getModelIcon(model.externalId) ? (
+                                <img
+                                  src={getModelIcon(model.externalId)!}
+                                  alt=""
+                                  className="w-4 h-4 rounded-sm object-contain flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="w-4 h-4" />
+                              )}
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-medium text-[13px] leading-tight">
+                                  {model.name}
+                                </span>
+                                {model.description && (
+                                  <span className="text-[11px] text-muted-foreground leading-tight line-clamp-2">
+                                    {model.description}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Single / Multi mode toggle — "Single" / "Multi" on all sizes */}
+                <div className="flex items-center ml-2 bg-muted/60 rounded-full p-0.5 gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={() => handleModeToggle("single")}
+                    className={`h-7 px-2.5 rounded-full text-xs font-medium transition-all duration-150 ${
+                      isSingle
+                        ? "bg-background dark:bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Single model mode"
+                  >
+                    Single
+                  </button>
+                  <button
+                    onClick={() => handleModeToggle("multiple")}
+                    className={`h-7 px-2.5 rounded-full text-xs font-medium transition-all duration-150 ${
+                      !isSingle
+                        ? "bg-background dark:bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Multi-model comparison mode"
+                  >
+                    Multi
+                  </button>
                 </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          
+
+                {/* Spacer */}
+                <div className="flex-1" />
+              </div>
+
+              {/* Separator */}
+              {!isExpanded && (
+                <div className="h-6 w-px bg-border/60 mx-1 flex-shrink-0" />
+              )}
+
+              {/* RIGHT: Enhance · Mic (always visible) · Send */}
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={`h-9 rounded-full px-2 text-xs font-medium ${isExpanded ? "hidden" : ""}`}
+                  onClick={handleEnhance}
+                  disabled={
+                    !content.trim() ||
+                    isSending ||
+                    isEnhancing ||
+                    hasUploadingFiles ||
+                    !onEnhancePrompt
+                  }
+                  title={
+                    hasUploadingFiles
+                      ? "Wait for files to finish uploading"
+                      : "Enhance prompt"
+                  }
+                  data-guide="enhance"
+                >
+                  {isEnhancing ? (
+                    <Loader2 className="h-3.5 w-3.5 sm:mr-1.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5 sm:mr-1.5" />
+                  )}
+                  <span className="hidden sm:inline">Enhance</span>
+                </Button>
+
+                {/* Mic — conditionally hidden in full screen */}
+                <div className={isExpanded ? "hidden" : ""}>
+                  <MicButton
+                    onResult={handleSpeechResult}
+                    onStart={handleMicStart}
+                    onStop={handleMicStop}
+                    hasText={false}
+                    guideId="mic"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  size="icon"
+                  className={`h-10 w-10 rounded-full transition-all duration-200 ${
+                    isSending
+                      ? "bg-destructive/90 text-white hover:bg-destructive shadow-md scale-100"
+                      : content.trim() && !hasUploadingFiles
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md scale-100"
+                        : "bg-muted text-muted-foreground border border-border/50 scale-100"
+                  }`}
+                  onClick={isSending ? onStopStreaming : handleSubmit}
+                  disabled={
+                    !isSending && (!content.trim() || hasUploadingFiles)
+                  }
+                  title={
+                    isSending
+                      ? "Stop generating"
+                      : hasUploadingFiles
+                        ? "Wait for files to finish uploading"
+                        : "Send message"
+                  }
+                >
+                  {isSending ? (
+                    <Square className="w-4 h-4 fill-current" />
+                  ) : (
+                    <ArrowUp className="w-5 h-5" />
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

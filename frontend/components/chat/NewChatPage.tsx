@@ -21,6 +21,7 @@ export function NewChatPage() {
 
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModels, setSelectedModels] = useState<number[]>([]);
+  const [maxModels, setMaxModels] = useState<number>(1); // 1 = single mode (default)
   const [isSending, setIsSending] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
 
@@ -111,11 +112,18 @@ export function NewChatPage() {
     const handleEvents = () => {
       loadAssistantAndModels();
     };
+    const handleModeChange = (e: Event) => {
+      const mode = (e as CustomEvent).detail?.mode;
+      if (mode === "single") setMaxModels(1);
+      else if (mode === "multiple") setMaxModels(-1);
+    };
     window.addEventListener("assistant-selected", handleEvents);
     window.addEventListener("refresh-models", handleEvents);
+    window.addEventListener("ai-colab:mode-change", handleModeChange);
     return () => {
       window.removeEventListener("assistant-selected", handleEvents);
       window.removeEventListener("refresh-models", handleEvents);
+      window.removeEventListener("ai-colab:mode-change", handleModeChange);
     };
   }, [loadAssistantAndModels]);
 
@@ -240,7 +248,7 @@ export function NewChatPage() {
         models={models}
         selectedModels={selectedModels}
         onModelChange={handleModelChange}
-        maxModels={-1}
+        maxModels={maxModels}
         onSend={handleSend}
         onEnhancePrompt={handleEnhancePrompt}
         isSending={isSending}
