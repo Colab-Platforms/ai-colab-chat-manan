@@ -8,10 +8,16 @@ import { toast } from "react-toastify";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { EASE } from "@/components/NewLanding/components/motionVariants";
+import { EASE } from "@/components/Landing/components/motionVariants";
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (
@@ -106,115 +112,174 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-linear-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5, ease: EASE }}
         className="w-[90%] max-w-md mx-3"
       >
-        <Card className="w-full border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto">
-            <Image src="/black.webp" alt="AI Colab" width={90} height={90} className="dark:hidden h-auto" priority />
-            <Image src="/white.webp" alt="AI Colab" width={90} height={90} className="hidden dark:block h-auto" priority />
-          </div>
-          <CardTitle className="text-2xl font-bold text-landing-primary">
-            {step === "request" ? "Forgot password" : "Reset password"}
-          </CardTitle>
-          <CardDescription className="-mt-3">
-            {step === "request" ? "Get OTP for password-based accounts. Google sign-in accounts should continue with Google." : `Enter OTP sent to ${email}`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {step === "request" ? (
-            <form onSubmit={handleRequestOtp} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Email</label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="h-11"
-                />
-              </div>
-              <Button type="submit" className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white" disabled={loading}>
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send OTP"}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Email</label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={timer > 0}
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">OTP</label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  placeholder="Enter 6-digit OTP"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  required
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">New password</label>
-                <div className="relative">
+        <Card className="w-full border-border/50 shadow-2xl border  rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto">
+              <Image
+                src="/black.webp"
+                alt="AI Colab"
+                width={90}
+                height={90}
+                className="dark:hidden h-auto"
+                priority
+              />
+              <Image
+                src="/white.webp"
+                alt="AI Colab"
+                width={90}
+                height={90}
+                className="hidden dark:block h-auto"
+                priority
+              />
+            </div>
+            <CardTitle className="text-2xl font-bold text-landing-primary">
+              {step === "request" ? "Forgot password" : "Reset password"}
+            </CardTitle>
+            <CardDescription className="-mt-3">
+              {step === "request"
+                ? "Get OTP for password-based accounts. Google sign-in accounts should continue with Google."
+                : `Enter OTP sent to ${email}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {step === "request" ? (
+              <form onSubmit={handleRequestOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Email
+                  </label>
                   <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Min 6 characters"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
-                    minLength={6}
-                    className="h-11 pr-10"
+                    className="h-11"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
-              </div>
-              <Button type="submit" className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white" disabled={loading}>
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset password"}
-              </Button>
-              <Button type="button" variant="outline" className="w-full h-11" disabled={resendLoading || timer > 0} onClick={handleResendOtp}>
-                {resendLoading ? <Loader2 className="w-4 h-4 animate-spin text-landing-primary" /> : timer > 0 ? `Resend OTP in ${timer}s` : "Resend OTP"}
-              </Button>
-            </form>
-          )}
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            Back to{" "}
-            <Link href="/login" className="text-primary hover:text-landing-primary font-medium">
-              Sign in
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+                <Button
+                  type="submit"
+                  className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Send OTP"
+                  )}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Email
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={timer > 0}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    OTP
+                  </label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{6}"
+                    placeholder="Enter 6-digit OTP"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    New password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Min 6 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className="h-11 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full h-11 font-medium bg-landing-primary hover:bg-landing-primary-hover text-white"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Reset password"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11"
+                  disabled={resendLoading || timer > 0}
+                  onClick={handleResendOtp}
+                >
+                  {resendLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-landing-primary" />
+                  ) : timer > 0 ? (
+                    `Resend OTP in ${timer}s`
+                  ) : (
+                    "Resend OTP"
+                  )}
+                </Button>
+              </form>
+            )}
+            <div className="mt-6 text-center text-sm text-muted-foreground">
+              Back to{" "}
+              <Link
+                href="/login"
+                className="text-primary hover:text-landing-primary font-medium"
+              >
+                Sign in
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="mt-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
-        <ArrowLeft className="w-4 h-4 " />
-        <Link href="/" className=" font-medium">
-          Back to Home
-        </Link>
-      </div>
+        <div className="mt-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2 text-primary hover:text-landing-primary transition-colors">
+          <ArrowLeft className="w-4 h-4 " />
+          <Link href="/" className=" font-medium">
+            Back to Home
+          </Link>
+        </div>
       </motion.div>
     </div>
   );
