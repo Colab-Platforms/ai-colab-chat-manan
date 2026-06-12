@@ -119,7 +119,7 @@ export default function ForgotPasswordPage() {
         transition={{ duration: 0.5, ease: EASE }}
         className="w-[90%] max-w-md mx-3"
       >
-        <Card className="w-full border-border/50 shadow-2xl border  rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+        <Card className="w-full shadow-2xl border border-border/60 rounded-[28px] bg-[#e7e4eb] dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto">
               <Image
@@ -152,7 +152,7 @@ export default function ForgotPasswordPage() {
             {step === "request" ? (
               <form onSubmit={handleRequestOtp} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     Email
                   </label>
                   <Input
@@ -161,7 +161,7 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-white/90"
                   />
                 </div>
                 <Button
@@ -179,7 +179,7 @@ export default function ForgotPasswordPage() {
             ) : (
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     Email
                   </label>
                   <Input
@@ -189,11 +189,11 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={timer > 0}
-                    className="h-11"
+                    className="h-11 bg-white/90"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     OTP
                   </label>
                   <Input
@@ -204,11 +204,11 @@ export default function ForgotPasswordPage() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-white/90"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     New password
                   </label>
                   <div className="relative">
@@ -219,12 +219,12 @@ export default function ForgotPasswordPage() {
                       onChange={(e) => setNewPassword(e.target.value)}
                       required
                       minLength={6}
-                      className="h-11 pr-10"
+                      className="h-11 pr-10 bg-white/90"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80 transition-colors cursor-pointer"
                     >
                       {showPassword ? (
                         <EyeOff className="w-4 h-4" />
