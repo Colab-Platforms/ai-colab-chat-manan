@@ -282,7 +282,7 @@ export function PricingSection() {
   };
 
   return (
-    <section id="pricing" className="py-24 bg-[#fdf6f9] dark:bg-[#060104]">
+    <section id="pricing" className="py-24 bg-[#e7e4eb] dark:bg-[#060104]">
       <div className="container mx-auto px-6">
 
         {/* ── Section header — same ScrollReveal pattern as Testimonials & FAQ ── */}
@@ -290,10 +290,10 @@ export function PricingSection() {
           delay={0.1}
           className="flex flex-col items-center text-center max-w-4xl mx-auto mb-14"
         >
-          <span className="border border-pink-200 dark:border-pink-900/60 text-pink-700 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 py-1 px-4 rounded-full text-xs font-medium tracking-wide mb-5">
+          <span className="border border-landing-primary/50 dark:border-landing-primary/60 text-landing-primary dark:landing-primary bg-landing-primary/10 dark:bg-landing-primary/40 py-1 px-4 rounded-full text-xs font-medium tracking-wide mb-5">
             Plans & Pricing
           </span>
-          <h2 className="text-4xl max-md:text-3xl font-bold text-pink-900 dark:text-pink-200 tracking-tight">
+          <h2 className="text-4xl max-md:text-3xl font-bold text-landing-primary dark:text-landing-primary tracking-tight">
             Invest in intelligence. Simple, transparent pricing
           </h2>
           <p className="mt-4 text-gray-600 dark:text-gray-400 text-balance">

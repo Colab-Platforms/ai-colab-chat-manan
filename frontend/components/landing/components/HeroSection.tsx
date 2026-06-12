@@ -14,7 +14,7 @@ export function HeroSection() {
         <div className="flex flex-col items-center justify-center gap-5 pt-48">
           {/* Headline */}
           <motion.h1
-            className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-center text-pink-900 leading-tight text-balance"
+            className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-center text-landing-primary leading-tight text-balance"
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: EASE, delay: 0.1 }}

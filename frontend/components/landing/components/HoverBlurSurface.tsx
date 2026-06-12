@@ -2,7 +2,7 @@
 
 import { type MouseEvent, type ReactNode, useCallback, useRef, useState } from "react";
 
-const HOVER_BLUR_SIZE = 350;
+const HOVER_BLUR_SIZE = 500;
 const HOVER_BLUR_HALF = HOVER_BLUR_SIZE / 2;
 
 export function HoverBlurSurface({
@@ -40,16 +40,16 @@ export function HoverBlurSurface({
       {/* Dot grid */}
       <div
         aria-hidden
-        className="absolute inset-0 z-0 [background-size:20px_20px] [background-image:radial-gradient(#d4d4d4_1px,transparent_1px)] dark:[background-image:radial-gradient(#404040_1px,transparent_1px)]"
+        className="absolute inset-0 z-0 bg-size-[20px_20px] bg-[radial-gradient(#d4d4d4_1px,transparent_1px)] dark:bg-[radial-gradient(#404040_1px,transparent_1px)]"
       />
       {/* Vignette over dots */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1] bg-[#fdf6f9] [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)] dark:bg-[#060003]"
+        className="pointer-events-none absolute inset-0 z-1 bg-[#fdf6f9] mask-[radial-gradient(ellipse_at_center,transparent_20%,black)] dark:bg-[#060003]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute z-[2] rounded-full bg-[#ead1f090] dark:bg-[#250714] blur-[80px] transition-opacity duration-300 ease-out"
+        className="pointer-events-none absolute z-2 rounded-full bg-[#41128340] dark:bg-[#41128340] blur-[150px] transition-opacity duration-300 ease-out"
         style={{
           width: HOVER_BLUR_SIZE,
           height: HOVER_BLUR_SIZE,

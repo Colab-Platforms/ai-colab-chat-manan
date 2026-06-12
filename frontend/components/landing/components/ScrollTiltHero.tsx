@@ -23,7 +23,7 @@ export function ScrollTiltHero() {
       style={{ perspective: "1200px" }}
     >
       <motion.div
-        className="bg-white dark:bg-gray-800 p-3 max-md:p-1 rounded-xl shadow-lg w-full object-cover transform-gpu dark:brightness-90 border border-pink-800"
+        className="bg-white dark:bg-gray-800 p-3 max-md:p-1 rounded-xl shadow-lg w-full object-cover transform-gpu dark:brightness-90 border border-landing-primary"
         initial={{ opacity: 0, y: 60 }}
         animate={{ opacity: 1, y: 0 }}
         style={{ rotateX }}

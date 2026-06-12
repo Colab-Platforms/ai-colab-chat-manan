@@ -63,8 +63,8 @@ function FAQItem({
       viewport={{ once: true }}
       className={`rounded-2xl border transition-colors duration-300 ${
         isOpen
-          ? "border-pink-200 dark:border-pink-900/70 bg-white dark:bg-[#1c0510]"
-          : "border-gray-100 dark:border-pink-950/40 bg-white/60 dark:bg-[#0f0208]/60 hover:border-pink-100 dark:hover:border-pink-900/50"
+          ? "border-landing-primary/50 dark:border-landing-primary/70 bg-white dark:bg-landing-primary/10"
+          : "border-gray-100 dark:border-landing-primary/40 bg-white/60 dark:bg-[#0f0208]/60 hover:border-landing-primary dark:hover:border-landing-primary/50"
       }`}
     >
       <button
@@ -76,9 +76,9 @@ function FAQItem({
           {question}
         </span>
         <ChevronDown
-          className={`flex-shrink-0 h-4 w-4 transition-all duration-300 ${
+          className={`shrink-0 h-4 w-4 transition-all duration-300 ${
             isOpen
-              ? "rotate-180 text-landing-primary dark:text-pink-400"
+              ? "rotate-180 text-landing-primary dark:text-landing-primary"
               : "rotate-0 text-gray-400 dark:text-gray-500"
           }`}
         />
@@ -110,7 +110,7 @@ export function FAQSection() {
   const toggle = (i: number) => setOpenIndex(openIndex === i ? null : i);
 
   return (
-    <section id="faq" className="py-24 bg-[#fdf6f9] dark:bg-[#060104]">
+    <section id="faq" className="py-24 bg-[#e7e4eb] dark:bg-[#060104]">
       <div className="container mx-auto px-6">
         {/* Header */}
         <motion.div
@@ -120,17 +120,17 @@ export function FAQSection() {
           viewport={{ once: true }}
           className="flex flex-col items-center text-center max-w-xl mx-auto mb-14"
         >
-          <span className="border border-pink-200 dark:border-pink-900/60 text-pink-700 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 py-1 px-4 rounded-full text-xs font-medium tracking-wide mb-5">
+          <span className="border border-landing-primary/50 dark:border-landing-primary/60 text-landing-primary dark:landing-primary bg-landing-primary/10 dark:bg-landing-primary/40 py-1 px-4 rounded-full text-xs font-medium tracking-wide mb-5">
             FAQ
           </span>
-          <h2 className="text-4xl max-md:text-3xl font-bold text-pink-900 dark:text-pink-200 tracking-tight">
+          <h2 className="text-4xl max-md:text-3xl font-bold text-landing-primary dark:text-landing-primary tracking-tight">
             Frequently asked questions
           </h2>
           <p className="mt-4 text-gray-600 dark:text-gray-400 text-balance">
             Everything you need to know about the platform. Can't find the answer you're looking for?{" "}
             <ContactModal>
               <button
-                className="text-landing-primary dark:text-pink-400 font-medium underline-offset-2 hover:underline transition-all"
+                className="text-landing-primary dark:text-landing-primary font-medium underline-offset-2 hover:underline transition-all"
               >
                 Contact our support team.
               </button>

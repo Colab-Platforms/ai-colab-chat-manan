@@ -50,7 +50,7 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="pb-6 pt-16 lg:pb-8 lg:pt-24 bg-[#fdf6f9] dark:bg-[#060104] border-t border-gray-100 dark:border-white/5">
+    <footer className="pb-6 pt-16 lg:pb-8 lg:pt-24 bg-[#e7e4eb] dark:bg-[#060104] ">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -97,7 +97,7 @@ export function Footer() {
         </div>
 
         {/* Bottom grid — copyright + nav + legal */}
-        <div className="border-t border-gray-100 dark:border-white/5 mt-6 pt-6 md:mt-4 md:pt-8 lg:grid lg:grid-cols-10">
+        <div className=" mt-6 pt-6 md:mt-4 md:pt-8 lg:grid lg:grid-cols-10">
 
           {/* Copyright — left col on lg */}
           <div className="mt-6 text-sm leading-6 text-gray-400 dark:text-gray-500 whitespace-nowrap lg:mt-0 lg:row-[1/3] lg:col-[1/4]">

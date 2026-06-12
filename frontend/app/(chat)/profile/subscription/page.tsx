@@ -244,10 +244,13 @@ export default function SubscriptionPage() {
       const selectedPlan = plans.find((p: any) => p.id === planId);
       const isPaidPlan = Number(selectedPlan?.monthlyPrice ?? 0) > 0;
 
+      const rawCycle = searchParams.get("billingCycle") || "MONTHLY";
+      const cycle = rawCycle.toUpperCase() === "YEARLY" ? "YEARLY" : "MONTHLY";
+
       if (isPaidPlan) {
         const payRes = await paymentService.createSubscribeOneTime({
           planId,
-          billingCycle: "MONTHLY",
+          billingCycle: cycle,
         });
         const paymentSessionId = payRes?.data?.data?.payment_session_id;
         if (!paymentSessionId) {
@@ -262,7 +265,7 @@ export default function SubscriptionPage() {
 
       const res = await subscriptionService.create({
         planId,
-        billingCycle: "MONTHLY",
+        billingCycle: cycle,
       });
       console.debug("[SubscriptionPage] handleSubscribe response", res?.data);
 
