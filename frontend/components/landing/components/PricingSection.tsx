@@ -58,15 +58,15 @@ export function PricingCard({
           "relative flex flex-col h-full rounded-2xl border p-7 text-left transition-all duration-300",
           "bg-white/60 dark:bg-[#0f0208]/60 backdrop-blur-sm",
           featured
-            ? "border-pink-300 dark:border-pink-700/70 shadow-xl shadow-pink-200/30 dark:shadow-pink-900/20 scale-[1.03] z-10"
-            : "border-gray-100 dark:border-pink-950/40 hover:border-pink-200 dark:hover:border-pink-900/50 hover:shadow-lg hover:shadow-pink-100/30 dark:hover:shadow-pink-900/10"
+            ? "border-landing-primary dark:border-landing-primary shadow-xl shadow-pink-200/30 dark:shadow-pink-900/20 scale-[1.03] z-10"
+            : "border-gray-100 dark:border-landing-primary/40 hover:border-landing-primary/40 dark:hover:border-landing-primary/80 hover:shadow-lg hover:shadow-pink-100/30 dark:hover:shadow-pink-900/10"
         )}
         aria-label={`${title} plan`}
       >
         {/* Most Popular ribbon */}
         {featured && (
           <div className="absolute -top-3.5 inset-x-0 flex justify-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-landing-primary px-4 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-md shadow-pink-400/30">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-landing-primary px-4 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-md shadow-landing-primary/60">
               <Sparkles className="h-3 w-3" />
               Most Popular
             </span>
@@ -80,7 +80,7 @@ export function PricingCard({
             className={cn(
               "rounded-md uppercase tracking-wider text-[11px] font-semibold",
               featured &&
-                "bg-pink-100 dark:bg-pink-950/60 text-landing-primary dark:text-pink-400 border-pink-200 dark:border-pink-800"
+                "bg-landing-primary/10 dark:bg-landing-primary/60 text-landing-primary dark:text-landing-primary border-landing-primary dark:border-landing-primary"
             )}
           >
             {title}
@@ -92,22 +92,12 @@ export function PricingCard({
           className={cn(
             "mt-5 text-4xl font-bold tracking-tight",
             featured
-              ? "text-landing-primary dark:text-pink-400"
-              : "text-pink-900 dark:text-pink-200"
+              ? "text-landing-primary dark:text-landing-primary"
+              : "text-landing-primary dark:text-landing-primary"
           )}
         >
           {price}
         </h3>
-
-        {/* "Free for 1st month" notice */}
-        {/* {isFreeFirstMonth && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-pink-50 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-900/50 px-3 py-1 w-fit">
-            <Gift className="h-3.5 w-3.5 text-landing-primary dark:text-pink-400" />
-            <span className="text-[11px] font-semibold text-landing-primary dark:text-pink-400">
-              Free for your first month
-            </span>
-          </div>
-        )} */}
 
         {/* Description */}
         {description && (
@@ -117,7 +107,7 @@ export function PricingCard({
         )}
 
         {/* Divider */}
-        <div className="my-6 border-t border-gray-100 dark:border-pink-950/40" />
+        <div className="my-6 border-t border-gray-100 dark:border-landing-primary/40" />
 
         {/* Features list */}
         <ul className="space-y-3 mb-8 grow">
@@ -130,8 +120,8 @@ export function PricingCard({
                 className={cn(
                   "mr-3 mt-0.5 h-4 w-4 shrink-0",
                   featured
-                    ? "text-landing-primary dark:text-pink-400"
-                    : "text-pink-400 dark:text-pink-600"
+                    ? "text-landing-primary dark:text-landing-primary"
+                    : "text-landing-primary dark:text-landing-primary"
                 )}
                 aria-hidden
               />
@@ -148,8 +138,8 @@ export function PricingCard({
               className={cn(
                 "w-full font-semibold transition-all",
                 featured
-                  ? "bg-landing-primary hover:bg-landing-primary-hover text-white shadow-md shadow-pink-400/20"
-                  : "border border-pink-200 dark:border-pink-900/50 text-landing-primary dark:text-pink-400 bg-transparent hover:bg-pink-50 dark:hover:bg-pink-950/30"
+                  ? "bg-landing-primary hover:bg-landing-primary-hover text-white shadow-landing-primary/20"
+                  : "border border-landing-primary/50 dark:border-landing-primary/50 text-landing-primary dark:text-white bg-transparent hover:bg-landing-primary/10 dark:bg-landing-primary/10 dark:hover:bg-landing-primary/30"
               )}
               variant={featured ? "default" : "outline"}
             >

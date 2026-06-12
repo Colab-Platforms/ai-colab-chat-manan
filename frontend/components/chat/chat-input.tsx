@@ -1297,12 +1297,12 @@ export function ChatInput({
                 </DropdownMenu>
 
                 {/* Single / Multi mode toggle — "Single" / "Multi" on all sizes */}
-                <div className="flex items-center ml-2 bg-muted/60 rounded-full p-0.5 gap-0.5 flex-shrink-0">
+                <div className="flex items-center ml-2 bg-muted/60 border border-border/40 rounded-full p-0.5 gap-0.5 flex-shrink-0">
                   <button
                     onClick={() => handleModeToggle("single")}
                     className={`h-7 px-2.5 rounded-full text-xs font-medium transition-all duration-150 ${
                       isSingle
-                        ? "bg-background dark:bg-background shadow-sm text-foreground"
+                        ? "bg-white dark:bg-background shadow text-foreground dark:text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                     title="Single model mode"
@@ -1313,7 +1313,7 @@ export function ChatInput({
                     onClick={() => handleModeToggle("multiple")}
                     className={`h-7 px-2.5 rounded-full text-xs font-medium transition-all duration-150 ${
                       !isSingle
-                        ? "bg-background dark:bg-background shadow-sm text-foreground"
+                        ? "bg-white dark:bg-background shadow text-foreground dark:text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                     title="Multi-model comparison mode"

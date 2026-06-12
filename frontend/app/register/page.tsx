@@ -155,7 +155,7 @@ export default function RegisterPage() {
         transition={{ duration: 0.5, ease: EASE }}
         className="w-[90%] max-w-md mx-3"
       >
-        <Card className="w-full border-border/50 shadow-2xl border border-border/60 rounded-[28px] bg-background dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+        <Card className="w-full shadow-2xl border border-border/60 rounded-[28px] bg-[#e7e4eb] dark:bg-muted/40  focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto">
               <Image
@@ -189,7 +189,7 @@ export default function RegisterPage() {
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
+                    <label className="text-sm font-medium text-black dark:text-white">
                       First name
                     </label>
                     <Input
@@ -197,11 +197,11 @@ export default function RegisterPage() {
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       required
-                      className="h-11"
+                      className="h-11 bg-white/90"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
+                    <label className="text-sm font-medium text-black dark:text-white">
                       Last name
                     </label>
                     <Input
@@ -209,12 +209,12 @@ export default function RegisterPage() {
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       required
-                      className="h-11"
+                      className="h-11 bg-white/90"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     Email
                   </label>
                   <Input
@@ -223,11 +223,11 @@ export default function RegisterPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-white/90"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     Password
                   </label>
                   <div className="relative">
@@ -238,12 +238,12 @@ export default function RegisterPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
-                      className="h-11 pr-10"
+                      className="h-11 pr-10 bg-white/90"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80 transition-colors cursor-pointer"
                     >
                       {showPassword ? (
                         <EyeOff className="w-4 h-4" />
@@ -269,13 +269,13 @@ export default function RegisterPage() {
                     <span className="w-full border-t border-border/70" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    <span className="bg-background px-2">or continue with</span>
+                    <span className="bg-[#e7e4eb] dark:bg-muted/40 px-2">or continue with</span>
                   </div>
                 </div>
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full h-11 font-medium"
+                  className="w-full h-11 font-medium bg-white"
                   onClick={startGoogleLogin}
                   disabled={googleLoading}
                 >
@@ -313,7 +313,7 @@ export default function RegisterPage() {
             ) : (
               <form onSubmit={handleVerify} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     Email
                   </label>
                   <Input
@@ -323,11 +323,11 @@ export default function RegisterPage() {
                     onChange={(e) => setPendingEmail(e.target.value)}
                     required
                     disabled={timer > 0}
-                    className="h-11"
+                    className="h-11 bg-white/90"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="text-sm font-medium text-black dark:text-white">
                     OTP
                   </label>
                   <Input
@@ -338,7 +338,7 @@ export default function RegisterPage() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-white/90"
                   />
                 </div>
                 <Button
