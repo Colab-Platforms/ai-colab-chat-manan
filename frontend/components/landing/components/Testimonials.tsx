@@ -65,7 +65,7 @@ const thirdColumn = testimonials.slice(6, 9);
 
 export const Testimonials = () => {
   return (
-    <section id="testimonials" className="py-24 bg-[#fdf6f9] dark:bg-[#060104] relative">
+    <section id="testimonials" className="py-24 bg-[#e7e4eb] dark:bg-[#060104] relative">
       <div className="container mx-auto px-6">
         {/* Section header */}
         <motion.div
@@ -76,14 +76,14 @@ export const Testimonials = () => {
           className="flex flex-col items-center justify-center max-w-4xl mx-auto mb-18"
         >
           <div className="flex justify-center">
-            <span className="border border-pink-200 dark:border-pink-900/60 text-pink-700 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 py-1 px-4 rounded-full text-xs font-medium tracking-wide">
+            <span className="border border-landing-primary/50 dark:border-landing-primary/60 text-landing-primary dark:landing-primary bg-landing-primary/10 dark:bg-landing-primary/40 py-1 px-4 rounded-full text-xs font-medium tracking-wide">
               Real People. Real Results.
             </span>
           </div>
 
-          <h2 className="text-4xl max-md:text-3xl font-bold text-pink-900 dark:text-pink-200 mt-5 text-center tracking-tight">
+          <h2 className="text-4xl max-md:text-3xl font-bold text-landing-primary dark:text-landing-primary mt-5 text-center tracking-tight">
             Trusted by teams who{" "}
-            <span className="text-landing-primary dark:text-pink-400">think with AI</span>
+            <span className="text-landing-primary dark:text-landing-primary">think with AI</span>
           </h2>
           <p className="text-center mt-4 text-gray-600 dark:text-gray-400 max-w-3xl text-balance">
             From solo founders to enterprise teams — see why professionals across industries rely on our platform every day.

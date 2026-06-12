@@ -14,7 +14,7 @@ export function LandingPage() {
   return (
     <SmoothScrollLayout>
       <Navbar />
-      <HoverBlurSurface className="w-full dark:bg-[#230713] pb-20">
+      <HoverBlurSurface className="w-full bg-[#d0c6e4] dark:bg-[#130429] pb-20">
         <HeroSection />
       </HoverBlurSurface>
       <FeaturesSection />
