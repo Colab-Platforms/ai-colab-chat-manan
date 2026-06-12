@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { motion } from "framer-motion";
-import { EASE } from "@/components/Landing/components/motionVariants";
+import { EASE } from "@/components/landing/components/motionVariants";
 import HeroGrid from "./HeroGrid";
 import Image from "next/image";
 

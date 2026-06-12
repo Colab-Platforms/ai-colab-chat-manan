@@ -12,7 +12,7 @@ import {
 } from "framer-motion";
 
 import { Button } from "../../ui/button";
-import { EASE } from "@/components/Landing/components/motionVariants";
+import { EASE } from "@/components/landing/components/motionVariants";
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
