@@ -17,7 +17,7 @@ import { Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { EASE } from "@/components/Landing/components/motionVariants";
+import { EASE } from "@/components/landing/components/motionVariants";
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (

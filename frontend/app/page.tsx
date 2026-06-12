@@ -4,9 +4,9 @@ import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/context/theme-context";
-import { LandingPage } from "@/components/Landing/LandingPage";
+import { LandingPage } from "@/components/landing/LandingPage";
 import { NewChatPage } from "@/components/chat/NewChatPage";
-import { HoverBlurSurface } from "@/components/Landing/components/HoverBlurSurface";
+import { HoverBlurSurface } from "@/components/landing/components/HoverBlurSurface";
 
 function HomeFolderScopeSync() {
   const searchParams = useSearchParams();
