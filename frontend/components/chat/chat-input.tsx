@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import imageCompression from "browser-image-compression";
 import {
   Plus,
   Loader2,
@@ -653,7 +654,21 @@ export function ChatInput({
         return;
       }
 
-      for (const file of newFiles) {
+      for (let file of newFiles) {
+        if (file.type.startsWith("image/") && file.size > 2 * 1024 * 1024) {
+          try {
+            file = await imageCompression(file, {
+              maxSizeMB: 2,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true,
+            });
+          } catch (error) {
+            console.error("Image compression error:", error);
+            toast.error(`Could not compress image "${file.name}".`);
+            continue;
+          }
+        }
+
         const tempId = Date.now() + Math.random();
         const previewUrl = IMAGE_TYPES.includes(file.type)
           ? URL.createObjectURL(file)
