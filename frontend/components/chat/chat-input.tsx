@@ -664,7 +664,7 @@ export function ChatInput({
             });
           } catch (error) {
             console.error("Image compression error:", error);
-            toast.error(`Could not compress image "${file.name}".`);
+            toast.error(`Couldn't compress image "${file.name}".`);
             continue;
           }
         }
