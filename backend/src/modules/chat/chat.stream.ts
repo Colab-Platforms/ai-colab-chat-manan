@@ -174,7 +174,13 @@ async function urlToBase64DataUrl(
   url: string,
   mimeType: string,
 ): Promise<string> {
-  const response = await fetch(url);
+  let fetchUrl = url;
+  // Optimize Cloudinary URLs to reduce image size before base64 conversion
+  if (fetchUrl.includes("res.cloudinary.com") && fetchUrl.includes("/upload/")) {
+    fetchUrl = fetchUrl.replace("/upload/", "/upload/w_1024,c_limit,q_auto,f_auto/");
+  }
+
+  const response = await fetch(fetchUrl);
   if (!response.ok)
     throw new Error(`Failed to fetch attachment: ${response.status}`);
   const buffer = await response.arrayBuffer();
