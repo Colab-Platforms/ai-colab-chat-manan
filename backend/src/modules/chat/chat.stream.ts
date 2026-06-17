@@ -950,15 +950,20 @@ export async function streamChat(req: Request, res: Response) {
         console.log(
           `[DEBUG] Adding Assistant System Prompt for: ${chatAssistant.name}`,
         );
+        const usePromptCaching =
+          model.externalId.includes("anthropic/") ||
+          model.externalId.includes("claude");
         conversationHistory.unshift({
           role: "system",
-          content: [
-            {
-              type: "text",
-              text: chatAssistant.systemPrompt,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          content: usePromptCaching
+            ? [
+                {
+                  type: "text",
+                  text: chatAssistant.systemPrompt,
+                  cache_control: { type: "ephemeral" },
+                },
+              ]
+            : chatAssistant.systemPrompt,
         });
         assistantTemperature = chatAssistant.temperature;
       } else {
@@ -976,15 +981,20 @@ export async function streamChat(req: Request, res: Response) {
         `[DEBUG] Adding User Context (${contextStrings.length} items)`,
       );
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c: any) => `- ${c}`).join("\n")}`;
+      const usePromptCaching =
+        model.externalId.includes("anthropic/") ||
+        model.externalId.includes("claude");
       conversationHistory.unshift({
         role: "system",
-        content: [
-          {
-            type: "text",
-            text: systemContent,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
+        content: usePromptCaching
+          ? [
+              {
+                type: "text",
+                text: systemContent,
+                cache_control: { type: "ephemeral" },
+              },
+            ]
+          : systemContent,
       });
     }
 
@@ -3005,15 +3015,20 @@ export async function continueChatStream(req: Request, res: Response) {
         where: { id: chat.assistantId, isActive: true, isDeleted: false },
       });
       if (chatAssistant) {
+        const usePromptCaching =
+          model.externalId.includes("anthropic/") ||
+          model.externalId.includes("claude");
         conversationHistory.unshift({
           role: "system",
-          content: [
-            {
-              type: "text",
-              text: chatAssistant.systemPrompt,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          content: usePromptCaching
+            ? [
+                {
+                  type: "text",
+                  text: chatAssistant.systemPrompt,
+                  cache_control: { type: "ephemeral" },
+                },
+              ]
+            : chatAssistant.systemPrompt,
         });
       }
     }
