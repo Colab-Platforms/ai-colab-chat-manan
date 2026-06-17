@@ -837,8 +837,8 @@ export function ChatInput({
         <div className="max-w-3xl mx-auto">
           <div
             className={`border border-border/60 bg-background dark:bg-muted/40 shadow-sm flex flex-col focus-within:ring-1 focus-within:ring-primary/20 transition-all ${isExpanded
-                ? "fixed inset-0 z-[9999] rounded-none h-[100dvh] pt-4 pb-4 px-4 sm:pt-6 sm:px-6"
-                : "relative rounded-[28px] pt-3 pb-3 px-3 max-h-[50vh] md:max-h-[60vh]"
+              ? "fixed inset-0 z-[9999] rounded-none h-[100dvh] pt-4 pb-4 px-4 sm:pt-6 sm:px-6"
+              : "relative rounded-[28px] pt-3 pb-3 px-3 max-h-[50vh] md:max-h-[60vh]"
               }`}
             data-guide="chat-input-area"
           >
@@ -1059,12 +1059,12 @@ export function ChatInput({
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask anythingggg..."
+                  placeholder="Ask anything..."
                   maxLength={10000}
                   rows={1}
                   className={`border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent dark:bg-transparent resize-none p-0 flex-1 min-w-0 min-h-[40px] leading-relaxed py-2.5 text-[15px] overflow-y-auto ${isExpanded
-                      ? "max-h-full h-full text-[16px] sm:text-[15px]"
-                      : "max-h-[120px] self-center pr-5"
+                    ? "max-h-full h-full text-[16px] sm:text-[15px]"
+                    : "max-h-[120px] self-center pr-5"
                     }`}
                   data-guide="chat-input"
                 />
@@ -1299,8 +1299,8 @@ export function ChatInput({
                   <button
                     onClick={() => handleModeToggle("single")}
                     className={`h-7 px-2.5 rounded-full text-xs font-medium transition-all duration-150 ${isSingle
-                        ? "bg-white dark:bg-background shadow text-foreground dark:text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
+                      ? "bg-white dark:bg-background shadow text-foreground dark:text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                       }`}
                     title="Single model mode"
                   >
@@ -1309,8 +1309,8 @@ export function ChatInput({
                   <button
                     onClick={() => handleModeToggle("multiple")}
                     className={`h-7 px-2.5 rounded-full text-xs font-medium transition-all duration-150 ${!isSingle
-                        ? "bg-white dark:bg-background shadow text-foreground dark:text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
+                      ? "bg-white dark:bg-background shadow text-foreground dark:text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                       }`}
                     title="Multi-model comparison mode"
                   >
@@ -1372,10 +1372,10 @@ export function ChatInput({
                   type="button"
                   size="icon"
                   className={`h-10 w-10 rounded-full transition-all duration-200 ${isSending
-                      ? "bg-destructive/90 text-white hover:bg-destructive shadow-md scale-100"
-                      : content.trim() && !hasUploadingFiles
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md scale-100"
-                        : "bg-muted text-muted-foreground border border-border/50 scale-100"
+                    ? "bg-destructive/90 text-white hover:bg-destructive shadow-md scale-100"
+                    : content.trim() && !hasUploadingFiles
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md scale-100"
+                      : "bg-muted text-muted-foreground border border-border/50 scale-100"
                     }`}
                   onClick={isSending ? onStopStreaming : handleSubmit}
                   disabled={
