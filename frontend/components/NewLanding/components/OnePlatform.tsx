@@ -310,17 +310,17 @@ const OnePlatform = () => {
 
         {/* ── Right Column: Text ── */}
         <div className="w-full lg:w-1/2 flex flex-col gap-4 text-left mt-5">
-          <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold leading-tight tracking-tight text-white">
+          <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold leading-tight tracking-tight text-black dark:text-white">
             One Platform. <br />
             Every Leading AI Model.
           </h2>
-          <p className="text-lg text-neutral-400 leading-relaxed max-w-lg">
+          <p className="text-lg text-gray-600 dark:text-neutral-400 leading-relaxed max-w-lg">
             See which AI model is best for your task. No subscription juggling. No context switching.
           </p>
           <div className="mt-2">
             <Link
               href="/register"
-              className="inline-flex items-center gap-2 px-6 py-3.5 bg-white text-black rounded-xl font-semibold hover:bg-neutral-200 transition-all duration-200"
+              className="inline-flex items-center gap-2 px-6 py-3.5 bg-black text-white dark:bg-white dark:text-black rounded-xl font-semibold hover:bg-gray-800 dark:hover:bg-neutral-200 transition-all duration-200"
             >
               Get started
             </Link>

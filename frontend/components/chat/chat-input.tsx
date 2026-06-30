@@ -785,7 +785,6 @@ export function ChatInput({
   // In single mode: clicking any model switches to it immediately (no deselect needed)
   const toggleModel = (modelId: number) => {
     if (isSingle) {
-      // Always switch — no need to deselect first
       onModelChange([modelId]);
     } else if (selectedModels.includes(modelId)) {
       if (selectedModels.length > 1) {
