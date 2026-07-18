@@ -56,6 +56,7 @@ class InvoiceService {
       const uploaded = await uploadToCloudinary(pdfBuffer, {
         folder: "invoices",
         resourceType: "raw",
+        format: "pdf",
       });
 
       await prisma.invoice.update({
