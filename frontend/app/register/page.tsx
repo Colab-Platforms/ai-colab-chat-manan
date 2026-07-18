@@ -88,7 +88,6 @@ export default function RegisterPage() {
 
     try {
       const result = await register({ firstName, lastName, email, password });
-      console.log("Registration result:", result);
       if (typeof window !== "undefined") {
         localStorage.setItem("signup_free_plan_prompt_pending", "1");
         localStorage.removeItem("signup_free_plan_prompt_seen");
