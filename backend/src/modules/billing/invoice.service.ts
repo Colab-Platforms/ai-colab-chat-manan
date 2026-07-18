@@ -3,6 +3,7 @@ import puppeteer from "puppeteer";
 import prisma from "@root/prisma.js";
 import { uploadToCloudinary } from "@/utils/cloudinary.js";
 import { invoiceTemplate } from "./invoice.template.js";
+import { invoiceLogoBase64 } from "@/assets/invoiceLogo.js";
 
 class InvoiceService {
   /**
@@ -29,8 +30,10 @@ class InvoiceService {
         .trim() || invoice.user.email;
 
       const html = ejs.render(invoiceTemplate, {
+        logoDataUri: invoiceLogoBase64,
         invoiceNumber: invoice.invoiceNumber,
         invoiceDate: invoice.createdAt.toDateString(),
+        status: "PAID",
         customerName,
         customerEmail: invoice.user.email,
         planName,
