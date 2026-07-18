@@ -13,19 +13,19 @@ class ChatService {
   private async getDefaultContextIdsForChat(userId: number, folderId?: number | null) {
     const globalContextsQuery = folderId
       ? prisma.contextMemory.findMany({
-          where: { userId, type: "GLOBAL", isAutoSelected: true, isDeleted: false },
-          select: { id: true },
-        })
+        where: { userId, type: "GLOBAL", isAutoSelected: true, isDeleted: false },
+        select: { id: true },
+      })
       : prisma.contextMemory.findMany({
-          where: { userId, type: "GLOBAL", isDeleted: false },
-          select: { id: true },
-        });
+        where: { userId, type: "GLOBAL", isDeleted: false },
+        select: { id: true },
+      });
 
     const folderContextsQuery = folderId
       ? prisma.contextMemory.findMany({
-          where: { userId, type: "FOLDER", folderId, isDeleted: false },
-          select: { id: true },
-        })
+        where: { userId, type: "FOLDER", folderId, isDeleted: false },
+        select: { id: true },
+      })
       : Promise.resolve([]);
 
     const [globalContexts, folderContexts] = await Promise.all([
@@ -165,13 +165,13 @@ class ChatService {
 
     // Heal existing chats or handle deactivated models
     const hasNoModels = !chat.modelIds || chat.modelIds.length === 0;
-    
+
     let activeModelIdsSet = new Set<number>();
     if (!hasNoModels) {
       const activeModels = await prisma.model.findMany({
-        where: { 
-          id: { in: chat.modelIds }, 
-          isActive: true, 
+        where: {
+          id: { in: chat.modelIds },
+          isActive: true,
           isDeleted: false,
           capabilities: { has: chat.capability }
         },
@@ -190,15 +190,15 @@ class ChatService {
         const lastAssistantMsg = chat.messages
           .filter((m) => m.role === "ASSISTANT")
           .pop();
-        
+
         if (lastAssistantMsg && lastAssistantMsg.modelResponses && lastAssistantMsg.modelResponses.length > 0) {
           const historyModelIds = [...new Set(lastAssistantMsg.modelResponses.map((mr: any) => mr.model?.id))]
             .filter((id): id is number => !!id);
-          
+
           const validHistoryModels = await prisma.model.findMany({
-            where: { 
-              id: { in: historyModelIds }, 
-              isActive: true, 
+            where: {
+              id: { in: historyModelIds },
+              isActive: true,
               isDeleted: false,
               capabilities: { has: chat.capability }
             },

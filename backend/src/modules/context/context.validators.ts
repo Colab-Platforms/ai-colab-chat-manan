@@ -20,7 +20,9 @@ export const updateContextSchema = Joi.object({
   folderId: Joi.number().integer().optional().allow(null),
   type: Joi.string().valid("GLOBAL", "FOLDER", "CUSTOM").optional(),
   title: Joi.string().trim().optional(),
-  memory: Joi.string().trim().optional(),
+  memory: Joi.string().trim().max(500).optional().messages({
+    "string.max": "Memory cannot exceed 500 characters",
+  }),
   priority: Joi.number().integer().optional(),
   isAutoSelected: Joi.boolean().optional(),
 });

@@ -110,6 +110,11 @@ export const paymentService = {
     api.post("/payments/subscribe-one-time/create", data),
 };
 
+export const billingService = {
+  getInvoices: (params?: Record<string, string>) =>
+    api.get("/billing/invoices", { params }),
+};
+
 export const planService = {
   list: (params?: Record<string, string>) => api.get("/plans", { params }),
   getById: (id: number) => api.get(`/plans/${id}`),

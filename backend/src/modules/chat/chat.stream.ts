@@ -65,6 +65,38 @@ async function touchChat(chatId: number) {
   });
 }
 
+// Debounced enqueue for the background context-distillation worker
+// (see crons/contextDistillation.ts). Only chats inside a folder have
+// shared project memory worth updating. Never throws — a failure here
+// must not break the chat response it's attached to.
+async function maybeEnqueueDistillation(
+  chatId: number,
+  folderId: number | null,
+) {
+  if (!folderId) return;
+  try {
+    const turnCount = await prisma.message.count({
+      where: { chatId, role: "ASSISTANT", isDeleted: false },
+    });
+    if (turnCount === 0 || turnCount % 4 !== 0) return;
+
+    const existingPending = await prisma.contextDistillationJob.findFirst({
+      where: { chatId, status: "PENDING" },
+      select: { id: true },
+    });
+    if (existingPending) return;
+
+    await prisma.contextDistillationJob.create({
+      data: { chatId, folderId, status: "PENDING" },
+    });
+    console.log(
+      `[context-distillation] ENQUEUED chat=${chatId} folder=${folderId} at assistant-turn=${turnCount} (worker picks this up on its next 2-min tick)`,
+    );
+  } catch (error) {
+    console.error("[context-distillation] failed to enqueue job", error);
+  }
+}
+
 async function getDefaultContextIdsForChat(
   userId: number,
   folderId?: number | null,
@@ -1561,6 +1593,8 @@ export async function streamChat(req: Request, res: Response) {
       }
     });
 
+    await maybeEnqueueDistillation(chatId, chat.folderId);
+
     // Send done signal with usage info
     res.write(
       `data: ${JSON.stringify({ type: "done", modelResponseId: (res as any).modelResponseId, promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
@@ -2165,6 +2199,8 @@ export async function regenerateChat(req: Request, res: Response) {
       }
     });
 
+    await maybeEnqueueDistillation(chatId, chat.folderId);
+
     res.write(
       `data: ${JSON.stringify({ type: "done", modelResponseId: (res as any).modelResponseId, promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
@@ -2766,6 +2802,8 @@ export async function editAndResend(req: Request, res: Response) {
       }
     });
 
+    await maybeEnqueueDistillation(chatId, chat.folderId);
+
     res.write(
       `data: ${JSON.stringify({ type: "done", modelResponseId: (res as any).modelResponseId, promptTokens: finalPrompt, completionTokens: finalCompletion, totalTokens: finalTotal, finishReason })}\n\n`,
     );
@@ -3211,6 +3249,8 @@ export async function continueChatStream(req: Request, res: Response) {
         });
       }
     });
+
+    await maybeEnqueueDistillation(chatId, chat.folderId);
 
     res.write(
       `data: ${JSON.stringify({ type: "done", promptTokens: 0, completionTokens, totalTokens: completionTokens, finishReason })}\n\n`,

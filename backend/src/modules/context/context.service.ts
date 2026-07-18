@@ -67,6 +67,7 @@ class ContextService {
         { key: "type", field: "type", type: "string" },
         { key: "isAutoSelected", field: "isAutoSelected", type: "boolean" },
         { key: "folderId", field: "folderId", type: "number" },
+        { key: "origin", field: "origin", type: "string" },
       ],
       sortFields: [
         { key: "createdAt", field: "createdAt" },
@@ -81,6 +82,7 @@ class ContextService {
         "type",
         "isAutoSelected",
         "folderId",
+        "origin",
       ],
     });
 
@@ -140,6 +142,11 @@ class ContextService {
       where: { id: contextId },
       data: {
         ...data,
+        // Once a user edits an auto-distilled memory, it's no longer just
+        // the model's guess — promote it to USER-owned so the distillation
+        // worker's cap-eviction logic (which only culls DISTILLED rows)
+        // never deletes something the user has curated.
+        ...(context.origin === "DISTILLED" ? { origin: "USER" as const } : {}),
       },
     });
 

@@ -89,6 +89,12 @@
   --landing-text-color: #cdcdcd;
   --landing-text-hover-color: #ffffff;
   --landing-primary-hover-color: #310f61;
+
+  /* Hero grid wormhole - dark mode default (root = dark) */
+  --hero-grid-stroke: #DCD0FF;
+  --hero-ray-stroke: #b060ff;
+  --hero-grid-opacity: 0.9;
+  --hero-grid-stroke-width: 1.5;
 }
 
 .dark {
@@ -128,6 +134,12 @@
   --landing-text-color: #cdcdcd;
   --landing-text-hover-color: #ffffff;
   --landing-primary-hover-color: #310f61;
+
+  /* Hero grid wormhole - dark mode: bright lavender visible on dark */
+  --hero-grid-stroke: #DCD0FF;
+  --hero-ray-stroke: #b060ff;
+  --hero-grid-opacity: 0.9;
+  --hero-grid-stroke-width: 1.5;
 }
 
 /* ── Light mode: override all variables when .dark class is absent ── */
@@ -166,6 +178,12 @@ html:not(.dark) {
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.85 0.006 286.32);
   --sidebar-ring: oklch(0.55 0.015 286.067);
+
+  /* Hero grid wormhole - light mode: dark violet visible on white */
+  --hero-grid-stroke: #5b21b6;
+  --hero-ray-stroke: #6d28d9;
+  --hero-grid-opacity: 0.6;
+  --hero-grid-stroke-width: 1;
 }
 
 
@@ -174,10 +192,12 @@ html:not(.dark) {
     border-color: var(--border);
     outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
   }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
   }
+
   button,
   [role="button"],
   a,
@@ -195,14 +215,17 @@ html:not(.dark) {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--muted);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
 }
@@ -231,8 +254,7 @@ html:not(.dark) {
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--primary) 30%, transparent)
-    transparent;
+  scrollbar-color: color-mix(in srgb, var(--primary) 30%, transparent) transparent;
 }
 
 html {
@@ -260,10 +282,10 @@ body {
   z-index: 2;
 }
 
-@media(max-width:768px){
-  .grid-wraper{
+@media(max-width:768px) {
+  .grid-wraper {
     width: 1000px;
-    top:40%;
+    top: 40%;
   }
 }
 
@@ -287,12 +309,10 @@ body {
 }
 
 .grid-overlay {
-  background: radial-gradient(
-    32% 25% at 50% 60.4%,
-    #1e1028 0%,
-    #5b2483 49.7297%,
-    #4e1b72 100%
-  );
+  background: radial-gradient(32% 25% at 50% 60.4%,
+      #1e1028 0%,
+      #5b2483 49.7297%,
+      #4e1b72 100%);
   opacity: 0;
   overflow: clip;
   will-change: transform;
@@ -308,7 +328,7 @@ body {
 }
 
 /* Entrance transitions */
-.circles-group > path,
+.circles-group>path,
 .circles-group g[mask] path {
   opacity: 0 !important;
   transform: translateY(-100px) !important;
@@ -317,9 +337,9 @@ body {
     transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.circles-group > path.visible,
+.circles-group>path.visible,
 .circles-group g[mask] path.visible {
-  opacity: 0.25 !important;
+  opacity: var(--hero-grid-opacity, 0.7) !important;
   transform: translateY(0) !important;
 }
 
@@ -329,7 +349,7 @@ body {
 }
 
 .radial-lines-group path.visible {
-  opacity: 0.25 !important;
+  opacity: var(--hero-grid-opacity, 0.7) !important;
 }
 
 .rays-group {
@@ -350,6 +370,7 @@ body {
   from {
     stroke-dashoffset: var(--dash-period, 2);
   }
+
   to {
     stroke-dashoffset: 0;
   }
@@ -359,18 +380,23 @@ body {
 /* ── OnePlatform: Center Hub Glow ── */
 
 @keyframes hub-pulse-expand {
-  0%, 60% {
+
+  0%,
+  60% {
     transform: scale(1);
     opacity: 0;
   }
+
   61% {
     transform: scale(1);
     opacity: 0.3;
   }
+
   90% {
     transform: scale(2.0);
     opacity: 0;
   }
+
   100% {
     transform: scale(2.0);
     opacity: 0;
@@ -378,12 +404,10 @@ body {
 }
 
 .hub-pulse-layer {
-  background: radial-gradient(
-    circle,
-    rgba(140, 140, 140, 0.6) 0%,
-    rgba(140, 140, 140, 0.3) 60%,
-    transparent 100%
-  );
+  background: radial-gradient(circle,
+      rgba(140, 140, 140, 0.6) 0%,
+      rgba(140, 140, 140, 0.3) 60%,
+      transparent 100%);
   animation: hub-pulse-expand 2s ease-in-out infinite;
   will-change: transform, opacity;
 }
@@ -394,14 +418,18 @@ body {
     stroke-dashoffset: 15;
     opacity: 0;
   }
+
   2% {
     opacity: 1;
   }
+
   60% {
     stroke-dashoffset: -100;
     opacity: 1;
   }
-  61%, 100% {
+
+  61%,
+  100% {
     stroke-dashoffset: -100;
     opacity: 0;
   }

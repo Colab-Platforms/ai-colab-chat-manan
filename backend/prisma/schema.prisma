@@ -48,6 +48,8 @@ model User {
   preference                    UserPreference?
   walletTransactions            WalletTransaction[]
   contexts                      ContextMemory[]
+  payments                      Payment[]
+  invoices                      Invoice[]
 }
 
 enum AuthProvider {
@@ -70,11 +72,19 @@ enum ContextType {
   CUSTOM
 }
 
+enum ContextOrigin {
+  USER
+  SYSTEM
+  DISTILLED
+}
+
 model ContextMemory {
   id              Int           @id @default(autoincrement())
   userId          Int
   folderId        Int?
   type            ContextType   @default(CUSTOM)
+  origin          ContextOrigin @default(USER)
+  sourceChatId    Int?
   title           String
   memory          String
   priority        Int           @default(0)
@@ -83,6 +93,7 @@ model ContextMemory {
   isDeleted       Boolean       @default(false)
   user            User          @relation(fields: [userId], references: [id])
   folder          Folder?       @relation(fields: [folderId], references: [id])
+  sourceChat      Chat?         @relation("ContextSourceChat", fields: [sourceChatId], references: [id])
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   deletedAt       DateTime?
@@ -91,6 +102,7 @@ model ContextMemory {
   @@index([userId])
   @@index([folderId])
   @@index([userId, type])
+  @@index([sourceChatId])
 }
 
 model UserRole {
@@ -180,6 +192,8 @@ model Chat {
   assistant    Assistant?      @relation(fields: [assistantId], references: [id])
   usageLogs    UsageLog[]
   chatContexts ChatContext[]
+  distilledContexts ContextMemory[] @relation("ContextSourceChat")
+  distillationJobs   ContextDistillationJob[]
 
   @@index([userId])
   @@index([folderId])
@@ -198,6 +212,28 @@ model ChatContext {
   @@unique([chatId, contextId])
   @@index([chatId])
   @@index([contextId])
+}
+
+enum DistillationStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model ContextDistillationJob {
+  id        Int                @id @default(autoincrement())
+  chatId    Int
+  folderId  Int
+  chat      Chat               @relation(fields: [chatId], references: [id])
+  status    DistillationStatus @default(PENDING)
+  attempts  Int                @default(0)
+  lastError String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([status])
+  @@index([chatId, status])
 }
 
 model Message {
@@ -419,6 +455,7 @@ model Subscription {
   plan                   Plan               @relation(fields: [planId], references: [id])
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
+  payments               Payment[]
 
   @@index([userId])
   @@index([status])
@@ -448,4 +485,86 @@ model SubscriptionReminder {
   @@unique([subscriptionId, stage])
   @@index([userId, stage])
   @@index([subscriptionId])
+}
+
+enum PaymentType {
+  ONE_TIME
+  RECURRING
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Payment {
+  id                      Int           @id @default(autoincrement())
+  userId                  Int
+  user                    User          @relation(fields: [userId], references: [id])
+  walletId                Int?
+  subscriptionId          Int?
+  subscription            Subscription? @relation(fields: [subscriptionId], references: [id])
+  type                    PaymentType
+  provider                String        @default("CASHFREE")
+  providerOrderId         String?
+  providerPaymentId       String?
+  providerSubscriptionId  String?
+  amount                  Decimal
+  currency                String        @default("INR")
+  status                  PaymentStatus @default(PENDING)
+  metadata                Json?
+  invoice                 Invoice?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  @@unique([provider, providerPaymentId])
+  @@index([userId])
+  @@index([providerOrderId])
+  @@index([subscriptionId])
+}
+
+enum InvoiceStatus {
+  PENDING
+  GENERATED
+  FAILED
+}
+
+model Invoice {
+  id            Int           @id @default(autoincrement())
+  paymentId     Int           @unique
+  payment       Payment       @relation(fields: [paymentId], references: [id])
+  userId        Int
+  user          User          @relation(fields: [userId], references: [id])
+  invoiceNumber String        @unique
+  invoiceUrl    String?
+  amount        Decimal
+  currency      String        @default("INR")
+  status        InvoiceStatus @default(PENDING)
+  errorMessage  String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+model BillingWebhookEvent {
+  id           Int                @id @default(autoincrement())
+  provider     String             @default("CASHFREE")
+  eventType    String
+  payloadHash  String             @unique
+  rawBody      String
+  status       WebhookEventStatus @default(RECEIVED)
+  errorMessage String?
+  processedAt  DateTime?
+  createdAt    DateTime           @default(now())
+
+  @@index([eventType])
 }

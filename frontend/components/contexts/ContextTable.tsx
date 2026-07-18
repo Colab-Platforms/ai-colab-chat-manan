@@ -49,9 +49,20 @@ export function ContextTable({ contexts, folders, onView, onEdit, onDelete }: Co
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-1 items-start">
-                  <Badge variant={ctx.type === "GLOBAL" ? "default" : ctx.type === "FOLDER" ? "secondary" : "outline"}>
-                    {ctx.type}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge variant={ctx.type === "GLOBAL" ? "default" : ctx.type === "FOLDER" ? "secondary" : "outline"}>
+                      {ctx.type}
+                    </Badge>
+                    {ctx.origin === "DISTILLED" && (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] uppercase tracking-wide text-muted-foreground"
+                        title="Automatically added from a chat in this project"
+                      >
+                        Auto
+                      </Badge>
+                    )}
+                  </div>
                   {ctx.type === "FOLDER" && ctx.folderId && (
                     <span className="text-[10px] text-muted-foreground ml-1">
                       in {getFolderName(ctx.folderId)}
