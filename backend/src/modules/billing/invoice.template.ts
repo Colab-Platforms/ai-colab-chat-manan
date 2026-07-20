@@ -142,7 +142,7 @@ export const invoiceTemplate = `
     <% } %>
   </table>
 
-  <% if (paymentType === "RECURRING" && nextBillingDate) { %>
+  <% if (nextBillingDate) { %>
   <div class="renewal-note">
     <% if (autoRenew) { %>
       Your <%= planName %> plan will renew automatically on <strong><%= nextBillingDate %></strong>.

@@ -634,8 +634,23 @@ class SubscriptionCashfreeService {
     });
 
     if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      console.error("Cashfree subscription cancel failed", {
+        subscriptionId,
+        status: response.status,
+        body: bodyText.slice(0, 1000),
+      });
+
+      // Cashfree returns 400 when the subscription is already in a terminal
+      // state (e.g. CANCELLED/EXPIRED) at their end. Treat that as a no-op
+      // success so a retry (or a subscription already cancelled by an
+      // earlier attempt/webhook) doesn't keep failing locally.
+      if (response.status === 400 && /already|cancel|terminat|expired|inactive/i.test(bodyText)) {
+        return;
+      }
+
       throw new ApiError(
-        `Cashfree subscription cancel failed: ${response.status}`,
+        `Cashfree subscription cancel failed: ${response.status}${bodyText ? ` - ${bodyText.slice(0, 300)}` : ""}`,
         STATUS_CODES.SERVER_ERROR,
       );
     }
