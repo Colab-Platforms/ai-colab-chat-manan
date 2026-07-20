@@ -320,7 +320,6 @@ class SubscriptionService {
     async cancel(userId: number) {
         const subscription = await prisma.subscription.findFirst({
             where: { userId, status: { in: ["ACTIVE", "PAST_DUE", "PENDING"] } },
-            include: { plan: true },
             orderBy: { createdAt: "desc" },
         });
 
@@ -333,43 +332,10 @@ class SubscriptionService {
             await this.cashfreeService.cancelSubscription(subscription.cashfreeSubscriptionId);
         }
 
-        const cancelled = await prisma.subscription.update({
+        return prisma.subscription.update({
             where: { id: subscription.id },
             data: { status: "CANCELLED", autoRenew: false },
         });
-
-        // Cancelling a paid plan should fall the user back to their existing
-        // Free plan grant rather than leaving them with no active plan.
-        // Just flip the old Free subscription row back to ACTIVE — tokens are
-        // refreshed by the usual monthly cycle job, not re-granted here.
-        const wasFreePlan =
-            Number(subscription.plan.monthlyPrice) === 0 ||
-            subscription.plan.name.trim().toLowerCase() === "free";
-
-        if (!wasFreePlan) {
-            const previousFreeSub = await prisma.subscription.findFirst({
-                where: {
-                    userId,
-                    status: "CANCELLED",
-                    plan: {
-                        OR: [
-                            { name: { equals: "free", mode: "insensitive" } },
-                            { monthlyPrice: 0 },
-                        ],
-                    },
-                },
-                orderBy: { createdAt: "desc" },
-            });
-
-            if (previousFreeSub) {
-                await prisma.subscription.update({
-                    where: { id: previousFreeSub.id },
-                    data: { status: "ACTIVE" },
-                });
-            }
-        }
-
-        return cancelled;
     }
 
     // Cancel only a PENDING subscription (used for "Cancel payment" flows).
