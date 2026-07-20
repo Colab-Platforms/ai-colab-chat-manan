@@ -35,6 +35,7 @@ export default function SubscriptionPage() {
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
   const [cancellingPendingPayment, setCancellingPendingPayment] = useState(false);
   const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null);
+  const isSubscribingRef = useRef(false);
   const [confirmUpgradePlanId, setConfirmUpgradePlanId] = useState<number | null>(null);
   const [autoPayUpdating, setAutoPayUpdating] = useState(false);
   const [autoStartingPlanId, setAutoStartingPlanId] = useState<number | null>(null);
@@ -237,7 +238,8 @@ export default function SubscriptionPage() {
   };
 
   const handleSubscribe = async (planId: number) => {
-    if (subscribingPlanId !== null) return;
+    if (isSubscribingRef.current) return;
+    isSubscribingRef.current = true;
     setSubscribingPlanId(planId);
     try {
       console.debug("[SubscriptionPage] handleSubscribe request", { planId });
@@ -303,6 +305,7 @@ export default function SubscriptionPage() {
       toast.error(err?.response?.data?.message || "Failed to subscribe");
     }
     finally {
+      isSubscribingRef.current = false;
       setSubscribingPlanId(null);
     }
   };
@@ -378,7 +381,8 @@ export default function SubscriptionPage() {
   };
 
   const handleEnableAutoPay = async () => {
-    if (!subscription?.planId || subscribingPlanId !== null) return;
+    if (!subscription?.planId || isSubscribingRef.current) return;
+    isSubscribingRef.current = true;
     setSubscribingPlanId(subscription.planId);
     try {
       const res = await subscriptionService.enableAutoPay({
@@ -402,6 +406,7 @@ export default function SubscriptionPage() {
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to enable AutoPay");
     } finally {
+      isSubscribingRef.current = false;
       setSubscribingPlanId(null);
     }
   };
@@ -628,6 +633,7 @@ export default function SubscriptionPage() {
                     <Button
                       size="sm"
                       className="w-full"
+                      disabled={subscribingPlanId !== null}
                       onClick={() => {
                         if (isUpgrade && currentIsFree) {
                           setConfirmUpgradePlanId(plan.id);
