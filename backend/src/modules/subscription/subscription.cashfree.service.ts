@@ -641,11 +641,20 @@ class SubscriptionCashfreeService {
         body: bodyText.slice(0, 1000),
       });
 
-      // Cashfree returns 400 when the subscription is already in a terminal
-      // state (e.g. CANCELLED/EXPIRED) at their end. Treat that as a no-op
-      // success so a retry (or a subscription already cancelled by an
-      // earlier attempt/webhook) doesn't keep failing locally.
-      if (response.status === 400 && /already|cancel|terminat|expired|inactive/i.test(bodyText)) {
+      // Cashfree returns 400 with code "subscription_status_invalid_for_action"
+      // when the subscription is not in a state CANCEL applies to (e.g. never
+      // authorized/INITIALIZED, or already CANCELLED/EXPIRED at their end).
+      // Either way there is no active mandate left to cancel, so treat it as
+      // a no-op success and let the caller mark it cancelled locally instead
+      // of failing the request forever.
+      const errorCode = (() => {
+        try {
+          return JSON.parse(bodyText)?.code;
+        } catch {
+          return null;
+        }
+      })();
+      if (response.status === 400 && errorCode === "subscription_status_invalid_for_action") {
         return;
       }
 
