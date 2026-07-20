@@ -19,7 +19,7 @@ export const invoiceTemplate = `
 <meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 40px; font-size: 13px; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; background: #ffffff; margin: 0; padding: 40px; font-size: 13px; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
   .brand { display: flex; align-items: center; gap: 10px; }
   .brand img { height: 28px; width: auto; }
@@ -39,7 +39,12 @@ export const invoiceTemplate = `
   table { width: 100%; border-collapse: collapse; margin-top: 32px; }
   th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
   th { color: #888; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
-  .total-row td { font-weight: bold; font-size: 15px; border-top: 2px solid #1a1a1a; border-bottom: none; padding-top: 14px; }
+  .totals { width: 100%; margin-top: 4px; }
+  .totals td { border-bottom: none; padding: 6px 8px; }
+  .totals .totals-spacer { width: 60%; }
+  .totals .totals-label { color: #5b6b98; text-align: right; }
+  .totals .totals-value { text-align: right; white-space: nowrap; }
+  .totals .total-row td { font-weight: bold; color: #1a1a1a; border-top: 1px solid #1a1a1a; padding-top: 12px; }
   .footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; gap: 24px; }
   .footer-address { font-size: 12px; color: #444; line-height: 1.6; }
   .footer-address strong { display: block; font-size: 13px; color: #1a1a1a; margin-bottom: 2px; }
@@ -83,7 +88,8 @@ export const invoiceTemplate = `
     <thead>
       <tr>
         <th>Description</th>
-        <th>Type</th>
+        <th style="text-align: right;">Qty</th>
+        <th style="text-align: right;">Unit price</th>
         <th style="text-align: right;">Amount</th>
       </tr>
     </thead>
@@ -92,15 +98,35 @@ export const invoiceTemplate = `
         <td>
           <%= planName %>
           <% if (billingCycle) { %> (<%= billingCycle %>)<% } %>
+          <div style="color: #888; font-size: 11px; margin-top: 2px;">
+            <%= paymentType === "RECURRING" ? "Subscription renewal" : "One-time payment" %>
+          </div>
         </td>
-        <td><%= paymentType === "RECURRING" ? "Subscription renewal" : "One-time payment" %></td>
+        <td style="text-align: right;">1</td>
         <td style="text-align: right;"><%= currency %> <%= amount %></td>
-      </tr>
-      <tr class="total-row">
-        <td colspan="2">Total</td>
         <td style="text-align: right;"><%= currency %> <%= amount %></td>
       </tr>
     </tbody>
+  </table>
+
+  <table class="totals">
+    <tr>
+      <td class="totals-spacer"></td>
+      <td class="totals-label">Subtotal</td>
+      <td class="totals-value totals-label"><%= currency %> <%= amount %></td>
+    </tr>
+    <tr>
+      <td class="totals-spacer"></td>
+      <td class="totals-label">Total</td>
+      <td class="totals-value totals-label"><%= currency %> <%= amount %></td>
+    </tr>
+    <% if (status === "PAID") { %>
+    <tr class="total-row">
+      <td class="totals-spacer"></td>
+      <td>Amount paid</td>
+      <td class="totals-value"><%= currency %> <%= amount %></td>
+    </tr>
+    <% } %>
   </table>
 
   <div class="footer">
