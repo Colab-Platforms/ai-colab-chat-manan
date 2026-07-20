@@ -22,12 +22,22 @@ class InvoiceService {
     if (!invoice) return;
 
     try {
-      const planName = invoice.payment.subscription?.plan?.name ?? "Wallet Top-up";
-      const billingCycle = invoice.payment.subscription?.billingCycle ?? null;
+      const subscription = invoice.payment.subscription;
+      const planName = subscription?.plan?.name ?? "Wallet Top-up";
+      const billingCycle = subscription?.billingCycle ?? null;
       const customerName = [invoice.user.firstName, invoice.user.lastName]
         .filter(Boolean)
         .join(" ")
         .trim() || invoice.user.email;
+
+      const dateFormatter = new Intl.DateTimeFormat("en-US", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      const nextBillingDate = subscription?.nextBillingDate
+        ? dateFormatter.format(subscription.nextBillingDate)
+        : null;
 
       const html = ejs.render(invoiceTemplate, {
         logoDataUri: invoiceLogoBase64,
@@ -41,6 +51,8 @@ class InvoiceService {
         paymentType: invoice.payment.type,
         amount: invoice.amount.toString(),
         currency: invoice.currency,
+        nextBillingDate,
+        autoRenew: subscription?.autoRenew ?? false,
       });
 
       const browser = await puppeteer.launch({

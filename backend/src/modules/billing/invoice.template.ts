@@ -10,6 +10,8 @@ export interface InvoiceTemplateData {
   paymentType: string;
   amount: string;
   currency: string;
+  nextBillingDate: string | null;
+  autoRenew: boolean;
 }
 
 export const invoiceTemplate = `
@@ -36,16 +38,20 @@ export const invoiceTemplate = `
   .label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
   .value { font-size: 13px; line-height: 1.5; }
   .value strong { font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 32px; }
-  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 32px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e0e0e0; font-size: 13px; vertical-align: top; }
   th { color: #888; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+  .col-desc { width: 46%; }
+  .col-qty { width: 12%; }
+  .col-unit { width: 21%; }
+  .col-amount { width: 21%; }
   .totals { width: 100%; margin-top: 4px; }
   .totals td { border-bottom: none; padding: 6px 8px; }
-  .totals .totals-spacer { width: 60%; }
   .totals .totals-label { color: #5b6b98; text-align: right; }
   .totals .totals-value { text-align: right; white-space: nowrap; }
   .totals .total-row td { font-weight: bold; color: #1a1a1a; border-top: 1px solid #1a1a1a; padding-top: 12px; }
-  .footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; gap: 24px; }
+  .renewal-note { margin-top: 24px; padding: 14px 16px; background: #f6f7fb; border: 1px solid #e4e7f0; border-radius: 6px; font-size: 12px; color: #444; line-height: 1.6; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; gap: 24px; }
   .footer-address { font-size: 12px; color: #444; line-height: 1.6; }
   .footer-address strong { display: block; font-size: 13px; color: #1a1a1a; margin-bottom: 2px; }
   .footer-note { font-size: 11px; color: #999; text-align: right; max-width: 260px; line-height: 1.6; }
@@ -85,6 +91,12 @@ export const invoiceTemplate = `
   </div>
 
   <table>
+    <colgroup>
+      <col class="col-desc" />
+      <col class="col-qty" />
+      <col class="col-unit" />
+      <col class="col-amount" />
+    </colgroup>
     <thead>
       <tr>
         <th>Description</th>
@@ -110,24 +122,39 @@ export const invoiceTemplate = `
   </table>
 
   <table class="totals">
+    <colgroup>
+      <col style="width: 79%;" />
+      <col class="col-amount" />
+    </colgroup>
     <tr>
-      <td class="totals-spacer"></td>
       <td class="totals-label">Subtotal</td>
       <td class="totals-value totals-label"><%= currency %> <%= amount %></td>
     </tr>
     <tr>
-      <td class="totals-spacer"></td>
       <td class="totals-label">Total</td>
       <td class="totals-value totals-label"><%= currency %> <%= amount %></td>
     </tr>
     <% if (status === "PAID") { %>
     <tr class="total-row">
-      <td class="totals-spacer"></td>
-      <td>Amount paid</td>
+      <td style="text-align: right;">Amount paid</td>
       <td class="totals-value"><%= currency %> <%= amount %></td>
     </tr>
     <% } %>
   </table>
+
+  <% if (paymentType === "RECURRING" && nextBillingDate) { %>
+  <div class="renewal-note">
+    <% if (autoRenew) { %>
+      Your <%= planName %> plan will renew automatically on <strong><%= nextBillingDate %></strong>.
+      To avoid any interruption to your service, please ensure your auto-pay mandate remains active
+      and your payment method is up to date.
+    <% } else { %>
+      Your <%= planName %> plan is scheduled to expire on <strong><%= nextBillingDate %></strong>.
+      To avoid any interruption to your service, please renew your subscription or enable auto-pay
+      before this date.
+    <% } %>
+  </div>
+  <% } %>
 
   <div class="footer">
     <div class="footer-address">
