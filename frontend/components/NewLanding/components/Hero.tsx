@@ -52,7 +52,7 @@ export function Hero() {
       <HeroGrid />
 
       <Image width={1920} height={1000} alt="hero-pc-dark" src="/new-landing/hero-pc-dark.png" className="border-2 border-gray-200 dark:border-[#4d4d4d] rounded-2xl shadow-lg w-full flex mx-auto hidden dark:block" />
-      <Image width={1920} height={1000} alt="hero-pc-light" src="/new-landing/hero-pc-dark.png" className="border-2 border-gray-200 dark:border-[#4d4d4d] rounded-2xl shadow-lg w-full flex mx-auto dark:hidden" />
+      <Image width={1920} height={1000} alt="hero-pc-light" src="/Landing/hero-pc-light.png" className="border-2 border-gray-200 dark:border-[#4d4d4d] rounded-2xl shadow-lg w-full flex mx-auto dark:hidden" />
       </div>
 
 

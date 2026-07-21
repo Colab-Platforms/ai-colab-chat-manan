@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/context/theme-context";
-import { LandingPage } from "@/components/landing/LandingPage";
+import { NewLandingPage } from "@/components/NewLanding/NewLandingPage";
 import { NewChatPage } from "@/components/chat/NewChatPage";
 import { HoverBlurSurface } from "@/components/landing/components/HoverBlurSurface";
 
@@ -71,5 +71,5 @@ export default function Home() {
     );
   }
 
-  return <LandingPage />;
+  return <NewLandingPage />;
 }
