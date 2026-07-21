@@ -361,6 +361,28 @@ body {
   opacity: 1;
 }
 
+/* Light mode: the lavender (#DCD0FF) / mauve (#a791b6) strokes tuned for a
+   dark hero background wash out to near-invisible against a white one —
+   swap in a darker, more saturated violet and raise the opacity floor. */
+html:not(.dark) .circles-group > path,
+html:not(.dark) .circles-group g[mask] path,
+html:not(.dark) .radial-lines-group path {
+  stroke: #8b5cf6;
+}
+
+html:not(.dark) .circles-group > path.visible,
+html:not(.dark) .circles-group g[mask] path.visible {
+  opacity: 0.45 !important;
+}
+
+html:not(.dark) .radial-lines-group path.visible {
+  opacity: 0.4 !important;
+}
+
+html:not(.dark) .rays-group path[stroke="#a791b6"] {
+  stroke: #7c3aed;
+}
+
 .flow-line {
   animation: flow-move linear infinite;
   will-change: stroke-dashoffset;
