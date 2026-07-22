@@ -38,7 +38,7 @@ export function calculateAdjustedTokens(
   availableTokens: number,
   billablePrompt: number,
   billableCompletion: number,
-  tokenMultiplier: number = 1.0,
+  _tokenMultiplier: number = 1.0,
   rawPrompt: number = billablePrompt,
   rawCompletion: number = billableCompletion,
 ) {
