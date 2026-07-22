@@ -314,6 +314,7 @@ model Model {
   externalId             String
   capabilities           ModelCapability[] @default([STANDARD])
   description            String?
+  isFreeModel            Boolean           @default(false)
   isActive               Boolean           @default(true)
   defaultForCapabilities ModelCapability[] @default([])
   tokenMultiplier        Float             @default(1.0)

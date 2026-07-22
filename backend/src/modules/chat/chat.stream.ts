@@ -412,7 +412,7 @@ async function checkTokenLimitsAndSetupStream(
   messageIdPayload: Record<string, any>,
   enableFollowUpQuestions: boolean,
 ): Promise<{ maxCompletionTokens: number; trimmedHistory: any[] } | null> {
-  const tokenMultiplier = model.tokenMultiplier || 1.0;
+  const tokenMultiplier = model.tokenMultiplier ?? 1.0;
   const maxAffordableTokens = Math.floor(
     wallet.tokensRemaining / tokenMultiplier,
   );
@@ -849,12 +849,19 @@ export async function streamChat(req: Request, res: Response) {
       return;
     }
 
+    const isfreeModel = model.isFreeModel
+
+    console.log(" it is returning from here 1", isfreeModel, model.isFreeModel, model.name, model.externalId, model.modelProvider.name)
+
     // Check wallet
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
-    if (!wallet || wallet.tokensRemaining <= 0) {
+    if ((!wallet || wallet.tokensRemaining <= 0 ) && !isfreeModel) {
       res.status(400).json({ status: false, message: "Token limit exceeded" });
       return;
     }
+
+    console.log(" it is returning from here 2")
+
 
     // Reuse existing user message or create a new one
     let userMessage: { id: number };
@@ -1159,7 +1166,7 @@ export async function streamChat(req: Request, res: Response) {
       const pTokens = Math.ceil(content.length / 3.5);
       const cTokens = Math.ceil(predefinedText.length / 3.5);
       const tTokens = pTokens + cTokens;
-      const tokenMultiplierPre = model.tokenMultiplier || 1.0;
+      const tokenMultiplierPre = model.tokenMultiplier ?? 1.0;
       const billablePromptPre = Math.ceil(pTokens * tokenMultiplierPre);
       const billableCompletionPre = Math.ceil(cTokens * tokenMultiplierPre);
 
@@ -1178,6 +1185,8 @@ export async function streamChat(req: Request, res: Response) {
           billablePromptPre,
           billableCompletionPre,
           tokenMultiplierPre,
+          pTokens,
+          cTokens,
         );
 
         finalPrompt = adjusted.finalRawPrompt;
@@ -1291,7 +1300,7 @@ export async function streamChat(req: Request, res: Response) {
         const stoppedContent =
           fullContent.trim() || "Generation stopped by user.";
         try {
-          const tokenMultiplier = model.tokenMultiplier || 1.0;
+          const tokenMultiplier = model.tokenMultiplier ?? 1.0;
           const billablePromptTokens = Math.ceil(
             (promptTokens || 0) * tokenMultiplier,
           );
@@ -1310,6 +1319,8 @@ export async function streamChat(req: Request, res: Response) {
               billablePromptTokens,
               billableCompletionTokens,
               tokenMultiplier,
+              promptTokens || 0,
+              completionTokens || 0,
             );
 
             await tx.message.update({
@@ -1501,7 +1512,7 @@ export async function streamChat(req: Request, res: Response) {
       fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
-    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const tokenMultiplier = model.tokenMultiplier ?? 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
@@ -1523,6 +1534,8 @@ export async function streamChat(req: Request, res: Response) {
         billablePromptTokens,
         billableCompletionTokens,
         tokenMultiplier,
+        promptTokens,
+        completionTokens,
       );
 
       finalPrompt = adjusted.finalRawPrompt;
@@ -1806,7 +1819,7 @@ export async function regenerateChat(req: Request, res: Response) {
       const pTokens = Math.ceil(originalContent.length / 3.5);
       const cTokens = Math.ceil(predefinedTextRegen.length / 3.5);
       const tTokens = pTokens + cTokens;
-      const tokenMultiplierRegen = model.tokenMultiplier || 1.0;
+      const tokenMultiplierRegen = model.tokenMultiplier ?? 1.0;
       const billablePromptRegen = Math.ceil(pTokens * tokenMultiplierRegen);
       const billableCompletionRegen = Math.ceil(cTokens * tokenMultiplierRegen);
 
@@ -1825,6 +1838,8 @@ export async function regenerateChat(req: Request, res: Response) {
           billablePromptRegen,
           billableCompletionRegen,
           tokenMultiplierRegen,
+          pTokens,
+          cTokens,
         );
 
         finalPrompt = adjusted.finalRawPrompt;
@@ -1927,7 +1942,7 @@ export async function regenerateChat(req: Request, res: Response) {
         const stoppedContent =
           fullContent.trim() || "Generation stopped by user.";
         try {
-          const tokenMultiplier = model.tokenMultiplier || 1.0;
+          const tokenMultiplier = model.tokenMultiplier ?? 1.0;
           const billablePromptTokens = Math.ceil(
             (promptTokens || 0) * tokenMultiplier,
           );
@@ -1946,6 +1961,8 @@ export async function regenerateChat(req: Request, res: Response) {
               billablePromptTokens,
               billableCompletionTokens,
               tokenMultiplier,
+              promptTokens || 0,
+              completionTokens || 0,
             );
 
             await tx.message.update({
@@ -2117,7 +2134,7 @@ export async function regenerateChat(req: Request, res: Response) {
       fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
-    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const tokenMultiplier = model.tokenMultiplier ?? 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
@@ -2138,6 +2155,8 @@ export async function regenerateChat(req: Request, res: Response) {
         billablePromptTokens,
         billableCompletionTokens,
         tokenMultiplier,
+        promptTokens,
+        completionTokens,
       );
 
       finalPrompt = adjusted.finalRawPrompt;
@@ -2509,7 +2528,7 @@ export async function editAndResend(req: Request, res: Response) {
         const stoppedContent =
           fullContent.trim() || "Generation stopped by user.";
         try {
-          const tokenMultiplier = model.tokenMultiplier || 1.0;
+          const tokenMultiplier = model.tokenMultiplier ?? 1.0;
           const billablePromptTokens = Math.ceil(
             (promptTokens || 0) * tokenMultiplier,
           );
@@ -2528,6 +2547,8 @@ export async function editAndResend(req: Request, res: Response) {
               billablePromptTokens,
               billableCompletionTokens,
               tokenMultiplier,
+              promptTokens || 0,
+              completionTokens || 0,
             );
 
             await tx.message.update({
@@ -2710,7 +2731,7 @@ export async function editAndResend(req: Request, res: Response) {
       fullContent = keepOnlyFirstImageMarkdown(fullContent).trim();
     }
 
-    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const tokenMultiplier = model.tokenMultiplier ?? 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
@@ -2732,6 +2753,8 @@ export async function editAndResend(req: Request, res: Response) {
         billablePromptTokens,
         billableCompletionTokens,
         tokenMultiplier,
+        promptTokens,
+        completionTokens,
       );
 
       finalPrompt = adjusted.finalRawPrompt;
@@ -3179,7 +3202,7 @@ export async function continueChatStream(req: Request, res: Response) {
       return;
     }
 
-    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const tokenMultiplier = model.tokenMultiplier ?? 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
@@ -3194,6 +3217,8 @@ export async function continueChatStream(req: Request, res: Response) {
         billablePromptTokens,
         billableCompletionTokens,
         tokenMultiplier,
+        promptTokens,
+        completionTokens,
       );
 
       await tx.message.update({

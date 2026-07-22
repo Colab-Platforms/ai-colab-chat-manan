@@ -196,7 +196,7 @@ class MessageService {
       completion.usage?.completion_tokens ?? estimateTokenCount(enhancedPrompt);
     const totalTokens = promptTokens + completionTokens;
 
-    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const tokenMultiplier = model.tokenMultiplier ?? 1.0;
     const billablePromptTokens = Math.ceil(promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       completionTokens * tokenMultiplier,
