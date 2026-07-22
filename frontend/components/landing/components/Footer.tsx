@@ -42,7 +42,7 @@ const mainLinks = [
 
 const legalLinks = [
   { href: "#", label: "Privacy Policy" },
-  { href: "#", label: "Terms of Service" },
+  { href: "/terms", label: "Terms of Service" },
   { href: "#", label: "Cookie Policy" },
 ];
 

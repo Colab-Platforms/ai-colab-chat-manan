@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Lock } from "lucide-react";
 import { planService } from "@/lib/services";
 import { useAuth } from "@/context/auth-context";
 
@@ -358,6 +358,23 @@ export default function Pricing() {
             </div>
 
           </div>
+        </div>
+
+        {/* Trust / billing disclosure note */}
+        <div className="mt-16 flex flex-col items-center gap-3 text-center">
+          <p className="flex items-center gap-2 text-sm font-medium text-neutral-300">
+            <Lock className="h-4 w-4" />
+            Payments are securely processed by Cashfree
+          </p>
+          <p className="max-w-2xl text-sm text-neutral-400 leading-relaxed">
+            By subscribing, you agree to our{" "}
+            <Link href="/terms" className="text-neutral-200 underline underline-offset-4 hover:text-white">
+              Terms of Use
+            </Link>
+            . Higher-tier models draw down your tokens faster via a disclosed
+            per-model multiplier — please read the Terms carefully for full
+            billing details before you pay.
+          </p>
         </div>
 
       </div>
