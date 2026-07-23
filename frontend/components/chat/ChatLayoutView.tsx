@@ -684,7 +684,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
         className={`h-dvh flex overflow-hidden text-foreground ${
           hasAssistantGradient
             ? "bg-background"
-            : "bg-linear-to-br from-purple-100 via-[#EACFEF] to-pink-100 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
+            : "bg-linear-to-br from-white via-pink-50 to-rose-100/70 dark:from-purple-950/40 dark:via-background dark:to-pink-950/40"
         }`}
         style={dynamicBackgroundStyle}
       >

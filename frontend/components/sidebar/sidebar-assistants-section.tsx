@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { SIDEBAR_SECTION_HEADER_ROW, SIDEBAR_SECTION_TITLE } from "@/components/sidebar/sidebar-section-styles";
 import type { Assistant } from "@/components/sidebar/sidebar-types";
 
+const ASSISTANT_ICON_EMOJI: Record<string, string> = {
+  Code2: "💻",
+  PenLine: "🎨",
+  Scale: "⚖️",
+  Megaphone: "🚀",
+};
+
 export const AssistantsSection = memo(function AssistantsSection({
   assistants,
   assistantsExpanded,
@@ -47,6 +54,7 @@ export const AssistantsSection = memo(function AssistantsSection({
         </button>
       </div>
       {assistantsExpanded && assistants.map((assistant) => {
+        const emoji = ASSISTANT_ICON_EMOJI[assistant.icon];
         const IconComponent =
           (LucideIcons as unknown as Record<string, ElementType>)[assistant.icon] || Bot;
 
@@ -57,7 +65,13 @@ export const AssistantsSection = memo(function AssistantsSection({
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer hover:bg-sidebar-accent text-foreground"
             title={assistant.description || assistant.name}
           >
-            <IconComponent className="w-4 h-4 flex-shrink-0 text-primary" />
+            {emoji ? (
+              <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center text-sm leading-none">
+                {emoji}
+              </span>
+            ) : (
+              <IconComponent className="w-4 h-4 flex-shrink-0 text-primary" />
+            )}
             <span className="truncate flex-1 text-left">{assistant.name}</span>
           </button>
         );

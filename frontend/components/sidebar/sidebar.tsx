@@ -520,8 +520,7 @@ function SidebarInner({
       <div className="p-3 pb-2 space-y-2">
         <Button
           onClick={() => handleNewChat(getDraftFolderScope())}
-          variant="outline"
-          className="w-full justify-start gap-2 h-10 border-border/50 hover:bg-sidebar-accent transition-colors cursor-pointer"
+          className="w-full justify-start gap-2 h-10 bg-violet-200/70 hover:bg-violet-200 text-violet-900 dark:bg-violet-500/20 dark:hover:bg-violet-500/30 dark:text-violet-200 border-0 shadow-sm transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           New Chat
