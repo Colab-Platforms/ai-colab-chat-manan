@@ -634,8 +634,32 @@ class SubscriptionCashfreeService {
     });
 
     if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      console.error("Cashfree subscription cancel failed", {
+        subscriptionId,
+        status: response.status,
+        body: bodyText.slice(0, 1000),
+      });
+
+      // Cashfree returns 400 with code "subscription_status_invalid_for_action"
+      // when the subscription is not in a state CANCEL applies to (e.g. never
+      // authorized/INITIALIZED, or already CANCELLED/EXPIRED at their end).
+      // Either way there is no active mandate left to cancel, so treat it as
+      // a no-op success and let the caller mark it cancelled locally instead
+      // of failing the request forever.
+      const errorCode = (() => {
+        try {
+          return JSON.parse(bodyText)?.code;
+        } catch {
+          return null;
+        }
+      })();
+      if (response.status === 400 && errorCode === "subscription_status_invalid_for_action") {
+        return;
+      }
+
       throw new ApiError(
-        `Cashfree subscription cancel failed: ${response.status}`,
+        `Cashfree subscription cancel failed: ${response.status}${bodyText ? ` - ${bodyText.slice(0, 300)}` : ""}`,
         STATUS_CODES.SERVER_ERROR,
       );
     }

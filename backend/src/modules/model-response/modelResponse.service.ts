@@ -24,7 +24,7 @@ class ModelResponseService {
     });
     if (!model) throw new ApiError("Model not found", STATUS_CODES.NOT_FOUND);
 
-    const tokenMultiplier = model.tokenMultiplier || 1.0;
+    const tokenMultiplier = model.tokenMultiplier ?? 1.0;
     const billablePromptTokens = Math.ceil(data.promptTokens * tokenMultiplier);
     const billableCompletionTokens = Math.ceil(
       data.completionTokens * tokenMultiplier,

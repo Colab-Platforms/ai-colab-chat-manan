@@ -5,8 +5,12 @@ import prisma from "@root/prisma.js";
 import { createWalletTransaction } from "@/utils/walletUtils.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import SubscriptionCashfreeService from "./subscription.cashfree.service.js";
+import BillingService from "@/modules/billing/billing.service.js";
+import InvoiceService from "@/modules/billing/invoice.service.js";
 
 const cashfreeService = new SubscriptionCashfreeService();
+const billingService = new BillingService();
+const invoiceService = new InvoiceService();
 
 function addCycle(now: Date, cycle: "MONTHLY" | "QUARTERLY" | "YEARLY") {
   switch (cycle) {
@@ -85,7 +89,17 @@ export async function cashfreeWebhook(req: Request, res: Response) {
   const payloadData = req.body?.data;
   const subscriptionId = getWebhookSubscriptionId(payloadData);
 
+  const { event: webhookEvent, duplicate } = await billingService.recordWebhookEvent({
+    eventType: String(eventType ?? "UNKNOWN"),
+    timestamp: req.headers["x-webhook-timestamp"] as string | undefined,
+    rawBody: (req as any).rawBody?.toString("utf8") ?? JSON.stringify(req.body ?? ""),
+  });
+  if (duplicate) {
+    return res.status(200).json({ status: true, message: "Duplicate webhook" });
+  }
+
   if (!eventType || !subscriptionId) {
+    await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
     return res.status(200).json({ status: true, message: "Ignored webhook" });
   }
 
@@ -94,6 +108,7 @@ export async function cashfreeWebhook(req: Request, res: Response) {
     include: { plan: true },
   });
   if (!subscription) {
+    await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
     return res.status(200).json({ status: true, message: "Subscription not found" });
   }
 
@@ -149,6 +164,7 @@ export async function cashfreeWebhook(req: Request, res: Response) {
           // Subscription remains pending until payment success webhook arrives.
         }
       }
+      await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
       return res.status(200).json({ status: true, message: "Processed" });
     } else if (status === "CUSTOMER_CANCELLED") {
       if (subscription.status === "PENDING") {
@@ -165,6 +181,7 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       }
     }
 
+    await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
     return res.status(200).json({ status: true, message: "Processed" });
   }
 
@@ -199,6 +216,7 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       }
     }
 
+    await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
     return res.status(200).json({ status: true, message: "Processed" });
   }
 
@@ -254,10 +272,11 @@ export async function cashfreeWebhook(req: Request, res: Response) {
         }
       }
 
+      await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
       return res.status(200).json({ status: true, message: "Ignored auth payment success" });
     }
 
-    await prisma.$transaction(async (tx) => {
+    const localPaymentId = await prisma.$transaction(async (tx) => {
       console.info("[Cashfree][Webhook] Activating subscription on real payment success", {
         subscriptionId,
         localSubscriptionId: subscription.id,
@@ -281,8 +300,8 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       const currentSub = await tx.subscription.findUnique({
         where: { id: subscription.id },
       });
-      if (!currentSub) return;
-      if (paymentId && currentSub.lastPaymentId === paymentId) return;
+      if (!currentSub) return null;
+      if (paymentId && currentSub.lastPaymentId === paymentId) return null;
 
       await tx.subscription.update({
         where: { id: subscription.id },
@@ -320,8 +339,22 @@ export async function cashfreeWebhook(req: Request, res: Response) {
         referenceId: "monthly_renewal",
         meta: { reason: "PAYMENT_SUCCESS", paymentId },
       });
+
+      return billingService.createPaymentAndInvoice(tx, {
+        userId: subscription.userId,
+        walletId: wallet.id,
+        subscriptionId: subscription.id,
+        type: "RECURRING",
+        providerSubscriptionId: subscriptionId,
+        providerPaymentId: String(paymentId),
+        amount: recurringAmount,
+      });
     });
 
+    if (localPaymentId) {
+      await invoiceService.generateAndUploadInvoice(localPaymentId);
+    }
+    await billingService.markWebhookEvent(webhookEvent?.id, "PROCESSED");
     return res.status(200).json({ status: true, message: "Processed" });
   }
 
@@ -330,6 +363,7 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       where: { id: subscription.id },
       data: { status: "PAST_DUE" },
     });
+    await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
     return res.status(200).json({ status: true, message: "Processed" });
   }
 
@@ -338,9 +372,11 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       where: { id: subscription.id },
       data: { status: "CANCELLED", autoRenew: false },
     });
+    await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
     return res.status(200).json({ status: true, message: "Processed" });
   }
 
+  await billingService.markWebhookEvent(webhookEvent?.id, "IGNORED");
   return res.status(200).json({ status: true, message: "Ignored event type" });
 }
 

@@ -4,9 +4,13 @@ import { ApiError } from "@/utils/ApiError.js";
 import STATUS_CODES from "@/utils/statusCodes.js";
 import { createWalletTransaction } from "@/utils/walletUtils.js";
 import PaymentCashfreeService from "./payment.cashfree.service.js";
+import BillingService from "@/modules/billing/billing.service.js";
+import InvoiceService from "@/modules/billing/invoice.service.js";
 
 class PaymentService {
   private cashfreeService = new PaymentCashfreeService();
+  private billingService = new BillingService();
+  private invoiceService = new InvoiceService();
 
   private normalizePhone(phoneNumber: string | null | undefined): string {
     const digits = String(phoneNumber ?? "").replace(/\D/g, "");
@@ -88,6 +92,19 @@ class PaymentService {
         customerPhone: this.normalizePhone(user.phoneNumber),
       });
 
+      await prisma.payment.create({
+        data: {
+          userId,
+          subscriptionId: localSubscription.id,
+          type: "ONE_TIME",
+          provider: "CASHFREE",
+          providerOrderId: orderId,
+          amount,
+          currency: "INR",
+          status: "PENDING",
+        },
+      });
+
       return {
         localSubscriptionId: localSubscription.id,
         order_id: order.order_id,
@@ -106,6 +123,14 @@ class PaymentService {
     this.cashfreeService.verifyWebhookSignature(req);
 
     const eventType = req.body?.type;
+    const { event: webhookEvent, duplicate } = await this.billingService.recordWebhookEvent({
+      eventType: String(eventType ?? "UNKNOWN"),
+      timestamp: req.headers["x-webhook-timestamp"],
+      rawBody: (req.rawBody as Buffer | undefined)?.toString("utf8") ?? JSON.stringify(req.body ?? ""),
+    });
+    if (duplicate) {
+      return { ignored: true, reason: "Duplicate webhook" };
+    }
     const data = req.body?.data ?? {};
     const orderId =
       data?.order?.order_id ??
@@ -164,17 +189,24 @@ class PaymentService {
       const now = new Date();
       const nextPeriodEnd = this.addCycle(now, subscription.billingCycle);
       const tokenLimit = subscription.plan.tokenLimit;
+      const amount = Number(
+        subscription.billingCycle === "MONTHLY"
+          ? subscription.plan.monthlyPrice
+          : subscription.billingCycle === "QUARTERLY"
+            ? subscription.plan.quarterlyPrice
+            : subscription.plan.yearlyPrice,
+      );
 
-      await prisma.$transaction(async (tx) => {
+      const paymentId = await prisma.$transaction(async (tx) => {
         const currentSub = await tx.subscription.findUnique({
           where: { id: subscription.id },
         });
-        if (!currentSub) return;
+        if (!currentSub) return null;
         if (
           currentSub.lastPaymentId &&
           normalizedPaymentId &&
           currentSub.lastPaymentId === normalizedPaymentId
-        ) return;
+        ) return null;
 
         await tx.subscription.updateMany({
           where: {
@@ -251,7 +283,22 @@ class PaymentService {
             paymentId: normalizedPaymentId,
           },
         });
+
+        return this.billingService.createPaymentAndInvoice(tx, {
+          userId: subscription.userId,
+          walletId: wallet.id,
+          subscriptionId: subscription.id,
+          type: "ONE_TIME",
+          providerOrderId: String(orderId),
+          providerPaymentId: normalizedPaymentId,
+          amount,
+        });
       });
+
+      if (paymentId) {
+        await this.invoiceService.generateAndUploadInvoice(paymentId);
+      }
+      await this.billingService.markWebhookEvent(webhookEvent?.id, "PROCESSED");
       return { ignored: false, processed: "success" };
     }
 
@@ -264,6 +311,21 @@ class PaymentService {
           lastPaymentId: normalizedPaymentId ?? String(orderId),
         },
       });
+      await this.billingService.markPaymentFailed({
+        userId: subscription.userId,
+        type: "ONE_TIME",
+        subscriptionId: subscription.id,
+        providerOrderId: String(orderId),
+        providerPaymentId: normalizedPaymentId,
+        amount: Number(
+          subscription.billingCycle === "MONTHLY"
+            ? subscription.plan.monthlyPrice
+            : subscription.billingCycle === "QUARTERLY"
+              ? subscription.plan.quarterlyPrice
+              : subscription.plan.yearlyPrice,
+        ),
+      });
+      await this.billingService.markWebhookEvent(webhookEvent?.id, "PROCESSED");
       return { ignored: false, processed: "failed" };
     }
 

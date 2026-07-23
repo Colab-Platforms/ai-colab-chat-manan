@@ -14,7 +14,7 @@ export function ScrollTiltHero() {
 
   const heroSrc =
     theme === "dark"
-      ? "/Landing/hero-pc-dark.png"
+      ? "/Landing/colab-hero-bg.png"
       : "/Landing/hero-pc-light.png";
 
   return (

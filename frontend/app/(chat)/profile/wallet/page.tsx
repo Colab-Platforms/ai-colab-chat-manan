@@ -8,8 +8,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { walletService } from "@/lib/services";
-import { Loader2, Coins, TrendingUp, Eye } from "lucide-react";
+import { walletService, billingService } from "@/lib/services";
+import { Loader2, Coins, TrendingUp, Eye, Download } from "lucide-react";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import {
   Dialog,
@@ -30,6 +30,13 @@ export default function WalletPage() {
   const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState<any>({});
   const [selectedTx, setSelectedTx] = useState<any>(null);
+
+  // Invoices state
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [invoicePageSize, setInvoicePageSize] = useState(10);
+  const [invoicePagination, setInvoicePagination] = useState<any>({});
 
   useEffect(() => {
     walletService
@@ -67,6 +74,28 @@ export default function WalletPage() {
   useEffect(() => {
     setPage(1);
   }, [sort, pageSize]);
+
+  const fetchInvoices = useCallback(async () => {
+    setInvoicesLoading(true);
+    try {
+      const params: any = {
+        page: String(invoicePage),
+        pageSize: String(invoicePageSize),
+      };
+      const res = await billingService.getInvoices(params);
+      const result = res.data.data;
+      setInvoices(result?.data || []);
+      setInvoicePagination(result || {});
+    } catch {
+      // ignore
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [invoicePage, invoicePageSize]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   if (loading)
     return (
@@ -161,6 +190,72 @@ export default function WalletPage() {
     },
   ];
 
+  const invoiceColumns: Column[] = [
+    {
+      key: "invoiceNumber",
+      label: "Invoice",
+      render: (r: any) => (
+        <span className="font-mono text-xs">{r.invoiceNumber}</span>
+      ),
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      render: (r: any) => (
+        <span className="font-mono text-sm">
+          {r.currency} {Number(r.amount).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (r: any) => {
+        const color =
+          r.status === "GENERATED"
+            ? "text-emerald-500 bg-emerald-500/10"
+            : r.status === "FAILED"
+              ? "text-rose-500 bg-rose-500/10"
+              : "text-amber-500 bg-amber-500/10";
+        return (
+          <span className={`text-xs uppercase px-2 py-1 rounded-md ${color}`}>
+            {r.status}
+          </span>
+        );
+      },
+    },
+    {
+      key: "createdAt",
+      label: "Date",
+      render: (r: any) => (
+        <span className="text-muted-foreground text-sm">
+          {new Date(r.createdAt).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      className: "w-12 min-w-[48px] text-center",
+      render: (r: any) =>
+        r.status === "GENERATED" && r.invoiceUrl ? (
+          <a
+            href={r.invoiceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mx-auto flex w-fit p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+            title="Download Invoice"
+          >
+            <Download className="w-4 h-4" />
+          </a>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {r.status === "FAILED" ? "Failed" : "Generating…"}
+          </span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -245,6 +340,22 @@ export default function WalletPage() {
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
         loading={txLoading}
+      />
+
+      <DataTable
+        columns={invoiceColumns}
+        data={invoices}
+        title="Invoices"
+        description="Downloadable invoices for your payments"
+        page={invoicePage}
+        pageSize={invoicePageSize}
+        totalRecords={invoicePagination.totalRecords || 0}
+        totalPages={invoicePagination.totalPages || 1}
+        hasNextPage={invoicePagination.hasNextPage}
+        hasPreviousPage={invoicePagination.hasPreviousPage}
+        onPageChange={setInvoicePage}
+        onPageSizeChange={setInvoicePageSize}
+        loading={invoicesLoading}
       />
 
       <Dialog

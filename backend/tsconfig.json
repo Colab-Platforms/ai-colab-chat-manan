@@ -10,6 +10,7 @@
     "lib": ["esnext"],
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "rootDir": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@root/*": ["./*"],

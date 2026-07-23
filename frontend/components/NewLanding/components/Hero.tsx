@@ -40,7 +40,7 @@ export function Hero() {
             transition={{ duration: 0.65, ease: EASE, delay: 0.4 }}
           >
             <Link
-              href="/register"  
+              href="/register"
               className="px-8 py-4 mt-2 bg-black dark:bg-white rounded-full text-white dark:text-black font-medium flex items-center gap-2 transition-all duration-300"
             >
               Get Started
@@ -48,8 +48,8 @@ export function Hero() {
             </Link>
           </motion.div>
         </div>
-        
-      <HeroGrid />
+
+        <HeroGrid />
 
       <Image width={1920} height={1000} alt="hero-pc-dark" src="/new-landing/hero-pc-dark.png" className="border-2 border-gray-200 dark:border-[#4d4d4d] rounded-2xl shadow-lg w-full flex mx-auto hidden dark:block" />
       <Image width={1920} height={1000} alt="hero-pc-light" src="/Landing/hero-pc-light.png" className="border-2 border-gray-200 dark:border-[#4d4d4d] rounded-2xl shadow-lg w-full flex mx-auto dark:hidden" />

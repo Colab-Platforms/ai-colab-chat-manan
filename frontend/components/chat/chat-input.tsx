@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import imageCompression from "browser-image-compression";
@@ -24,6 +25,7 @@ import {
   Paperclip,
   Maximize2,
   Minimize2,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -54,6 +56,7 @@ interface Model {
   capabilities?: string[];
   externalId?: string;
   defaultForCapabilities?: string[];
+  tokenMultiplier?: number;
 }
 
 /** A file that has been uploaded to the backend (Cloudinary) */
@@ -321,6 +324,8 @@ export function ChatInput({
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [freeModelsOpen, setFreeModelsOpen] = useState(false);
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [chatType, setChatType] = useState<ChatType>("STANDARD");
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -900,8 +905,9 @@ export function ChatInput({
                 </div>
               )}
 
-              {/* Multi-model selection chips */}
-              {selectedModels.length > 1 && (
+              {/* Selected model chip(s) — shown for single selection too, so the
+                  active model is always visible in the bar, not just in multi mode. */}
+              {selectedModels.length >= 1 && (
                 <div className="flex flex-wrap gap-1.5 px-2 mb-1 mt-1 flex-shrink-0">
                   {models
                     .filter((m) => selectedModels.includes(m.id))
@@ -935,12 +941,14 @@ export function ChatInput({
                         )}
                       </div>
                     ))}
-                  <Badge
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0.5 h-5 rounded-full bg-muted text-muted-foreground"
-                  >
-                    {selectedModels.length} models
-                  </Badge>
+                  {selectedModels.length > 1 && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0.5 h-5 rounded-full bg-muted text-muted-foreground"
+                    >
+                      {selectedModels.length} models
+                    </Badge>
+                  )}
                 </div>
               )}
 
@@ -1105,7 +1113,10 @@ export function ChatInput({
                 className={`flex items-center gap-1 flex-1 ${isExpanded ? "hidden" : "flex"}`}
               >
                 <DropdownMenu
+                  open={attachMenuOpen}
                   onOpenChange={(open) => {
+                    setAttachMenuOpen(open);
+                    if (!open) setFreeModelsOpen(false);
                     if (open)
                       window.dispatchEvent(
                         new Event("ai-colab:capability-menu-opened"),
@@ -1246,33 +1257,44 @@ export function ChatInput({
                     </DropdownMenuLabel>
 
                     <div className="max-h-[250px] overflow-y-auto scrollbar-thin">
-                      {models
-                        .filter(
-                          (m) =>
-                            !m.capabilities ||
-                            m.capabilities.length === 0 ||
-                            m.capabilities.includes(chatType),
-                        )
-                        .filter((m) => {
-                          const hasImage = attachments.some((a) =>
-                            a.mimeType.startsWith("image/"),
+                      {(() => {
+                        const hasImage = attachments.some((a) =>
+                          a.mimeType.startsWith("image/"),
+                        );
+                        const selectable = models
+                          .filter(
+                            (m) =>
+                              !m.capabilities ||
+                              m.capabilities.length === 0 ||
+                              m.capabilities.includes(chatType),
+                          )
+                          .filter(
+                            (m) =>
+                              !hasImage ||
+                              (m.capabilities &&
+                                m.capabilities.includes("VISION")),
                           );
-                          return (
-                            !hasImage ||
-                            (m.capabilities &&
-                              m.capabilities.includes("VISION"))
-                          );
-                        })
-                        .map((model) => (
+                        const regularModels = selectable.filter(
+                          (m) => m.tokenMultiplier !== 0,
+                        );
+                        const freeModels = selectable.filter(
+                          (m) => m.tokenMultiplier === 0,
+                        );
+
+                        const renderModelItem = (
+                          model: Model,
+                          indent?: boolean,
+                        ) => (
                           <DropdownMenuItem
                             key={model.id}
-                            className="gap-2 focus:bg-muted cursor-pointer rounded-md py-2 items-start"
+                            className={`gap-2 focus:bg-muted cursor-pointer rounded-md py-2 items-start ${indent ? "ml-4" : ""}`}
                             onClick={(e) => {
                               e.preventDefault();
                               toggleModel(model.id);
                               window.dispatchEvent(
                                 new Event("ai-colab:model-selected"),
                               );
+                              setAttachMenuOpen(false);
                             }}
                           >
                             <div className="w-4 flex justify-center mt-0.5">
@@ -1303,7 +1325,51 @@ export function ChatInput({
                               </div>
                             </div>
                           </DropdownMenuItem>
-                        ))}
+                        );
+
+                        return (
+                          <>
+                            {regularModels.map((m) => renderModelItem(m))}
+
+                            {freeModels.length > 0 && (
+                              <>
+                                <div
+                                  className="flex items-center gap-2 rounded-md py-2 px-2 cursor-pointer hover:bg-muted"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setFreeModelsOpen((o) => !o);
+                                  }}
+                                >
+                                  <div className="w-4 flex justify-center">
+                                    {freeModels.some((m) =>
+                                      selectedModels.includes(m.id),
+                                    ) && (
+                                      <Check className="w-3 h-3 text-primary" />
+                                    )}
+                                  </div>
+                                  <span className="font-medium text-[13px] flex-1">
+                                    Free Models
+                                  </span>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-[10px] px-1.5 py-0 h-4 rounded-md"
+                                  >
+                                    {freeModels.length}
+                                  </Badge>
+                                  <ChevronDown
+                                    className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${freeModelsOpen ? "rotate-180" : ""}`}
+                                  />
+                                </div>
+                                {freeModelsOpen &&
+                                  freeModels.map((m) =>
+                                    renderModelItem(m, true),
+                                  )}
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1412,6 +1478,44 @@ export function ChatInput({
               </div>
             </div>
           </div>
+
+          {/* Quick capability switcher — shortcuts into the same chatType
+              state/handler as the "+" menu's Capabilities section. */}
+          {!isExpanded && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
+              {(
+                [
+                  { type: "STANDARD" as const, label: "Chat", icon: MessageSquare },
+                  { type: "WEB_SEARCH" as const, label: "Web Search", icon: Search },
+                  { type: "IMAGE_GENERATION" as const, label: "Image Gen", icon: ImageIcon },
+                ]
+              ).map(({ type, label, icon: Icon }) => {
+                const active = chatType === type;
+                return (
+                  <motion.button
+                    key={type}
+                    type="button"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      handleChatTypeChange(type);
+                      window.dispatchEvent(
+                        new Event("ai-colab:capability-selected"),
+                      );
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                      active
+                        ? "bg-violet-200/70 text-violet-900 border-violet-200 dark:bg-violet-500/20 dark:text-violet-200 dark:border-violet-500/30 shadow-sm"
+                        : "bg-background/70 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </motion.button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -2,10 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
+import { motion, type Variants } from "framer-motion";
 import { chatService, messageService, modelService, assistantService } from "@/lib/services";
 import * as LucideIcons from "lucide-react";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageSquare, Sparkles } from "lucide-react";
+import { useAuth } from "@/context/auth-context";
+import { ChatHyperspeedBackground } from "@/components/chat/ChatHyperspeedBackground";
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const } },
+};
 
 interface Model {
   id: number;
@@ -18,6 +27,7 @@ interface Model {
 
 export function NewChatPage() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModels, setSelectedModels] = useState<number[]>([]);
@@ -175,8 +185,8 @@ export function NewChatPage() {
     return res.data.data;
   };
 
-  let welcomeTitle = "AI Colab Chat";
-  let welcomeSubtitle = "Start a conversation with one or multiple AI models. Select your models below and type a message.";
+  let welcomeTitle = user?.firstName ? `Hi ${user.firstName}` : "Hi there";
+  let welcomeSubtitle = "What's on your mind today?";
   let ActiveIcon: React.ElementType = Sparkles;
   let activePrompts = SUGGESTED_PROMPTS;
 
@@ -197,66 +207,75 @@ export function NewChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="relative flex flex-col h-full overflow-y-auto">
+      {/* <ChatHyperspeedBackground /> */}
+
       {/* Center hero */}
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="text-center space-y-4 max-w-xl">
-          <div className={`mx-auto w-16 h-16 ${assistant ? "bg-primary/10" : "bg-gradient-to-br from-primary/20 to-primary/5"} rounded-2xl flex items-center justify-center shadow-sm`}>
-            <ActiveIcon className={`w-8 h-8 ${assistant ? "text-primary/80" : "text-primary"}`} />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">{welcomeTitle}</h1>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto text-balance">{welcomeSubtitle}</p>
-          <div className="flex flex-col items-center gap-2 pt-2">
-            {activePrompts.length > 0 && (
-              <div className="flex justify-center w-full">
-                <button
-                  onClick={() => setInitialPrompt(activePrompts[0].value)}
-                  className="px-4 py-2 text-sm bg-background/80 hover:bg-background/90 rounded-xl transition-colors text-muted-foreground hover:text-foreground border border-border/40 shadow-sm"
-                >
-                  {(() => {
-                     const TopIcon = activePrompts[0].icon;
-                     return <TopIcon className={activePrompts[0].className} />;
-                  })()}
-                  {activePrompts[0].text}
-                </button>
-              </div>
-            )}
-            
-            {activePrompts.length > 1 && (
-              <div className="flex justify-center gap-2 w-full flex-wrap">
-                {activePrompts.slice(1, 3).map((prompt, index) => {
-                  const Icon = prompt.icon;
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => setInitialPrompt(prompt.value)}
-                      className="px-4 py-2 text-sm bg-background/80 hover:bg-background/90 rounded-xl transition-colors text-muted-foreground hover:text-foreground border border-border/40 shadow-sm"
-                    >
-                      <Icon className={prompt.className} />
-                      {prompt.text}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="relative z-10 flex-1 flex items-center justify-center p-4">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
+          className="text-center space-y-4 max-w-xl w-full"
+        >
+          <motion.div
+            variants={fadeUp}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-border/50 bg-background/70 backdrop-blur-sm shadow-sm text-xs font-medium text-muted-foreground"
+          >
+            <Image src="/black.webp" alt="" width={16} height={16} className="dark:hidden h-4 w-auto opacity-90" />
+            <Image src="/white.webp" alt="" width={16} height={16} className="hidden dark:block h-4 w-auto opacity-90" />
+            AI Colab · Multi-model AI platform
+          </motion.div>
+
+          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3">
+            <div className={`w-10 h-10 shrink-0 ${assistant ? "bg-primary/10" : "bg-gradient-to-br from-primary/20 to-primary/5"} rounded-xl flex items-center justify-center shadow-sm`}>
+              <ActiveIcon className={`w-5 h-5 ${assistant ? "text-primary/80" : "text-primary"}`} />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground text-balance">{welcomeTitle}</h1>
+          </motion.div>
+
+          <motion.p variants={fadeUp} className="text-foreground/80 text-xl sm:text-2xl font-medium max-w-md mx-auto text-balance">
+            {welcomeSubtitle}
+          </motion.p>
+
+          {activePrompts.length > 0 && (
+            <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              {activePrompts.slice(0, 3).map((prompt, index) => {
+                const Icon = prompt.icon;
+                return (
+                  <motion.button
+                    key={index}
+                    whileHover={{ scale: 1.03, y: -1 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setInitialPrompt(prompt.value)}
+                    className="px-4 py-2 text-sm bg-background/80 hover:bg-background rounded-full transition-colors text-muted-foreground hover:text-foreground border border-border/40 shadow-sm cursor-pointer"
+                  >
+                    <Icon className={prompt.className} />
+                    {prompt.text}
+                  </motion.button>
+                );
+              })}
+            </motion.div>
+          )}
+        </motion.div>
       </div>
 
       {/* Input */}
-      <ChatInput
-        models={models}
-        selectedModels={selectedModels}
-        onModelChange={handleModelChange}
-        maxModels={maxModels}
-        onSend={handleSend}
-        onEnhancePrompt={handleEnhancePrompt}
-        isSending={isSending}
-        forceReset={true}
-        initialPrompt={initialPrompt}
-        onPromptClear={() => setInitialPrompt(undefined)}
-        draftStorageKey="chat_draft_new"
-      />
+      <div className="relative z-10">
+        <ChatInput
+          models={models}
+          selectedModels={selectedModels}
+          onModelChange={handleModelChange}
+          maxModels={maxModels}
+          onSend={handleSend}
+          onEnhancePrompt={handleEnhancePrompt}
+          isSending={isSending}
+          forceReset={true}
+          initialPrompt={initialPrompt}
+          onPromptClear={() => setInitialPrompt(undefined)}
+          draftStorageKey="chat_draft_new"
+        />
+      </div>
     </div>
   );
 }

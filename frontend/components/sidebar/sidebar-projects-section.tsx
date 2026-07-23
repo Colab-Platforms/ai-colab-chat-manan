@@ -25,6 +25,7 @@ import {
   MoreHorizontal,
   Edit2,
   Trash2,
+  Plus,
 } from "lucide-react";
 import { chatService } from "@/lib/services";
 import { ChatItem } from "@/components/sidebar/sidebar-chat-item";
@@ -53,6 +54,7 @@ function FolderGroup({
   setDeleteTarget,
   searchQuery,
   globalChats,
+  onNewChatInFolder,
 }: {
   folder: FolderItem;
   isExpanded: boolean;
@@ -75,6 +77,7 @@ function FolderGroup({
   setDeleteTarget: Dispatch<SetStateAction<number | null>>;
   searchQuery: string;
   globalChats: Chat[];
+  onNewChatInFolder: (folderId: number) => void;
 }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [page, setPage] = useState(1);
@@ -169,6 +172,19 @@ function FolderGroup({
         <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <Folder className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+        </div>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+          <Button
+            variant="ghost"
+            className="h-7 w-7 rounded p-0 text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewChatInFolder(folder.id);
+            }}
+            title={`New chat in ${folder.name}`}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
         </div>
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground">
           <ChevronRight
@@ -272,6 +288,7 @@ export const ProjectsSection = memo(function ProjectsSection({
   setDeleteTarget,
   filteredChats,
   setCreateFolderOpen,
+  onNewChatInFolder,
 }: {
   projectsExpanded: boolean;
   setProjectsExpanded: Dispatch<SetStateAction<boolean>>;
@@ -297,6 +314,7 @@ export const ProjectsSection = memo(function ProjectsSection({
   setDeleteTarget: Dispatch<SetStateAction<number | null>>;
   filteredChats: Chat[];
   setCreateFolderOpen: Dispatch<SetStateAction<boolean>>;
+  onNewChatInFolder: (folderId: number) => void;
 }) {
   return (
     <>
@@ -363,6 +381,7 @@ export const ProjectsSection = memo(function ProjectsSection({
             setDeleteTarget={setDeleteTarget}
             searchQuery={search}
             globalChats={filteredChats}
+            onNewChatInFolder={onNewChatInFolder}
           />
         ))}
     </>

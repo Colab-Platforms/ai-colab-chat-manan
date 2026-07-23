@@ -38,23 +38,28 @@ export function calculateAdjustedTokens(
   availableTokens: number,
   billablePrompt: number,
   billableCompletion: number,
-  tokenMultiplier: number = 1.0
+  _tokenMultiplier: number = 1.0,
+  rawPrompt: number = billablePrompt,
+  rawCompletion: number = billableCompletion,
 ) {
   const actualAvailable = Math.max(0, availableTokens);
   const requestedTotal = billablePrompt + billableCompletion;
+  const rawTotal = rawPrompt + rawCompletion;
 
   if (requestedTotal <= actualAvailable) {
     return {
       finalBillablePrompt: billablePrompt,
       finalBillableCompletion: billableCompletion,
       finalBillableTotal: requestedTotal,
-      finalRawPrompt: Math.ceil(billablePrompt / tokenMultiplier),
-      finalRawCompletion: Math.ceil(billableCompletion / tokenMultiplier),
-      finalRawTotal: Math.ceil(requestedTotal / tokenMultiplier),
+      finalRawPrompt: rawPrompt,
+      finalRawCompletion: rawCompletion,
+      finalRawTotal: rawTotal,
     };
   }
 
-  // Capped at available
+  // Capped at available — scale the raw counts down proportionally so
+  // promptTokens/completionTokens stay consistent with what was billed.
+  // (Unreachable when tokenMultiplier is 0, since billable is always 0 then.)
   let finalBillablePrompt = billablePrompt;
   let finalBillableCompletion = billableCompletion;
 
@@ -67,13 +72,14 @@ export function calculateAdjustedTokens(
   }
 
   const finalBillableTotal = finalBillablePrompt + finalBillableCompletion;
+  const scale = requestedTotal > 0 ? finalBillableTotal / requestedTotal : 0;
 
   return {
     finalBillablePrompt,
     finalBillableCompletion,
     finalBillableTotal,
-    finalRawPrompt: Math.ceil(finalBillablePrompt / tokenMultiplier),
-    finalRawCompletion: Math.ceil(finalBillableCompletion / tokenMultiplier),
-    finalRawTotal: Math.ceil(finalBillableTotal / tokenMultiplier),
+    finalRawPrompt: Math.ceil(rawPrompt * scale),
+    finalRawCompletion: Math.ceil(rawCompletion * scale),
+    finalRawTotal: Math.ceil(rawTotal * scale),
   };
 }

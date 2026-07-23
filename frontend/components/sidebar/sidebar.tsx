@@ -253,10 +253,19 @@ function SidebarInner({
         detail: { folderId: nextFolderId },
       }),
     );
+    // HomeFolderScopeSync (app/page.tsx) treats the URL's `folderId` param as
+    // the source of truth and clears localStorage whenever it's absent — so
+    // navigating to a bare "/" would immediately wipe the value just set
+    // above. Carry it through the URL too so the two stay in sync.
+    const homeHref = nextFolderId ? `/?folderId=${nextFolderId}` : "/";
     if (routeUiRef.current.isDraftRoute) {
+      // Already on the new-chat screen, so no navigation (and thus no
+      // HomeFolderScopeSync re-run) will happen. Update the URL in place
+      // anyway so it can't go stale and later resync localStorage backwards.
+      router.replace(homeHref);
       return;
     }
-    router.push("/");
+    router.push(homeHref);
   };
 
   const handleDeleteChat = async () => {
@@ -511,8 +520,7 @@ function SidebarInner({
       <div className="p-3 pb-2 space-y-2">
         <Button
           onClick={() => handleNewChat(getDraftFolderScope())}
-          variant="outline"
-          className="w-full justify-start gap-2 h-10 border-border/50 hover:bg-sidebar-accent transition-colors cursor-pointer"
+          className="w-full justify-start gap-2 h-10 bg-violet-200/70 hover:bg-violet-200 text-violet-900 dark:bg-violet-500/20 dark:hover:bg-violet-500/30 dark:text-violet-200 border-0 shadow-sm transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           New Chat
@@ -566,6 +574,7 @@ function SidebarInner({
             setDeleteTarget={setDeleteTarget}
             filteredChats={filteredChats}
             setCreateFolderOpen={setCreateFolderOpen}
+            onNewChatInFolder={(folderId: number) => handleNewChat(folderId)}
           />
 
           <ContextsSectionContainer
