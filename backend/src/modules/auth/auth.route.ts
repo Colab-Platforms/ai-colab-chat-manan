@@ -7,6 +7,7 @@ router.post("/register", authController.register);
 router.post("/login", authController.login);
 router.get("/google/start", authController.startGoogleAuth);
 router.get("/google/callback", authController.googleAuthCallback);
+router.post("/google/mobile", authController.googleMobileAuth);
 router.post("/verify-email-otp", authController.verifyEmailOtp);
 router.post("/resend-email-otp", authController.resendEmailVerificationOtp);
 router.post("/forgot-password", authController.forgotPassword);

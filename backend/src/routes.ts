@@ -18,6 +18,7 @@ import subscriptionRoutes from "@/modules/subscription/subscription.route.js";
 import dashboardRoutes from "@/modules/dashboard/dashboard.route.js";
 import paymentRoutes from "@/modules/payments/payment.route.js";
 import billingRoutes from "@/modules/billing/billing.route.js";
+import supportRoutes from "@/modules/support/support.route.js";
 
 const router = Router();
 
@@ -43,5 +44,6 @@ router.use("/contexts", contextRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/payments", paymentRoutes);
 router.use("/billing", billingRoutes);
+router.use("/support", supportRoutes);
 
 export default router;

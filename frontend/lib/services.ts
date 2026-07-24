@@ -185,3 +185,12 @@ export const contextService = {
   update: (id: number, data: any) => api.put(`/contexts/${id}`, data),
   delete: (id: number) => api.delete(`/contexts/${id}`),
 };
+
+export const supportService = {
+  listTickets: (params?: Record<string, string>) =>
+    api.get("/support/tickets", { params }),
+  listContactMessages: (params?: Record<string, string>) =>
+    api.get("/support/contact", { params }),
+  updateStatus: (id: number, status: string) =>
+    api.patch(`/support/${id}/status`, { status }),
+};

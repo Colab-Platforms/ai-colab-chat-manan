@@ -30,3 +30,18 @@ export const auth = (...allowedRoles: Array<"USER" | "ADMIN" | "SUPERADMIN">) =>
         }
     };
 };
+
+// Attaches req.user when a valid Bearer token is present, but never blocks the
+// request — for public endpoints that want to associate the caller when logged in.
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+        try {
+            const token = authHeader.split(" ")[1];
+            req.user = jwt.verify(token, process.env.JWT_SECRET!) as Express.User;
+        } catch {
+            // Invalid/expired token on a public route — proceed unauthenticated.
+        }
+    }
+    next();
+};

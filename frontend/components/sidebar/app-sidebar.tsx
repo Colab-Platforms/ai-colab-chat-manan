@@ -9,6 +9,7 @@ import {
   Moon,
   LogOut,
   Settings,
+  LifeBuoy,
   PanelLeftOpen,
   PanelLeftClose,
   MoreHorizontal,
@@ -152,6 +153,9 @@ export function AppSidebar({
                   <MessageSquare className="w-4 h-4" /> Go to Chat
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => { handleClose(); router.push("/support"); }} className="gap-2 cursor-pointer">
+                <LifeBuoy className="w-4 h-4" /> Help & Support
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
                 <LogOut className="w-4 h-4" /> Logout
@@ -254,6 +258,9 @@ export function AppSidebar({
                 <MessageSquare className="w-4 h-4" /> Go to Chat
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem onClick={() => { handleClose(); router.push("/support"); }} className="gap-2 cursor-pointer">
+              <LifeBuoy className="w-4 h-4" /> Help & Support
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
               <LogOut className="w-4 h-4" /> Logout

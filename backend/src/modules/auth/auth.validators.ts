@@ -78,6 +78,13 @@ export const resetPasswordSchema = Joi.object({
   }),
 });
 
+export const googleMobileAuthSchema = Joi.object({
+  idToken: Joi.string().required().messages({
+    "string.empty": "idToken is required",
+    "any.required": "idToken is required",
+  }),
+});
+
 export const validateRegisterSchema = (data: unknown) => {
   return registerSchema.validate(data, { abortEarly: false });
 };
@@ -96,4 +103,8 @@ export const validateForgotPasswordSchema = (data: unknown) => {
 
 export const validateResetPasswordSchema = (data: unknown) => {
   return resetPasswordSchema.validate(data, { abortEarly: false });
+};
+
+export const validateGoogleMobileAuthSchema = (data: unknown) => {
+  return googleMobileAuthSchema.validate(data, { abortEarly: false });
 };

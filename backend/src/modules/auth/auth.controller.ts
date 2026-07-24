@@ -8,6 +8,7 @@ import {
   validateVerifyEmailOtpSchema,
   validateForgotPasswordSchema,
   validateResetPasswordSchema,
+  validateGoogleMobileAuthSchema,
 } from "./auth.validators.js";
 
 const authService = new AuthService();
@@ -118,6 +119,38 @@ export const googleAuthCallback = async (
       error.message,
     );
     res.redirect(redirectUrl);
+  }
+};
+
+export const googleMobileAuth = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { error, value } = validateGoogleMobileAuthSchema(req.body);
+
+    if (error) {
+      sendResponse(res, false, error, error.message, STATUS_CODES.BAD_REQUEST);
+      return;
+    }
+
+    const result = await authService.googleMobileAuth(value.idToken);
+    sendResponse(
+      res,
+      true,
+      result,
+      "You logged in successfully",
+      STATUS_CODES.OK,
+    );
+  } catch (error: any) {
+    console.error("Google mobile auth error", error);
+    sendResponse(
+      res,
+      false,
+      null,
+      error.message,
+      error.statusCode ?? STATUS_CODES.UNAUTHORIZED,
+    );
   }
 };
 

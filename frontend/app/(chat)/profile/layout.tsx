@@ -7,7 +7,7 @@ import { useAuth } from "@/context/auth-context";
 import {
   LayoutDashboard, Wallet, CreditCard, BarChart3,
   UserCircle, Users, Bot, Building, CreditCard as PlansIcon,
-  ArrowLeft, Menu, X, Archive, Settings,
+  ArrowLeft, Menu, X, Archive, Settings, LifeBuoy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +34,7 @@ const adminNav = [
   { label: "Assistants", href: "/profile/assistants", icon: Bot },
   { label: "Providers", href: "/profile/providers", icon: Building },
   { label: "Usage", href: "/profile/usage", icon: BarChart3 },
+  { label: "Support", href: "/profile/support", icon: LifeBuoy },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

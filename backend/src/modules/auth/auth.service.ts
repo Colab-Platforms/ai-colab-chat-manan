@@ -461,6 +461,18 @@ class AuthService {
     return redirectUrl.toString();
   }
 
+  async googleMobileAuth(idToken: string) {
+    const profile = await this.verifyGoogleIdToken(idToken);
+    const { user, isNewUser } = await this.findOrCreateUserFromGoogleProfile(profile);
+    const token = this.createToken(user as any);
+
+    return {
+      user: formatUser(user),
+      token,
+      isNewUser,
+    };
+  }
+
   async register(data: RegisterBody): Promise<RegisterResponse> {
     const email = this.normalizeEmail(data.email);
     const existingUser = await prisma.user.findFirst({

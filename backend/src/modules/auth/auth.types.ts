@@ -45,6 +45,10 @@ export interface ResetPasswordBody {
   newPassword: string;
 }
 
+export interface GoogleMobileAuthBody {
+  idToken: string;
+}
+
 export interface JwtPayload {
   id: number;
   role: "USER" | "ADMIN" | "SUPERADMIN";
