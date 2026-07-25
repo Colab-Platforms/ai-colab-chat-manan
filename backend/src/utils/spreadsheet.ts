@@ -369,7 +369,10 @@ async function parseXlsxStream(
     worksheetName = worksheetReader.name || worksheetName;
 
     for await (const row of worksheetReader) {
-      const rowValues: unknown[] = (row.values as unknown[]) ?? [];
+      // row.values from ExcelJS can be a sparse array (blank cells are holes,
+      // not explicit undefined) — densify it so .map()/.slice() below don't
+      // silently skip indices, which would desync headers from columnMap.
+      const rowValues: unknown[] = Array.from((row.values as unknown[]) ?? []);
       const normalizedValues = rowValues.slice(1);
 
       if (!rowHasContent(normalizedValues)) {

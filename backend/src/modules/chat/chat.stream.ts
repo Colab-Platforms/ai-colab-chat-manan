@@ -305,6 +305,9 @@ async function buildAttachmentContentParts(
           maxBytes: PDF_MAX_BYTES,
         });
         extraText += `\n\n${pdfReport.aiText}`;
+        console.log(
+          `[Attachment Parse] PDF "${att.fileName}" extracted text:\n${pdfReport.aiText}`,
+        );
       } catch (e) {
         console.error("Failed to parse PDF attachment", att.fileName, e);
         extraText += `\n\n[Attached PDF: ${att.fileName}]\nUnable to extract PDF text. Please summarize the PDF based on user instructions only if sufficient context is available.`;
@@ -319,6 +322,9 @@ async function buildAttachmentContentParts(
           const text = result.value.trim();
           if (text) {
             extraText += `\n\n[Attached Word Document: ${att.fileName}]\n${text}`;
+            console.log(
+              `[Attachment Parse] Word "${att.fileName}" extracted text:\n${text}`,
+            );
           }
         }
       } catch (e) {
@@ -339,6 +345,9 @@ async function buildAttachmentContentParts(
             const text = ast.toText();
             if (text && text.trim()) {
               extraText += `\n\n[Attached PowerPoint Presentation: ${att.fileName}]\n${text.trim()}`;
+              console.log(
+                `[Attachment Parse] PPT "${att.fileName}" extracted text:\n${text.trim()}`,
+              );
             }
           } catch (parseError) {
             console.error(
@@ -362,6 +371,9 @@ async function buildAttachmentContentParts(
         if (response.ok) {
           const text = await response.text();
           extraText += `\n\n[Attached text file: ${att.fileName}]\n${text}`;
+          console.log(
+            `[Attachment Parse] Text file "${att.fileName}" content:\n${text}`,
+          );
         }
       } catch (e) {
         console.error("Failed to fetch text attachment", att.fileName, e);
@@ -380,6 +392,9 @@ async function buildAttachmentContentParts(
           },
         );
         extraText += `\n\n${spreadsheetReport.aiText}`;
+        console.log(
+          `[Attachment Parse] Spreadsheet "${att.fileName}" extracted text:\n${spreadsheetReport.aiText}`,
+        );
       } catch (e) {
         console.error(
           "Failed to parse spreadsheet attachment",
@@ -392,6 +407,9 @@ async function buildAttachmentContentParts(
 
   // Text part always comes first so the model reads the user's question before files
   const finalText = textContent + extraText;
+  console.log(
+    `[Attachment Parse] Final combined text sent to AI:\n${finalText}`,
+  );
   const processedText = await detectAndConvertImages(finalText);
   if (Array.isArray(processedText)) {
     parts.unshift(...processedText);
@@ -1045,6 +1063,7 @@ export async function streamChat(req: Request, res: Response) {
 
     // Build multipart content for current message if attachments are present
     let attachmentPlugins: any[] = [];
+    let pushedAttachmentMessage = false;
     if (attachmentIds && attachmentIds.length > 0) {
       const attachments = await attachmentService.findMany(attachmentIds);
       if (attachments.length > 0) {
@@ -1054,21 +1073,13 @@ export async function streamChat(req: Request, res: Response) {
         // (checkTokenLimitsAndSetupStream will use the last item as latestPrompt)
         conversationHistory.push({ role: "user", content: contentParts });
         attachmentPlugins = extraPlugins;
+        pushedAttachmentMessage = true;
       }
     }
 
-    // If no attachments were pushed above, push the plain (or multipart if URLs detected) version
-    if (attachmentPlugins.length === 0 && (attachmentIds?.length ?? 0) === 0) {
-      const userContent =
-        chatType === "IMAGE_GENERATION"
-          ? await detectAndConvertImages(content.trim())
-          : content.trim();
-      conversationHistory.push({ role: "user", content: userContent });
-    } else if (
-      attachmentPlugins.length === 0 &&
-      (attachmentIds?.length ?? 0) > 0
-    ) {
-      // Attachments array was provided but all records were missing — fall back to text/URL detection
+    // Only push the plain-text version if the attachment content wasn't already pushed above
+    // (e.g. no attachmentIds, or attachmentIds pointed at records that no longer exist)
+    if (!pushedAttachmentMessage) {
       const userContent =
         chatType === "IMAGE_GENERATION"
           ? await detectAndConvertImages(content.trim())
