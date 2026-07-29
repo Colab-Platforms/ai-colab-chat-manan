@@ -855,9 +855,9 @@ export function ChatInput({
       <div className="pt-2 pb-6 px-4 w-full">
         <div className="max-w-3xl mx-auto">
           <div
-            className={`border border-border/60 bg-background dark:bg-muted/40 shadow-sm flex flex-col focus-within:ring-1 focus-within:ring-primary/20 transition-all ${isExpanded
+            className={`border border-border/60 bg-background dark:bg-muted/40 flex flex-col focus-within:ring-1 focus-within:ring-primary/20 transition-all ${isExpanded
               ? "fixed inset-0 z-[9999] rounded-none h-[100dvh] pt-4 pb-4 px-4 sm:pt-6 sm:px-6"
-              : "relative rounded-[28px] pt-3 pb-3 px-3 max-h-[50vh] md:max-h-[60vh]"
+              : "relative rounded-[28px] pt-3 pb-3 px-3 max-h-[50vh] md:max-h-[60vh] shadow-[0_4px_20px_-4px_hsl(var(--primary)/0.25),0_0_0_1px_hsl(var(--primary)/0.08)] dark:shadow-[0_4px_24px_-4px_hsl(var(--primary)/0.35),0_0_0_1px_hsl(var(--primary)/0.15)]"
               }`}
             data-guide="chat-input-area"
           >

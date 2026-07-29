@@ -607,7 +607,11 @@ export default function SubscriptionPage() {
                   </span>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
-                  <p>🎯 {(plan.tokenLimit / 1000).toFixed(0)}k tokens / month</p>
+                  <p>
+                    🎯 {plan.tokenLimit >= 1_000_000
+                      ? `${(plan.tokenLimit / 1_000_000).toFixed(plan.tokenLimit % 1_000_000 === 0 ? 0 : 1)}M`
+                      : `${(plan.tokenLimit / 1000).toFixed(0)}k`} tokens / month
+                  </p>
                   <p>🤖 {plan.features?.maxModels === -1 ? "Unlimited" : plan.features?.maxModels} model{plan.features?.maxModels !== 1 ? "s" : ""}</p>
                   {plan.features?.attachments && <p>📎 File attachments</p>}
                 </div>

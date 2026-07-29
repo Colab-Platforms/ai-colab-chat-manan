@@ -16,6 +16,16 @@ const fadeUp: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const } },
 };
 
+const wordContainer: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.09, delayChildren: 0.15 } },
+};
+
+const wordFadeUp: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const } },
+};
+
 interface Model {
   id: number;
   name: string;
@@ -210,8 +220,13 @@ export function NewChatPage() {
     <div className="relative flex flex-col h-full overflow-y-auto">
       {/* <ChatHyperspeedBackground /> */}
 
-      {/* Center hero */}
-      <div className="relative z-10 flex-1 flex items-center justify-center p-4">
+      {/* Ambient glow behind the centered hero + input, à la Gemini's start screen */}
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
+        <div className="h-[420px] w-[720px] max-w-[90vw] rounded-full bg-primary/10 dark:bg-primary/25 blur-[110px]" />
+      </div>
+
+      {/* Center hero + input, grouped so they stay together mid-screen at start */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-6 p-4">
         <motion.div
           initial="hidden"
           animate="visible"
@@ -224,18 +239,29 @@ export function NewChatPage() {
           >
             <Image src="/black.webp" alt="" width={16} height={16} className="dark:hidden h-4 w-auto opacity-90" />
             <Image src="/white.webp" alt="" width={16} height={16} className="hidden dark:block h-4 w-auto opacity-90" />
-            AI Colab · Multi-model AI platform
+            Colab AI · Multi-model AI platform
           </motion.div>
 
           <motion.div variants={fadeUp} className="flex items-center justify-center gap-3">
             <div className={`w-10 h-10 shrink-0 ${assistant ? "bg-primary/10" : "bg-gradient-to-br from-primary/20 to-primary/5"} rounded-xl flex items-center justify-center shadow-sm`}>
-              <ActiveIcon className={`w-5 h-5 ${assistant ? "text-primary/80" : "text-primary"}`} />
+              {assistant ? (
+                <ActiveIcon className="w-5 h-5 text-primary/80" />
+              ) : (
+                <Image src="/icons/Colab Infinite.png" alt="" width={22} height={22} className="w-[22px] h-[22px] object-contain" />
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground text-balance">{welcomeTitle}</h1>
           </motion.div>
 
-          <motion.p variants={fadeUp} className="text-foreground/80 text-xl sm:text-2xl font-medium max-w-md mx-auto text-balance">
-            {welcomeSubtitle}
+          <motion.p
+            variants={wordContainer}
+            className="text-foreground/70 text-base sm:text-lg font-normal italic max-w-md mx-auto text-balance"
+          >
+            {welcomeSubtitle.split(" ").map((word, i) => (
+              <motion.span key={i} variants={wordFadeUp} className="inline-block mr-[0.28em] last:mr-0">
+                {word}
+              </motion.span>
+            ))}
           </motion.p>
 
           {activePrompts.length > 0 && (
@@ -248,7 +274,7 @@ export function NewChatPage() {
                     whileHover={{ scale: 1.03, y: -1 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setInitialPrompt(prompt.value)}
-                    className="px-4 py-2 text-sm bg-background/80 hover:bg-background rounded-full transition-colors text-muted-foreground hover:text-foreground border border-border/40 shadow-sm cursor-pointer"
+                    className="px-4 py-2 text-sm bg-background/80 hover:bg-background rounded-full transition-colors text-muted-foreground hover:text-foreground border border-border/40 shadow-[0_2px_12px_-3px_hsl(var(--primary)/0.25),0_0_0_1px_hsl(var(--primary)/0.06)] dark:shadow-[0_2px_14px_-3px_hsl(var(--primary)/0.35),0_0_0_1px_hsl(var(--primary)/0.12)] cursor-pointer"
                   >
                     <Icon className={prompt.className} />
                     {prompt.text}
@@ -258,23 +284,22 @@ export function NewChatPage() {
             </motion.div>
           )}
         </motion.div>
-      </div>
 
-      {/* Input */}
-      <div className="relative z-10">
-        <ChatInput
-          models={models}
-          selectedModels={selectedModels}
-          onModelChange={handleModelChange}
-          maxModels={maxModels}
-          onSend={handleSend}
-          onEnhancePrompt={handleEnhancePrompt}
-          isSending={isSending}
-          forceReset={true}
-          initialPrompt={initialPrompt}
-          onPromptClear={() => setInitialPrompt(undefined)}
-          draftStorageKey="chat_draft_new"
-        />
+        <div className="relative z-10 w-full max-w-2xl">
+          <ChatInput
+            models={models}
+            selectedModels={selectedModels}
+            onModelChange={handleModelChange}
+            maxModels={maxModels}
+            onSend={handleSend}
+            onEnhancePrompt={handleEnhancePrompt}
+            isSending={isSending}
+            forceReset={true}
+            initialPrompt={initialPrompt}
+            onPromptClear={() => setInitialPrompt(undefined)}
+            draftStorageKey="chat_draft_new"
+          />
+        </div>
       </div>
     </div>
   );
