@@ -239,7 +239,12 @@ class PaymentService {
           where: { userId: subscription.userId },
         });
 
-        if (existingWallet && existingWallet.tokensRemaining > 0) {
+        // Every one-time-payment order creates a fresh PENDING subscription (there's no
+        // auto-renew on this flow), so reaching here always means an explicit plan
+        // purchase/switch by the user — carry forward unused tokens instead of wiping them.
+        const isPlanSwitch = currentSub.status !== "ACTIVE";
+
+        if (!isPlanSwitch && existingWallet && existingWallet.tokensRemaining > 0) {
           await createWalletTransaction(tx, {
             userId: subscription.userId,
             walletId: existingWallet.id,
@@ -263,12 +268,19 @@ class PaymentService {
             currentPeriodStart: now,
             currentPeriodEnd: nextPeriodEnd,
           },
-          update: {
-            tokensRemaining: tokenLimit,
-            tokensUsed: 0,
-            currentPeriodStart: now,
-            currentPeriodEnd: nextPeriodEnd,
-          },
+          update: isPlanSwitch
+            ? {
+                tokensRemaining: { increment: tokenLimit },
+                tokensUsed: 0,
+                currentPeriodStart: now,
+                currentPeriodEnd: nextPeriodEnd,
+              }
+            : {
+                tokensRemaining: tokenLimit,
+                tokensUsed: 0,
+                currentPeriodStart: now,
+                currentPeriodEnd: nextPeriodEnd,
+              },
         });
 
         await createWalletTransaction(tx, {
