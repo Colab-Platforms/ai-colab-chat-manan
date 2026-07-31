@@ -276,12 +276,18 @@ export async function cashfreeWebhook(req: Request, res: Response) {
       return res.status(200).json({ status: true, message: "Ignored auth payment success" });
     }
 
+    // Snapshot the pre-webhook status: a subscription is still PENDING right up until
+    // its first successful debit activates it (a plan switch/new activation). If it's
+    // already ACTIVE, this payment is a routine same-plan renewal, not a switch.
+    const isPlanSwitch = subscription.status !== "ACTIVE";
+
     const localPaymentId = await prisma.$transaction(async (tx) => {
       console.info("[Cashfree][Webhook] Activating subscription on real payment success", {
         subscriptionId,
         localSubscriptionId: subscription.id,
         paymentId,
         paymentType: getWebhookPaymentType(payloadData),
+        isPlanSwitch,
       });
 
       await tx.subscription.updateMany({
@@ -323,12 +329,21 @@ export async function cashfreeWebhook(req: Request, res: Response) {
           currentPeriodStart: now,
           currentPeriodEnd: nextPeriodEnd,
         },
-        update: {
-          tokensRemaining: tokenLimit,
-          tokensUsed: 0,
-          currentPeriodStart: now,
-          currentPeriodEnd: nextPeriodEnd,
-        },
+        // Plan switch: carry forward unused tokens from the previous plan instead of
+        // wiping them. Same-plan renewals still reset to the plan's tokenLimit.
+        update: isPlanSwitch
+          ? {
+              tokensRemaining: { increment: tokenLimit },
+              tokensUsed: 0,
+              currentPeriodStart: now,
+              currentPeriodEnd: nextPeriodEnd,
+            }
+          : {
+              tokensRemaining: tokenLimit,
+              tokensUsed: 0,
+              currentPeriodStart: now,
+              currentPeriodEnd: nextPeriodEnd,
+            },
       });
 
       await createWalletTransaction(tx, {

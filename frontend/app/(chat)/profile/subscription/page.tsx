@@ -461,7 +461,7 @@ export default function SubscriptionPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm upgrade</AlertDialogTitle>
             <AlertDialogDescription>
-              You still have remaining tokens in your current plan. If you continue, remaining tokens will be removed and your new plan tokens will be credited.
+              You still have remaining tokens in your current plan. If you continue, those tokens will carry over and be added to your new plan&apos;s tokens.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

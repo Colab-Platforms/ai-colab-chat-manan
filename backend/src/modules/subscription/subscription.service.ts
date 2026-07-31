@@ -182,7 +182,9 @@ class SubscriptionService {
                         currentPeriodEnd: addCycle(now, data.billingCycle),
                     },
                     update: {
-                        tokensRemaining: plan.tokenLimit,
+                        // Plan switch: carry forward unused tokens from the previous plan
+                        // instead of wiping them.
+                        tokensRemaining: { increment: plan.tokenLimit },
                         tokensUsed: 0,
                         currentPeriodStart: now,
                         currentPeriodEnd: addCycle(now, data.billingCycle),
