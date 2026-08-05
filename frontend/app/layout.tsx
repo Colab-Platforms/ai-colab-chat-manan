@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title:
-    "ColabPlatforms AI - Multi-Model LLM Chat Platform | Gemini, Claude, Perplexity",
+    "Colab Platforms AI - Multi-Model LLM Chat Platform | Claude, Gemini, Perplexity",
   description:
     "Advanced AI chatbot platform by ColabPlatforms. Chat with multiple LLM models simultaneously - Gemini, Claude, Perplexity, and more. Experience the future of AI conversation with our multichat interface.",
   keywords:
