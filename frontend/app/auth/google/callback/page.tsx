@@ -8,7 +8,7 @@ import { useAuth } from "@/context/auth-context";
 
 const getSafeRedirectPath = (value: string | null) => {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/";
+    return "/home";
   }
   return value;
 };

@@ -56,7 +56,7 @@ export default function RegisterPage() {
 
   const startGoogleLogin = () => {
     const redirect = searchParams.get("redirect");
-    const redirectPath = redirect && redirect.startsWith("/") ? redirect : "/";
+    const redirectPath = redirect && redirect.startsWith("/") ? redirect : "/home";
     const apiBaseUrl = (
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
     ).replace(/\/+$/, "");
@@ -68,7 +68,7 @@ export default function RegisterPage() {
   useEffect(() => {
     if (user && step === "register") {
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     }
   }, [user, step, router, searchParams]);
 
@@ -101,7 +101,7 @@ export default function RegisterPage() {
       }
       toast.success("Account created and signed in successfully");
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Registration failed"));
     } finally {
@@ -122,7 +122,7 @@ export default function RegisterPage() {
       }
       toast.success("Email verified and signed in successfully");
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "OTP verification failed"));
     } finally {

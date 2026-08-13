@@ -100,7 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <TooltipTrigger asChild>
           <Link href="#" onClick={(e) => {
             e.preventDefault();
-            const lastPath = localStorage.getItem("last_chat_path") || "/";
+            const lastPath = localStorage.getItem("last_chat_path") || "/home";
             router.push(lastPath);
           }}>
             <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer">
@@ -177,7 +177,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Link href="#" onClick={(e) => {
           e.preventDefault();
           setMobileOpen(false);
-          const lastPath = localStorage.getItem("last_chat_path") || "/";
+          const lastPath = localStorage.getItem("last_chat_path") || "/home";
           router.push(lastPath);
         }}>
           <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground justify-start cursor-pointer w-full">

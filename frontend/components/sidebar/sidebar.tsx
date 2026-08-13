@@ -253,11 +253,11 @@ function SidebarInner({
         detail: { folderId: nextFolderId },
       }),
     );
-    // HomeFolderScopeSync (app/page.tsx) treats the URL's `folderId` param as
-    // the source of truth and clears localStorage whenever it's absent — so
-    // navigating to a bare "/" would immediately wipe the value just set
-    // above. Carry it through the URL too so the two stay in sync.
-    const homeHref = nextFolderId ? `/?folderId=${nextFolderId}` : "/";
+    // HomeFolderScopeSync (app/(chat)/home/page.tsx) treats the URL's
+    // `folderId` param as the source of truth and clears localStorage whenever
+    // it's absent — so navigating to a bare "/home" would immediately wipe the
+    // value just set above. Carry it through the URL too so the two stay in sync.
+    const homeHref = nextFolderId ? `/home?folderId=${nextFolderId}` : "/home";
     if (routeUiRef.current.isDraftRoute) {
       // Already on the new-chat screen, so no navigation (and thus no
       // HomeFolderScopeSync re-run) will happen. Update the URL in place
@@ -276,7 +276,7 @@ function SidebarInner({
       toast.success("Chat deleted");
       onRefresh();
       if (activeChatIdRef.current === deleteTarget) {
-        router.push("/");
+        router.push("/home");
       }
       setDeleteTarget(null);
     } catch {
@@ -293,7 +293,7 @@ function SidebarInner({
       await chatService.archive(chatId);
       onRefresh();
       if (activeChatIdRef.current === chatId) {
-        router.push("/");
+        router.push("/home");
       }
     } catch { /* ignore */ }
   };
@@ -443,7 +443,7 @@ function SidebarInner({
         detail: { assistant },
       }),
     );
-    routerRef.current.push("/");
+    routerRef.current.push("/home");
   }, [onMobileClose]);
 
   const filteredChats = useMemo(() => chats.filter((c: Chat) => !c.isArchived), [chats]);
