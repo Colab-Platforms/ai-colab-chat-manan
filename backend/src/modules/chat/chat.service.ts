@@ -154,6 +154,23 @@ class ChatService {
             modelResponses: {
               include: {
                 model: { select: { id: true, name: true, externalId: true } },
+                // Generation outlives the SSE stream, so a document must come
+                // back with the chat — otherwise a refresh mid-generation
+                // loses the card entirely.
+                generatedDocuments: {
+                  where: { isDeleted: false },
+                  select: {
+                    id: true,
+                    status: true,
+                    format: true,
+                    title: true,
+                    fileName: true,
+                    fileUrl: true,
+                    fileSize: true,
+                    lastError: true,
+                  },
+                  orderBy: { createdAt: "asc" },
+                },
               },
             },
           },

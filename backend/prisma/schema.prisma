@@ -51,6 +51,7 @@ model User {
   payments                      Payment[]
   invoices                      Invoice[]
   supportRequests               SupportRequest[]
+  generatedDocuments            GeneratedDocument[]
 }
 
 enum AuthProvider {
@@ -195,6 +196,7 @@ model Chat {
   chatContexts ChatContext[]
   distilledContexts ContextMemory[] @relation("ContextSourceChat")
   distillationJobs   ContextDistillationJob[]
+  generatedDocuments GeneratedDocument[]
 
   @@index([userId])
   @@index([folderId])
@@ -237,6 +239,62 @@ model ContextDistillationJob {
   @@index([chatId, status])
 }
 
+enum GeneratedDocumentFormat {
+  PDF
+  DOCX
+  PPTX
+  XLSX
+}
+
+enum GeneratedDocumentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model GeneratedDocument {
+  id                 Int                     @id @default(autoincrement())
+  userId             Int
+  chatId             Int?
+  messageId          Int?
+  // In compare mode one assistant Message owns several ModelResponse rows, so
+  // messageId alone cannot say which model's answer this document came from.
+  modelResponseId    Int?
+  format             GeneratedDocumentFormat @default(PDF)
+  status             GeneratedDocumentStatus @default(PENDING)
+  title              String
+  prompt             String
+  sourceText         String?
+  spec               Json?
+  theme              String                  @default("professional")
+  fileName           String?
+  fileUrl            String?
+  cloudinaryPublicId String?
+  fileSize           Int?
+  promptTokens       Int                     @default(0)
+  completionTokens   Int                     @default(0)
+  attempts           Int                     @default(0)
+  lastError          String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  isDeleted          Boolean                 @default(false)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  deletedAt          DateTime?
+  user               User                    @relation(fields: [userId], references: [id])
+  chat               Chat?                   @relation(fields: [chatId], references: [id])
+  message            Message?                @relation(fields: [messageId], references: [id])
+  modelResponse      ModelResponse?          @relation(fields: [modelResponseId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([chatId])
+  @@index([messageId])
+  @@index([modelResponseId])
+}
+
 model Message {
   id             Int             @id @default(autoincrement())
   chatId         Int
@@ -254,6 +312,7 @@ model Message {
   deletedAt      DateTime?
   modelResponses ModelResponse[]
   usageLogs      UsageLog[]
+  generatedDocuments GeneratedDocument[]
 
   @@index([chatId])
   @@index([createdAt])
@@ -276,6 +335,7 @@ model ModelResponse {
   chat             Chat           @relation(fields: [chatId], references: [id])
   message          Message        @relation(fields: [messageId], references: [id])
   model            Model          @relation(fields: [modelId], references: [id])
+  generatedDocuments GeneratedDocument[]
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   completedAt      DateTime?
