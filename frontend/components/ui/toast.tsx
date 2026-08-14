@@ -1,118 +1,232 @@
-"use client";
+"use client"
 
-import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
-import { Toast, Toaster as ArkToaster, createToaster } from "@ark-ui/react/toast";
-import { Portal } from "@ark-ui/react/portal";
-import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import * as React from "react"
+import { Toast as ToastPrimitive } from "@base-ui/react/toast"
+import {
+  CircleCheckIcon,
+  InfoIcon,
+  Loader2Icon,
+  OctagonXIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react"
 
-/**
- * Shared toaster store. `duration` and `placement` mirror the react-toastify
- * setup this replaced (`autoClose={3000}`, `position="top-right"`), so existing
- * `toast.*` calls behave exactly as before.
- */
-export const toaster = createToaster({
-  placement: "top-end",
-  gap: 12,
-  overlap: true,
-  duration: 3000,
-  offsets: "1rem",
-});
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
-type ToastKind = "success" | "error" | "warning" | "info";
+const toast = ToastPrimitive.createToastManager()
 
-const VARIANTS: Record<
-  ToastKind,
-  { Icon: LucideIcon; root: string; icon: string }
-> = {
-  success: {
-    Icon: CheckCircle,
-    root: "bg-green-50 border-green-500 text-green-900 dark:bg-green-950 dark:border-green-400 dark:text-green-50",
-    icon: "text-green-500 dark:text-green-400",
-  },
-  error: {
-    Icon: AlertCircle,
-    root: "bg-red-50 border-red-500 text-red-900 dark:bg-red-950 dark:border-red-400 dark:text-red-50",
-    icon: "text-red-500 dark:text-red-400",
-  },
-  warning: {
-    Icon: AlertTriangle,
-    root: "bg-yellow-50 border-yellow-500 text-yellow-900 dark:bg-yellow-950 dark:border-yellow-400 dark:text-yellow-50",
-    icon: "text-yellow-500 dark:text-yellow-400",
-  },
-  info: {
-    Icon: Info,
-    root: "bg-blue-50 border-blue-500 text-blue-900 dark:bg-blue-950 dark:border-blue-400 dark:text-blue-50",
-    icon: "text-blue-500 dark:text-blue-400",
-  },
-};
-
-interface ToastExtra {
-  description?: ReactNode;
-  duration?: number;
-  id?: string;
+function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
+  return <ToastPrimitive.Provider {...props} />
 }
 
-function show(type: ToastKind, title: ReactNode, extra?: ToastExtra) {
-  // Ark warns about flushSync when a toast is created during render or inside a
-  // React effect (e.g. chat-input's attachment fallback), so always defer.
-  queueMicrotask(() => {
-    toaster.create({ ...extra, title, type });
-  });
+function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {
+  return <ToastPrimitive.Portal data-slot="toast-portal" {...props} />
 }
 
-/**
- * react-toastify-compatible facade over the Ark toaster, so call sites keep
- * using `toast.success("...")` / `toast.error("...")` unchanged.
- */
-export const toast = {
-  success: (title: ReactNode, extra?: ToastExtra) => show("success", title, extra),
-  error: (title: ReactNode, extra?: ToastExtra) => show("error", title, extra),
-  info: (title: ReactNode, extra?: ToastExtra) => show("info", title, extra),
-  warning: (title: ReactNode, extra?: ToastExtra) => show("warning", title, extra),
-  warn: (title: ReactNode, extra?: ToastExtra) => show("warning", title, extra),
-  dismiss: (id?: string) => toaster.dismiss(id),
-};
-
-export function Toaster() {
+function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
   return (
-    <Portal>
-      <ArkToaster toaster={toaster} style={{ zIndex: 100000 }}>
-        {(item) => {
-          const variant = VARIANTS[item.type as ToastKind] ?? VARIANTS.info;
-          const { Icon } = variant;
+    <ToastPrimitive.Viewport
+      data-slot="toast-viewport"
+      className={cn(
+        // z-index app ke fixed overlays (z-9500 / z-9999) ke upar rehna chahiye.
+        "pointer-events-none fixed inset-x-4 bottom-4 z-[100000] mx-auto w-auto max-w-sm outline-none sm:right-4 sm:left-auto sm:mx-0 sm:w-full",
+        className
+      )}
+      {...props}
+    />
+  )
+}
 
-          return (
-            <Toast.Root
-              onClick={() => item.id && toaster.dismiss(item.id)}
-              className={cn(
-                "relative w-[min(20rem,calc(100vw-2rem))] cursor-pointer rounded-lg border-l-4 p-4 pr-10 shadow-lg wrap-anywhere",
-                "transition-all duration-300 ease-out will-change-transform",
-                "h-(--height) translate-x-(--x) translate-y-(--y) scale-(--scale) opacity-(--opacity) z-(--z-index)",
-                variant.root,
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", variant.icon)} />
-                <div className="flex-1">
-                  <Toast.Title className="text-sm font-semibold">
-                    {item.title}
-                  </Toast.Title>
-                  {item.description ? (
-                    <Toast.Description className="mt-1 text-sm opacity-80">
-                      {item.description}
-                    </Toast.Description>
-                  ) : null}
-                </div>
-              </div>
-              <Toast.CloseTrigger className="absolute top-3 right-3 rounded p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10">
-                <X className="h-3 w-3" />
-              </Toast.CloseTrigger>
-            </Toast.Root>
-          );
-        }}
-      </ArkToaster>
-    </Portal>
-  );
+function Toast({ className, ...props }: ToastPrimitive.Root.Props) {
+  return (
+    <ToastPrimitive.Root
+      data-slot="toast"
+      className={cn(
+        "group/toast pointer-events-auto absolute right-0 bottom-0 z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl border bg-popover text-popover-foreground shadow-lg will-change-transform outline-none select-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))]",
+        "h-(--height) [transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] [transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]",
+        "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-['']",
+        "data-expanded:h-(--toast-height) data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))]",
+        "data-limited:opacity-0 data-starting-style:[transform:translateY(150%)]",
+        "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(150%)]",
+        "data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
+        "data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]",
+        "data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]",
+        "data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function ToastContent({ className, ...props }: ToastPrimitive.Content.Props) {
+  return (
+    <ToastPrimitive.Content
+      data-slot="toast-content"
+      className={cn(
+        "flex h-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] data-behind:opacity-0 data-expanded:opacity-100",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function ToastTitle({ className, ...props }: ToastPrimitive.Title.Props) {
+  return (
+    <ToastPrimitive.Title
+      data-slot="toast-title"
+      className={cn("text-sm font-medium", className)}
+      {...props}
+    />
+  )
+}
+
+function ToastDescription({
+  className,
+  ...props
+}: ToastPrimitive.Description.Props) {
+  return (
+    <ToastPrimitive.Description
+      data-slot="toast-description"
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+
+function ToastAction({
+  className,
+  render = <Button variant="outline" size="sm" />,
+  ...props
+}: ToastPrimitive.Action.Props) {
+  return (
+    <ToastPrimitive.Action
+      data-slot="toast-action"
+      render={render}
+      className={cn("shrink-0", className)}
+      {...props}
+    />
+  )
+}
+
+function ToastClose({
+  className,
+  children,
+  render = <Button variant="ghost" size="icon-sm" />,
+  ...props
+}: ToastPrimitive.Close.Props) {
+  return (
+    <ToastPrimitive.Close
+      data-slot="toast-close"
+      aria-label="Close toast"
+      render={render}
+      className={cn(
+        "relative shrink-0 text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-foreground",
+        className
+      )}
+      {...props}
+    >
+      {children ?? <XIcon aria-hidden="true" />}
+    </ToastPrimitive.Close>
+  )
+}
+
+function ToastIcon({ type }: { type: string | undefined }) {
+  let icon: React.ReactNode = null
+
+  if (type === "success") {
+    icon = <CircleCheckIcon aria-hidden="true" />
+  }
+
+  if (type === "info") {
+    icon = <InfoIcon aria-hidden="true" />
+  }
+
+  if (type === "warning") {
+    icon = <TriangleAlertIcon aria-hidden="true" />
+  }
+
+  if (type === "error") {
+    icon = <OctagonXIcon className="text-destructive" aria-hidden="true" />
+  }
+
+  if (type === "loading") {
+    icon = <Loader2Icon className="animate-spin" aria-hidden="true" />
+  }
+
+  if (!icon) {
+    return null
+  }
+
+  return (
+    <span
+      data-slot="toast-icon"
+      className="shrink-0 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4"
+    >
+      {icon}
+    </span>
+  )
+}
+
+function ToastList() {
+  const { toasts } = ToastPrimitive.useToastManager()
+
+  return toasts.map((toastItem) => (
+    <Toast key={toastItem.id} toast={toastItem}>
+      <ToastContent>
+        <ToastIcon type={toastItem.type} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <ToastTitle />
+          <ToastDescription />
+        </div>
+        <ToastAction />
+        <ToastClose />
+      </ToastContent>
+    </Toast>
+  ))
+}
+
+function Toaster({
+  children,
+  toastManager = toast,
+  // Purane Ark toaster jaisa 3s auto-close (Base UI default 5s hai).
+  timeout = 3000,
+  ...props
+}: ToastPrimitive.Provider.Props) {
+  return (
+    <ToastProvider toastManager={toastManager} timeout={timeout} {...props}>
+      {children}
+      <ToastPortal>
+        <ToastViewport>
+          <ToastList />
+        </ToastViewport>
+      </ToastPortal>
+    </ToastProvider>
+  )
+}
+
+const createToastManager = ToastPrimitive.createToastManager
+const useToastManager = ToastPrimitive.useToastManager
+
+export {
+  Toaster,
+  Toast,
+  ToastAction,
+  ToastClose,
+  ToastContent,
+  ToastDescription,
+  ToastPortal,
+  ToastProvider,
+  ToastTitle,
+  ToastViewport,
+  createToastManager,
+  toast,
+  useToastManager,
 }

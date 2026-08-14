@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { EASE } from "@/components/landing/components/motionVariants";

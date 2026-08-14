@@ -13,7 +13,7 @@ import {
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { supportService } from "@/lib/services";
 import { Eye, LifeBuoy, Mail } from "lucide-react";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 
 type SupportTab = "TICKET" | "CONTACT";
 

@@ -5,7 +5,7 @@ import { notFound, useParams } from "next/navigation";
 import { chatService, modelService, messageService, assistantService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 import * as LucideIcons from "lucide-react";
 import { Bot, Sparkles, MessageSquare } from "lucide-react";
 

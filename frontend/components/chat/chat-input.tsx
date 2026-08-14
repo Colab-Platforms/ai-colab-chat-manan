@@ -38,7 +38,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getModelIcon } from "@/lib/model-icons";
 import { attachmentService } from "@/lib/services";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 
 // Dynamically imported so react-speech-recognition never runs on the server
 const MicButton = dynamic(

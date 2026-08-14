@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { subscriptionService, planService, paymentService } from "@/lib/services";
 import { Loader2 } from "lucide-react";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,

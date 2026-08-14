@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { userService } from "@/lib/services";
 import { Loader2, Eye, Pencil, Trash2, Save, BarChart3, Coins, TrendingUp, Hash, ChevronLeft, ChevronRight } from "lucide-react";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 
 interface GroupedLog {
   id: string; // generated id
