@@ -5,6 +5,10 @@ import { createOpenRouterStream } from "@/utils/openrouter.js";
 import { estimateMessageTokens } from "@/utils/tokenCounter.js";
 import { checkPredefinedResponse } from "@/utils/predefinedResponses.js";
 import {
+  buildSystemMessage,
+  getDefaultSystemPrompt,
+} from "@/utils/systemPrompt.js";
+import {
   createWalletTransaction,
   calculateAdjustedTokens,
 } from "@/utils/walletUtils.js";
@@ -1020,11 +1024,13 @@ export async function streamChat(req: Request, res: Response) {
       userPreference?.enableFollowUpQuestions !== false;
 
     // -----------------------------------------------------------------------
-    // Assistant persona injection – prepend assistant system prompt first
-    // so it sits at the very beginning of the conversation context.
-    // Context memory (user personalisation) is stacked on top of it next.
+    // Persona injection – prepend the assistant's system prompt (or the
+    // platform default for normal chats) so it sits at the very beginning of
+    // the conversation context. Context memory (user personalisation) is
+    // stacked on top of it next.
     // -----------------------------------------------------------------------
     let assistantTemperature: number | undefined;
+    let personaPrompt: string | null = null;
     if (chat.assistantId) {
       const chatAssistant = await prisma.assistant.findFirst({
         where: { id: chat.assistantId, isActive: true, isDeleted: false },
@@ -1033,27 +1039,20 @@ export async function streamChat(req: Request, res: Response) {
         console.log(
           `[DEBUG] Adding Assistant System Prompt for: ${chatAssistant.name}`,
         );
-        const usePromptCaching =
-          model.externalId.includes("anthropic/") ||
-          model.externalId.includes("claude");
-        conversationHistory.unshift({
-          role: "system",
-          content: usePromptCaching
-            ? [
-                {
-                  type: "text",
-                  text: chatAssistant.systemPrompt,
-                  cache_control: { type: "ephemeral" },
-                },
-              ]
-            : chatAssistant.systemPrompt,
-        });
+        personaPrompt = chatAssistant.systemPrompt;
         assistantTemperature = chatAssistant.temperature;
       } else {
         console.log(
           `[DEBUG] Assistant with ID ${chat.assistantId} not found or inactive`,
         );
       }
+    }
+
+    const systemPrompt = personaPrompt ?? getDefaultSystemPrompt(chatType);
+    if (systemPrompt) {
+      conversationHistory.unshift(
+        buildSystemMessage(systemPrompt, model.externalId),
+      );
     }
 
     const selectedContexts = await getSelectedContextsForChat(userId, chatId);
@@ -1064,21 +1063,9 @@ export async function streamChat(req: Request, res: Response) {
         `[DEBUG] Adding User Context (${contextStrings.length} items)`,
       );
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStrings.map((c: any) => `- ${c}`).join("\n")}`;
-      const usePromptCaching =
-        model.externalId.includes("anthropic/") ||
-        model.externalId.includes("claude");
-      conversationHistory.unshift({
-        role: "system",
-        content: usePromptCaching
-          ? [
-              {
-                type: "text",
-                text: systemContent,
-                cache_control: { type: "ephemeral" },
-              },
-            ]
-          : systemContent,
-      });
+      conversationHistory.unshift(
+        buildSystemMessage(systemContent, model.externalId),
+      );
     }
 
     // Build multipart content for current message if attachments are present
@@ -1817,6 +1804,24 @@ export async function regenerateChat(req: Request, res: Response) {
     const enableFollowUpQuestions =
       userPreference?.enableFollowUpQuestions !== false;
 
+    // Prepend the persona (assistant prompt, or the platform default for
+    // normal chats), then context memory on top — same order as streamChat.
+    let personaPromptRegen: string | null = null;
+    if (chat.assistantId) {
+      const chatAssistant = await prisma.assistant.findFirst({
+        where: { id: chat.assistantId, isActive: true, isDeleted: false },
+      });
+      if (chatAssistant) personaPromptRegen = chatAssistant.systemPrompt;
+    }
+
+    const systemPromptRegen =
+      personaPromptRegen ?? getDefaultSystemPrompt(chatType);
+    if (systemPromptRegen) {
+      conversationHistory.unshift(
+        buildSystemMessage(systemPromptRegen, model.externalId),
+      );
+    }
+
     // Prepend context memory as a system message
     const selectedContextsRegen = await getSelectedContextsForChat(
       userId,
@@ -1826,7 +1831,9 @@ export async function regenerateChat(req: Request, res: Response) {
 
     if (contextStringsRegen.length > 0) {
       const systemContent = `User context (personalisation — always keep in mind):\n${contextStringsRegen.map((c: any) => `- ${c}`).join("\n")}`;
-      conversationHistory.unshift({ role: "system", content: systemContent });
+      conversationHistory.unshift(
+        buildSystemMessage(systemContent, model.externalId),
+      );
     }
 
     // --- IMAGE GENERATION ITERATION FIX ---
@@ -2536,8 +2543,8 @@ export async function editAndResend(req: Request, res: Response) {
     });
 
     const conversationHistory: {
-      role: "user" | "assistant";
-      content: string;
+      role: "user" | "assistant" | "system";
+      content: string | any[];
     }[] = [];
     for (const msg of previousMessages) {
       if (msg.role === "USER") {
@@ -2551,6 +2558,23 @@ export async function editAndResend(req: Request, res: Response) {
     }
     // Add the new edited user message
     conversationHistory.push({ role: "user", content: content.trim() });
+
+    // Prepend the persona (assistant prompt, or the platform default)
+    let personaPromptEdit: string | null = null;
+    if (chat.assistantId) {
+      const chatAssistant = await prisma.assistant.findFirst({
+        where: { id: chat.assistantId, isActive: true, isDeleted: false },
+      });
+      if (chatAssistant) personaPromptEdit = chatAssistant.systemPrompt;
+    }
+
+    const systemPromptEdit =
+      personaPromptEdit ?? getDefaultSystemPrompt(chatType);
+    if (systemPromptEdit) {
+      conversationHistory.unshift(
+        buildSystemMessage(systemPromptEdit, model.externalId),
+      );
+    }
 
     const userPreference = await prisma.userPreference.findUnique({
       where: { userId },
@@ -3165,28 +3189,21 @@ export async function continueChatStream(req: Request, res: Response) {
       }
     }
 
-    // Add Persona
+    // Add Persona (assistant prompt, or the platform default for normal chats)
+    let personaPromptContinue: string | null = null;
     if (chat.assistantId) {
       const chatAssistant = await prisma.assistant.findFirst({
         where: { id: chat.assistantId, isActive: true, isDeleted: false },
       });
-      if (chatAssistant) {
-        const usePromptCaching =
-          model.externalId.includes("anthropic/") ||
-          model.externalId.includes("claude");
-        conversationHistory.unshift({
-          role: "system",
-          content: usePromptCaching
-            ? [
-                {
-                  type: "text",
-                  text: chatAssistant.systemPrompt,
-                  cache_control: { type: "ephemeral" },
-                },
-              ]
-            : chatAssistant.systemPrompt,
-        });
-      }
+      if (chatAssistant) personaPromptContinue = chatAssistant.systemPrompt;
+    }
+
+    const systemPromptContinue =
+      personaPromptContinue ?? getDefaultSystemPrompt(chat.capability);
+    if (systemPromptContinue) {
+      conversationHistory.unshift(
+        buildSystemMessage(systemPromptContinue, model.externalId),
+      );
     }
 
     // Now push the *partial* assistant message

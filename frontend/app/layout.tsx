@@ -1,11 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import "react-toastify/dist/ReactToastify.css";
 import { ThemeProvider } from "@/context/theme-context";
 import { AuthProvider } from "@/context/auth-context";
 import { ChatRootShell } from "@/components/chat/chat-root-shell";
-import { ToastContainer } from "react-toastify";
+import { Toaster } from "@/components/ui/toast";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { PwaInstallPrompt } from "@/components/pwa/install-prompt";
 import Script from "next/script";
@@ -120,18 +119,7 @@ fbq('track', 'PageView');`,
             src="https://www.facebook.com/tr?id=927597176298283&ev=PageView&noscript=1"
           />
         </noscript>
-        <ToastContainer
-          position="top-right"
-          autoClose={3000}
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          pauseOnHover
-          theme="light"
-          toastClassName="!text-sm"
-          style={{ zIndex: 99999 }}
-          className={"max-md:m-2"}
-        />
+        <Toaster />
         <ThemeProvider>
           <AuthProvider>
             <ChatRootShell>{children}</ChatRootShell>

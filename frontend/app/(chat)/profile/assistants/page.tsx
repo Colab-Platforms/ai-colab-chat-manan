@@ -12,7 +12,7 @@ import { DataTable, Column } from "@/components/dashboard/data-table";
 import { assistantService, modelService } from "@/lib/services";
 import { Loader2, Pencil, Trash2, Save, Plus, Bot } from "lucide-react";
 import * as LucideIcons from "lucide-react";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 
 export default function AssistantsAdminPage() {
   const [assistants, setAssistants] = useState<any[]>([]);

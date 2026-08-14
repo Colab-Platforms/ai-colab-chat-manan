@@ -25,7 +25,7 @@ import {
 import { Plus, Search, Star } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
 import { getRouteUiSnapshot, subscribeRouteUi, useIsStarredRoute } from "@/lib/route-ui-store";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 import { AppSidebar } from "./app-sidebar";
 import type { Assistant, Chat, FolderItem } from "./sidebar-types";
 import { ProjectsSection } from "./sidebar-projects-section";
