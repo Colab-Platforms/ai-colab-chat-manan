@@ -24,7 +24,7 @@ import {
   folderService,
   userPreferenceService,
 } from "@/lib/services";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 
 export default function PreferencesPage() {
   const router = useRouter();

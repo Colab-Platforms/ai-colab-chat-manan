@@ -5,7 +5,7 @@ import { chatService } from "@/lib/services";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArchiveRestore, MessageSquare, Archive } from "lucide-react";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 
 interface ArchivedChat {
   id: number;

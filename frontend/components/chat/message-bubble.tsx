@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "@/components/ui/button";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 import useEmblaCarousel from "embla-carousel-react";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";

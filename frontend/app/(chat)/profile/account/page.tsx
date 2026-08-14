@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Save, Loader2, Sun, Moon, Trash2, AlertTriangle, Camera } from "lucide-react";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 
 export default function AccountPage() {
   const { user, logout, refreshUser } = useAuth();

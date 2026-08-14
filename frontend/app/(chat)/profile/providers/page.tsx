@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { modelProviderService } from "@/lib/services";
 import { Loader2, Eye, Pencil, Trash2, Save } from "lucide-react";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 
 export default function ProvidersAdminPage() {
   const [providers, setProviders] = useState<any[]>([]);

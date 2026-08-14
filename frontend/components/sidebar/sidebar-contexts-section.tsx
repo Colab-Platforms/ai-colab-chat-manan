@@ -23,7 +23,7 @@ import { ContextModal } from "@/components/contexts/ContextModal";
 import { ContextViewDialog } from "@/components/contexts/ContextViewDialog";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { chatService, contextService } from "@/lib/services";
-import { toast } from "react-toastify";
+import { toast } from "@/components/ui/toast";
 import {
   Tooltip,
   TooltipContent,
