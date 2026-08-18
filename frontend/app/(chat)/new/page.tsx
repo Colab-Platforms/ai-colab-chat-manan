@@ -7,7 +7,7 @@ export default function NewChatAliasPage({
 }) {
   const folderId = searchParams?.folderId;
   if (folderId && folderId.trim() !== "") {
-    redirect(`/?folderId=${encodeURIComponent(folderId)}`);
+    redirect(`/home?folderId=${encodeURIComponent(folderId)}`);
   }
-  redirect("/");
+  redirect("/home");
 }

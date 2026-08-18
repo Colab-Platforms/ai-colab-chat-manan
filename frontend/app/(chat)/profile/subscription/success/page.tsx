@@ -196,7 +196,7 @@ export default function SubscriptionSuccessPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button asChild className="sm:min-w-40">
-            <Link href="/">Start chat</Link>
+            <Link href="/home">Start chat</Link>
           </Button>
           <Button asChild variant="outline" className="sm:min-w-40">
             <Link href="/profile">Go to dashboard</Link>

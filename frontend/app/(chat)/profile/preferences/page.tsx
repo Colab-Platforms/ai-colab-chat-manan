@@ -247,7 +247,7 @@ export default function PreferencesPage() {
     localStorage.setItem("ai_colab_startup_guide_replay", "1");
     window.dispatchEvent(new Event("ai-colab:start-guide"));
 
-    const lastPath = localStorage.getItem("last_chat_path") || "/";
+    const lastPath = localStorage.getItem("last_chat_path") || "/home";
     router.push(lastPath);
     toast.info("Interactive startup guide started.");
   };

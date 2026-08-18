@@ -54,7 +54,7 @@ export default function LoginPage() {
 
   const startGoogleLogin = () => {
     const redirect = searchParams.get("redirect");
-    const redirectPath = redirect && redirect.startsWith("/") ? redirect : "/";
+    const redirectPath = redirect && redirect.startsWith("/") ? redirect : "/home";
     const apiBaseUrl = (
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
     ).replace(/\/+$/, "");
@@ -70,7 +70,7 @@ export default function LoginPage() {
         return;
       }
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     }
   }, [user, router, searchParams, hasRole]);
 
@@ -103,7 +103,7 @@ export default function LoginPage() {
         return;
       }
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Login failed"));
     } finally {
@@ -127,7 +127,7 @@ export default function LoginPage() {
         return;
       }
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "OTP verification failed"));
     } finally {

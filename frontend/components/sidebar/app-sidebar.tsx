@@ -148,10 +148,10 @@ export function AppSidebar({
                       // ignore localStorage issues
                     }
                     if (typeof window !== "undefined") {
-                      const lastPath = localStorage.getItem("last_chat_path") || "/";
+                      const lastPath = localStorage.getItem("last_chat_path") || "/home";
                       router.push(lastPath);
                     } else {
-                      router.push("/");
+                      router.push("/home");
                     }
                   }}
                   className="gap-2 cursor-pointer"
@@ -260,10 +260,10 @@ export function AppSidebar({
                     // ignore localStorage issues
                   }
                   if (typeof window !== "undefined") {
-                    const lastPath = localStorage.getItem("last_chat_path") || "/";
+                    const lastPath = localStorage.getItem("last_chat_path") || "/home";
                     router.push(lastPath);
                   } else {
-                    router.push("/");
+                    router.push("/home");
                   }
                 }}
                 className="gap-2 cursor-pointer"
