@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import {
   MessageSquare,
@@ -10,6 +10,7 @@ import {
   LogOut,
   Settings,
   LifeBuoy,
+  ShieldCheck,
   PanelLeftOpen,
   PanelLeftClose,
   MoreHorizontal,
@@ -59,9 +60,14 @@ export function AppSidebar({
   onMobileClose,
   onLogout,
 }: AppSidebarProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, hasRole } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
+  const isAdmin = hasRole("ADMIN") || hasRole("SUPERADMIN");
+  // Admin panel's own sidebar already has "Back to Chat" and Admin/Support nav,
+  // so those dropdown items would just duplicate what's on screen.
+  const isAdminArea = pathname?.startsWith("/admin");
 
   const handleClose = () => onMobileClose?.();
 
@@ -122,16 +128,16 @@ export function AppSidebar({
                 {theme === "dark" ? "Light Mode" : "Dark Mode"}
               </DropdownMenuItem>
               {variant === "chat" ? (
-                <DropdownMenuItem onClick={() => { 
-                  handleClose(); 
+                <DropdownMenuItem onClick={() => {
+                  handleClose();
                   if (typeof window !== "undefined") {
                     localStorage.setItem("last_chat_path", window.location.pathname);
                   }
-                  router.push("/profile"); 
+                  router.push("/profile");
                 }} className="gap-2 cursor-pointer">
                   <Settings className="w-4 h-4" /> Settings
                 </DropdownMenuItem>
-              ) : (
+              ) : !isAdminArea ? (
                 <DropdownMenuItem
                   onClick={() => {
                     handleClose();
@@ -152,10 +158,17 @@ export function AppSidebar({
                 >
                   <MessageSquare className="w-4 h-4" /> Go to Chat
                 </DropdownMenuItem>
+              ) : null}
+              {isAdmin && !isAdminArea && (
+                <DropdownMenuItem onClick={() => { handleClose(); router.push("/admin"); }} className="gap-2 cursor-pointer">
+                  <ShieldCheck className="w-4 h-4" /> Admin Panel
+                </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => { handleClose(); router.push("/support"); }} className="gap-2 cursor-pointer">
-                <LifeBuoy className="w-4 h-4" /> Help & Support
-              </DropdownMenuItem>
+              {!isAdminArea && (
+                <DropdownMenuItem onClick={() => { handleClose(); router.push("/support"); }} className="gap-2 cursor-pointer">
+                  <LifeBuoy className="w-4 h-4" /> Help & Support
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
                 <LogOut className="w-4 h-4" /> Logout
@@ -236,7 +249,7 @@ export function AppSidebar({
               }} className="gap-2 cursor-pointer">
                 <Settings className="w-4 h-4" /> Settings
               </DropdownMenuItem>
-            ) : (
+            ) : !isAdminArea ? (
               <DropdownMenuItem
                 onClick={() => {
                   handleClose();
@@ -257,10 +270,17 @@ export function AppSidebar({
               >
                 <MessageSquare className="w-4 h-4" /> Go to Chat
               </DropdownMenuItem>
+            ) : null}
+            {isAdmin && !isAdminArea && (
+              <DropdownMenuItem onClick={() => { handleClose(); router.push("/admin"); }} className="gap-2 cursor-pointer">
+                <ShieldCheck className="w-4 h-4" /> Admin Panel
+              </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => { handleClose(); router.push("/support"); }} className="gap-2 cursor-pointer">
-              <LifeBuoy className="w-4 h-4" /> Help & Support
-            </DropdownMenuItem>
+            {!isAdminArea && (
+              <DropdownMenuItem onClick={() => { handleClose(); router.push("/support"); }} className="gap-2 cursor-pointer">
+                <LifeBuoy className="w-4 h-4" /> Help & Support
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
               <LogOut className="w-4 h-4" /> Logout

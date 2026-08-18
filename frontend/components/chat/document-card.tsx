@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { documentService } from "@/lib/services";
 import { cn } from "@/lib/utils";
 
-export type DocumentFormat = "PDF" | "DOCX" | "PPTX" | "XLSX";
+export type DocumentFormat = "PDF" | "DOCX" | "PPTX" | "XLSX" | "CSV";
 
 export interface GeneratedDocument {
   id: number;
@@ -42,6 +42,10 @@ const FORMAT_META: Record<
   DOCX: { label: "Word", extension: "docx", short: "DOC", tint: "#2B579A" },
   PPTX: { label: "PowerPoint", extension: "pptx", short: "PPT", tint: "#D14524" },
   XLSX: { label: "Excel", extension: "xlsx", short: "XLS", tint: "#1D7044" },
+  // Deliberately a distinct tone from XLS green — same "spreadsheet" family,
+  // but a plain-text file is a genuinely different thing to open than a
+  // styled workbook, and the icon should say so before the label does.
+  CSV: { label: "CSV", extension: "csv", short: "CSV", tint: "#546E7A" },
 };
 
 const metaFor = (format: string) =>

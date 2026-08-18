@@ -38,7 +38,7 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 };
 
 export default function LoginPage() {
-  const { login, verifyEmailOtp, resendEmailOtp, user } = useAuth();
+  const { login, verifyEmailOtp, resendEmailOtp, user, hasRole } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<"login" | "verify">("login");
@@ -65,10 +65,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
+      if (hasRole("ADMIN") || hasRole("SUPERADMIN")) {
+        router.replace("/admin");
+        return;
+      }
       const redirect = searchParams.get("redirect");
       router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     }
-  }, [user, router, searchParams]);
+  }, [user, router, searchParams, hasRole]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -94,6 +98,10 @@ export default function LoginPage() {
         return;
       }
       toast.success("Login successful!");
+      if (result.isAdmin) {
+        router.replace("/admin");
+        return;
+      }
       const redirect = searchParams.get("redirect");
       router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {
@@ -114,6 +122,10 @@ export default function LoginPage() {
         return;
       }
       toast.success("Email verified. Login successful!");
+      if (result.isAdmin) {
+        router.replace("/admin");
+        return;
+      }
       const redirect = searchParams.get("redirect");
       router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {

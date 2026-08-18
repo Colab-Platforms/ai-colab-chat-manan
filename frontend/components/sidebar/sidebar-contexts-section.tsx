@@ -367,9 +367,14 @@ export function ContextsSectionContainer({
     async (chatId?: number | null, folderIdHint?: number | null, force = false) => {
       let folderId = folderIdHint ?? null;
       if (chatId && folderId === null) {
-        const activeChat =
-          chatsRef.current.find((chat) => chat.id === chatId) ||
-          (await chatService.getById(chatId)).data.data;
+        let activeChat = chatsRef.current.find((chat) => chat.id === chatId);
+        if (!activeChat) {
+          try {
+            activeChat = (await chatService.getById(chatId)).data.data;
+          } catch {
+            activeChat = undefined;
+          }
+        }
         folderId = activeChat?.folderId ?? null;
       }
       setActiveFolderId(chatId ? folderId : null);

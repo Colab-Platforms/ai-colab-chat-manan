@@ -20,15 +20,21 @@ import paymentRoutes from "@/modules/payments/payment.route.js";
 import billingRoutes from "@/modules/billing/billing.route.js";
 import supportRoutes from "@/modules/support/support.route.js";
 import documentRoutes from "@/modules/document/document.route.js";
+import adminRoutes from "@/modules/admin/admin.route.js";
 
 
 
 
 const router = Router();
 
-router.get("/health", (_req, res) => {
-  res.send("Colab Platform ai Backend is running!");
-});
+// router.get("/health", (_req, res) => {
+//   res.status(200).json({
+//     status: "ok",
+//     message: "Colab Platform AI Backend is running!",
+//     timestamp: new Date().toISOString(),
+//     uptime: process.uptime(),
+//   });
+// });
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/folders", folderRoutes);
@@ -50,5 +56,6 @@ router.use("/payments", paymentRoutes);
 router.use("/billing", billingRoutes);
 router.use("/support", supportRoutes);
 router.use("/documents", documentRoutes);
+router.use("/admin", adminRoutes);
 
 export default router;

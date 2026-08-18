@@ -47,6 +47,7 @@ export interface DocumentIntent {
   title: string;
   useLastAnswer: boolean;
   confidence: number;
+  requiresCurrentData: boolean;
 }
 
 const NONE: DocumentIntent = {
@@ -55,6 +56,7 @@ const NONE: DocumentIntent = {
   title: "",
   useLastAnswer: false,
   confidence: 0,
+  requiresCurrentData: false,
 };
 
 /* ------------------------------------------------------------------ *
@@ -74,7 +76,7 @@ const PRODUCTION_VERB =
 
 /** "as a pdf", "in word format", "into a deck" — verb-free but unambiguous. */
 const REFERENTIAL_FORM =
-  /\b(?:as|in|into|to)\s+(?:an?\s+)?(?:pdf|document|report|word|docx|excel|spreadsheet|xlsx|ppt|pptx|powerpoint|presentation|slide deck|slides|deck)\b|\b(?:pdf|word|docx|excel|xlsx|ppt|pptx)\s+format\b/i;
+  /\b(?:as|in|into|to)\s+(?:an?\s+)?(?:pdf|document|report|word|docx|excel|spreadsheet|xlsx|csv|ppt|pptx|powerpoint|presentation|slide deck|slides|deck)\b|\b(?:pdf|word|docx|excel|xlsx|csv|ppt|pptx)\s+format\b/i;
 
 // Intent lives in the instruction, which sits at the very start ("generate a
 // pdf of the following: <10k of pasted data>") or occasionally at the very end
@@ -106,17 +108,21 @@ Reply with ONLY this JSON object:
 {
   "intent": "REPLACE" | "AUGMENT" | "NONE",
   "format": ${DOCUMENT_FORMATS.map((f) => `"${f}"`).join(" | ")},
-  "title": string,            // short document title, "" when intent is NONE
-  "useLastAnswer": boolean,   // true if the document should be built from the previous assistant answer
-  "confidence": number        // 0.0 - 1.0
+  "title": string,               // short document title, "" when intent is NONE
+  "useLastAnswer": boolean,      // true if the document should be built from the previous assistant answer
+  "confidence": number,          // 0.0 - 1.0
+  "requiresCurrentData": boolean // see below — "" / false when intent is NONE
 }
 
 Choosing "format" — report what the user ASKED FOR, never what you think is best:
 - "PDF"  — "pdf", or any request for a document/report/write-up with no format named. This is the default.
 - "DOCX" — "word", "word file", "doc file", "docx", "editable document".
 - "PPTX" — "ppt", "powerpoint", "pptx", "presentation", "slide deck", "slides".
-- "XLSX" — "excel", "spreadsheet", "xlsx", "sheet", "csv".
+- "XLSX" — "excel", "spreadsheet", "xlsx", "sheet".
+- "CSV"  — "csv", "comma separated", "comma-separated values". Do NOT use XLSX for these — they are different files.
 When no format is named at all, answer "PDF".
+
+Choosing "requiresCurrentData" — set true when accurately answering the request needs facts that are current, recent, or change over time, which you cannot verify with certainty: this month's or this year's statistics, best-sellers or rankings "right now", live prices, sports scores, ongoing events, recent news. Set false for facts that are stable regardless of when they are answered (how something works, historical events, established concepts). This is judged independently of intent and format.
 
 Meaning of each intent:
 - "REPLACE": the message ONLY asks for a file. Nothing else is being asked.
@@ -144,6 +150,7 @@ const intentSchema = Joi.object({
   title: Joi.string().allow("").max(200).default(""),
   useLastAnswer: Joi.boolean().default(false),
   confidence: Joi.number().min(0).max(1).default(0.5),
+  requiresCurrentData: Joi.boolean().default(false),
 });
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
@@ -287,6 +294,17 @@ export const buildDocumentSystemNote = (
     const requestedLabel = DOCUMENT_FORMAT_META[intent.format].label;
     lines.push(
       `IMPORTANT: the user asked for a ${requestedLabel}, which this platform cannot generate yet. A ${effectiveLabel} is being produced instead. State this plainly in one sentence — do not pretend the ${requestedLabel} was created, and do not apologise at length.`,
+    );
+  }
+
+  if (!opts.sourceAlreadyExists && intent.requiresCurrentData) {
+    const isSpreadsheet =
+      opts.effectiveFormat === "XLSX" || opts.effectiveFormat === "CSV";
+    lines.push(
+      "This topic depends on current, recent or time-sensitive facts you cannot verify with certainty (up-to-date figures, rankings, prices, or ongoing events). Do not state specific numbers, rankings or statistics as verified fact unless you are certain they are current and correct — say plainly that a figure is an estimate, or that you do not have verified current data for it, rather than presenting an invented number with false confidence." +
+        (isSpreadsheet
+          ? " This matters more than usual here: your answer becomes spreadsheet cells with real number formatting and totals, which makes an uncertain figure look authoritative. Prefer a clearly-labelled estimate — or omitting the number — over a precise-looking invented one."
+          : ""),
     );
   }
 

@@ -16,13 +16,14 @@ export const DOCUMENT_THEMES: DocumentTheme[] = [
 ];
 
 /** Mirrors `GeneratedDocumentFormat` in schema.prisma. */
-export type DocumentFormat = "PDF" | "DOCX" | "PPTX" | "XLSX";
+export type DocumentFormat = "PDF" | "DOCX" | "PPTX" | "XLSX" | "CSV";
 
 export const DOCUMENT_FORMATS: DocumentFormat[] = [
   "PDF",
   "DOCX",
   "PPTX",
   "XLSX",
+  "CSV",
 ];
 
 export interface DocumentFormatMeta {
@@ -64,6 +65,11 @@ export const DOCUMENT_FORMAT_META: Record<DocumentFormat, DocumentFormatMeta> = 
     extension: "xlsx",
     mimeType:
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  },
+  CSV: {
+    label: "CSV file",
+    extension: "csv",
+    mimeType: "text/csv",
   },
 };
 
@@ -148,7 +154,77 @@ export interface PresentationSpec {
   slides: SlideSpec[];
 }
 
-export type AnySpec = DocumentSpec | PresentationSpec;
+/* ------------------------------------------------------------------ *
+ * Workbooks
+ *
+ * The one spec that shares nothing with `DocumentBlock`, because blocks are
+ * prose-shaped: every value in them is a string. A spreadsheet cell has a
+ * TYPE, and that type is the whole point — a number written as text is
+ * left-aligned, uncountable, and makes SUM() return 0.
+ *
+ * Formulas are declarative (`total: "sum"`) rather than authored by the model.
+ * The renderer turns that into `=SUM(B2:B11)`, for the same reason the model
+ * never emits HTML: model-authored code in the user's Excel is not something
+ * we can validate.
+ * ------------------------------------------------------------------ */
+
+export type CellValue = string | number | boolean | null;
+
+export type ColumnType =
+  | "text"
+  | "number"
+  | "currency"
+  | "percent"
+  | "date";
+
+export const COLUMN_TYPES: ColumnType[] = [
+  "text",
+  "number",
+  "currency",
+  "percent",
+  "date",
+];
+
+export type ColumnTotal = "sum" | "average" | "count";
+
+export const COLUMN_TOTALS: ColumnTotal[] = ["sum", "average", "count"];
+
+export interface SheetColumn {
+  header: string;
+  type?: ColumnType;
+  /** Width in characters. Derived from the content when absent. */
+  width?: number;
+  /** Adds a totals row; the renderer writes the formula, not the model. */
+  total?: ColumnTotal;
+}
+
+export interface SheetSpec {
+  name: string;
+  columns: SheetColumn[];
+  rows: CellValue[][];
+  freezeHeader?: boolean;
+  /** Attached as a note on A1 rather than a row, so the grid stays clean. */
+  notes?: string;
+}
+
+export interface WorkbookSpec {
+  title: string;
+  author?: string;
+  sheets: SheetSpec[];
+}
+
+export type AnySpec = DocumentSpec | PresentationSpec | WorkbookSpec;
+
+/**
+ * Excel's own limits, not ours: a sheet name over 31 characters or containing
+ * any of []:*?/\ makes Excel declare the file corrupt and "repair" it.
+ */
+export const MAX_SHEET_NAME_CHARS = 31;
+export const ILLEGAL_SHEET_NAME_CHARS = /[[\]:*?/\\]/g;
+
+export const MAX_SHEETS = 10;
+export const MAX_SHEET_ROWS = 2000;
+export const MAX_SHEET_COLUMNS = 30;
 
 /**
  * Which spec shape a format's model call produces and its renderer consumes.
@@ -157,19 +233,30 @@ export type AnySpec = DocumentSpec | PresentationSpec;
  * the validator and the renderer signature, so it is the real fork in the
  * pipeline. XLSX will need a third kind; PDF and DOCX share the first.
  */
-export type SpecKind = "document" | "presentation";
+export type SpecKind = "document" | "presentation" | "workbook";
 
 export const FORMAT_SPEC_KIND: Record<DocumentFormat, SpecKind> = {
   PDF: "document",
   DOCX: "document",
   PPTX: "presentation",
-  // Placeholder until XLSX gets its own sheet-shaped spec; it has no renderer,
-  // so nothing reads this yet.
-  XLSX: "document",
+  XLSX: "workbook",
+  // CSV shares the workbook spec — a CSV is just one flat sheet of it,
+  // rendered by a format-specific renderer rather than a different spec.
+  CSV: "workbook",
 };
 
 export const isPresentationSpec = (spec: AnySpec): spec is PresentationSpec =>
   Array.isArray((spec as PresentationSpec).slides);
+
+export const isWorkbookSpec = (spec: AnySpec): spec is WorkbookSpec =>
+  Array.isArray((spec as WorkbookSpec).sheets);
+
+export const specKindOf = (spec: AnySpec): SpecKind =>
+  isPresentationSpec(spec)
+    ? "presentation"
+    : isWorkbookSpec(spec)
+      ? "workbook"
+      : "document";
 
 export const MAX_SLIDES = 60;
 export const MAX_BLOCKS_PER_SLIDE = 8;

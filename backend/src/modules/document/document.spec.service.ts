@@ -1,14 +1,19 @@
 import { createOpenRouterJsonCompletion } from "@/utils/openrouter.js";
 import { dlog, dlogBlock, dlogError } from "./document.logger.js";
 import {
-  pruneInvalidBlocks,
+  pruneInvalidEntries,
   validateSpecForKind,
 } from "./document.validators.js";
 import {
   isPresentationSpec,
+  isWorkbookSpec,
   MAX_BLOCKS,
   MAX_BLOCKS_PER_SLIDE,
   MAX_NOTES_CHARS,
+  MAX_SHEET_COLUMNS,
+  MAX_SHEET_NAME_CHARS,
+  MAX_SHEET_ROWS,
+  MAX_SHEETS,
   MAX_SLIDES,
   MAX_SOURCE_TEXT_CHARS,
   type AnySpec,
@@ -122,12 +127,63 @@ Composition rules — these are what separate a deck from a sliced-up document:
 - Put the detail a presenter would SAY in "notes", not on the slide. A slide the audience must read in full is a failed slide.
 - Tables on slides must be small — at most 5 columns and 8 rows. Summarise rather than dump.`;
 
+const WORKBOOK_SYSTEM_PROMPT = `You are a spreadsheet composition engine. You convert a user's request into a structured workbook specification that a rendering engine turns into a spreadsheet file (Excel or CSV).
+
+Return ONLY a JSON object matching this schema:
+
+{
+  "title": string,                      // required, max 200 chars
+  "author": string,                     // optional
+  "sheets": Sheet[]                     // required, 1..${MAX_SHEETS} items
+}
+
+Sheet is:
+{
+  "name": string,                       // required, max ${MAX_SHEET_NAME_CHARS} chars, must NOT contain [ ] : * ? / \\
+  "columns": Column[],                  // required, 1..${MAX_SHEET_COLUMNS}
+  "rows": Cell[][],                     // required, 0..${MAX_SHEET_ROWS} rows
+  "freezeHeader": boolean,              // optional, default true
+  "notes": string                       // optional, max 1000 chars
+}
+
+Column is:
+{
+  "header": string,                                                   // required
+  "type": "text"|"number"|"currency"|"percent"|"date",                // optional, default "text"
+  "width": number,                                                    // optional, characters
+  "total": "sum"|"average"|"count"                                    // optional, adds a totals row
+}
+
+Cell is a string, a number, a boolean, or null. null means an empty cell.
+
+Hard rules:
+- Output raw JSON only. No markdown fences, no commentary.
+- NEVER write formulas. Do not emit any value starting with "=". To total a column, set "total" on that column and the renderer writes the formula.
+- Every row must have exactly as many cells as the sheet has columns. Use null for blanks.
+- Emit numbers as JSON NUMBERS, not strings. Write 1234.5, never "1,234.50" and never "$1,234.50". The column "type" controls how it is displayed.
+- For "percent" columns emit the NUMBER OF PERCENT: write 12.5 to mean 12.5%. Do not write 0.125.
+- For "date" columns use ISO format: "2026-08-12".
+- Sheet names must be unique and describe their contents ("Revenue by Quarter", not "Sheet1").
+
+Choosing what goes in the spreadsheet:
+- NEVER invent numeric data. If the source material contains no figures, build the correct column headers and leave the rows empty (or omit rows entirely) so the user has a template to fill in. A spreadsheet of plausible-looking invented numbers is worse than an empty one, because numbers in a grid look authoritative.
+- You may always derive columns and labels from the material; the prohibition is on fabricating VALUES that were not given to you.
+- If the source is not already tabular — an article, an explanation, a process — find the genuinely tabular structure inside it: entities and their attributes, steps and their descriptions, options and their trade-offs, terms and their definitions.
+- Do NOT pour paragraphs into cells. A cell holds a value or a short phrase, not prose.
+- Prefer several focused sheets over one wide sheet when the material covers distinct subjects.
+- Set "total" only on columns where a sum, average or count is genuinely meaningful. Never total an identifier, a year, or a percentage.`;
+
 const buildUserContent = (
   kind: SpecKind,
   prompt: string,
   sourceText?: string | null,
 ): string => {
-  const noun = kind === "presentation" ? "presentation" : "document";
+  const noun =
+    kind === "presentation"
+      ? "presentation"
+      : kind === "workbook"
+        ? "spreadsheet"
+        : "document";
   const trimmedSource = sourceText?.trim();
   if (!trimmedSource) {
     return `Create a ${noun} for this request:\n\n${prompt}`;
@@ -183,7 +239,9 @@ export const generateSpec = async (
   const systemPrompt =
     kind === "presentation"
       ? PRESENTATION_SYSTEM_PROMPT
-      : DOCUMENT_SYSTEM_PROMPT;
+      : kind === "workbook"
+        ? WORKBOOK_SYSTEM_PROMPT
+        : DOCUMENT_SYSTEM_PROMPT;
   const model = getSpecModel();
 
   for (let attempt = 1; attempt <= MAX_SPEC_ATTEMPTS; attempt += 1) {
@@ -251,7 +309,7 @@ export const generateSpec = async (
       // comes back shorter, so salvaging a handful of bad blocks preserves
       // more content than the "fix" would.
       if (error) {
-        const prune = pruneInvalidBlocks(kind, parsed);
+        const prune = pruneInvalidEntries(kind, parsed);
         const ratio = prune.total > 0 ? prune.dropped / prune.total : 1;
 
         if (prune.dropped > 0 && ratio <= MAX_SALVAGE_RATIO) {
@@ -276,9 +334,11 @@ export const generateSpec = async (
 
       if (!error) {
         const spec = value as AnySpec;
-        const blocks = isPresentationSpec(spec)
-          ? spec.slides.flatMap((slide) => slide.blocks)
-          : spec.blocks;
+        const blocks = isWorkbookSpec(spec)
+          ? []
+          : isPresentationSpec(spec)
+            ? spec.slides.flatMap((slide) => slide.blocks)
+            : spec.blocks;
         const blockCounts = blocks.reduce<Record<string, number>>((acc, b) => {
           acc[b.type] = (acc[b.type] ?? 0) + 1;
           return acc;
@@ -286,18 +346,27 @@ export const generateSpec = async (
 
         dlogBlock(
           "spec:valid",
-          `spec accepted on attempt ${attempt}${salvaged ? ` (after salvaging ${salvaged} block(s))` : ""}`,
+          `spec accepted on attempt ${attempt}${salvaged ? ` (after salvaging ${salvaged} entr${salvaged === 1 ? "y" : "ies"})` : ""}`,
           {
-          kind,
-          salvagedBlocks: salvaged,
-          title: spec.title,
-          subtitle: spec.subtitle,
-          ...(isPresentationSpec(spec)
-            ? {
-                totalSlides: spec.slides.length,
-                slideTitles: spec.slides.map((slide) => slide.title),
-              }
-            : { coverPage: spec.coverPage }),
+            kind,
+            salvagedEntries: salvaged,
+            title: spec.title,
+            ...(isWorkbookSpec(spec)
+              ? {
+                  totalSheets: spec.sheets.length,
+                  sheets: spec.sheets.map((sheet) => ({
+                    name: sheet.name,
+                    columns: sheet.columns.length,
+                    rows: sheet.rows.length,
+                  })),
+                }
+              : isPresentationSpec(spec)
+                ? {
+                    subtitle: spec.subtitle,
+                    totalSlides: spec.slides.length,
+                    slideTitles: spec.slides.map((slide) => slide.title),
+                  }
+                : { subtitle: spec.subtitle, coverPage: spec.coverPage }),
             totalBlocks: blocks.length,
             blockCounts,
             promptTokens,

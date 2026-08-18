@@ -209,3 +209,7 @@ export const supportService = {
   updateStatus: (id: number, status: string) =>
     api.patch(`/support/${id}/status`, { status }),
 };
+
+export const adminService = {
+  getOverview: () => api.get("/admin/overview"),
+};

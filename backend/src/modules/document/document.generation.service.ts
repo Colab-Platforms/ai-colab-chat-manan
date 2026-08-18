@@ -6,12 +6,13 @@ import { generateSpec } from "./document.spec.service.js";
 import {
   DOCUMENT_FORMAT_META,
   FORMAT_SPEC_KIND,
-  isPresentationSpec,
+  specKindOf,
   type AnySpec,
   type DocumentFormat,
   type DocumentSpec,
   type DocumentTheme,
   type PresentationSpec,
+  type WorkbookSpec,
 } from "./document.types.js";
 
 const MAX_ATTEMPTS = Number(process.env.DOCUMENT_MAX_ATTEMPTS ?? 3);
@@ -161,19 +162,24 @@ export const processDocument = async (id: number): Promise<void> => {
     // A stored spec from an older row could be the wrong shape for this
     // format's renderer — check rather than trust, since the alternative is a
     // crash deep inside the renderer on a missing field.
-    const specIsPresentation = isPresentationSpec(spec!);
-    if (specIsPresentation !== (renderer.kind === "presentation")) {
+    const storedKind = specKindOf(spec!);
+    if (storedKind !== renderer.kind) {
       throw new Error(
-        `Stored spec is a ${specIsPresentation ? "presentation" : "document"} spec but ${format} needs a ${renderer.kind} spec.`,
+        `Stored spec is a ${storedKind} spec but ${format} needs a ${renderer.kind} spec.`,
       );
     }
 
     const theme = document.theme as DocumentTheme;
-    const fileBuffer = await dtime("worker", `job=${id} ${format} render`, () =>
-      renderer.kind === "presentation"
-        ? renderer.render(spec as PresentationSpec, theme)
-        : renderer.render(spec as DocumentSpec, theme),
-    );
+    const fileBuffer = await dtime("worker", `job=${id} ${format} render`, () => {
+      switch (renderer.kind) {
+        case "presentation":
+          return renderer.render(spec as PresentationSpec, theme);
+        case "workbook":
+          return renderer.render(spec as WorkbookSpec, theme);
+        default:
+          return renderer.render(spec as DocumentSpec, theme);
+      }
+    });
 
     // Named rather than left to Cloudinary's random id: this string becomes the
     // URL basename, and the URL basename is what the browser actually saves as

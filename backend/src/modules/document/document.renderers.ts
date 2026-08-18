@@ -1,12 +1,15 @@
 import { renderSpecToPdf } from "./document.pdf.js";
 import { renderSpecToDocx } from "./document.docx.js";
 import { renderSpecToPptx } from "./document.pptx.js";
+import { renderSpecToXlsx } from "./document.xlsx.js";
+import { renderSpecToCsv } from "./document.csv.js";
 import {
   DOCUMENT_FORMATS,
   type DocumentFormat,
   type DocumentSpec,
   type DocumentTheme,
   type PresentationSpec,
+  type WorkbookSpec,
 } from "./document.types.js";
 
 /**
@@ -31,6 +34,10 @@ export type RendererEntry =
   | {
       kind: "presentation";
       render: (spec: PresentationSpec, theme: DocumentTheme) => Promise<Buffer>;
+    }
+  | {
+      kind: "workbook";
+      render: (spec: WorkbookSpec, theme: DocumentTheme) => Promise<Buffer>;
     };
 
 /**
@@ -45,6 +52,8 @@ const RENDERERS: Partial<Record<DocumentFormat, RendererEntry>> = {
   PDF: { kind: "document", render: renderSpecToPdf },
   DOCX: { kind: "document", render: renderSpecToDocx },
   PPTX: { kind: "presentation", render: renderSpecToPptx },
+  XLSX: { kind: "workbook", render: renderSpecToXlsx },
+  CSV: { kind: "workbook", render: renderSpecToCsv },
 };
 
 export const isFormatSupported = (format: DocumentFormat): boolean =>

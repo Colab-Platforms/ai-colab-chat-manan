@@ -1,8 +1,14 @@
 import Joi from "joi";
 import {
+  COLUMN_TOTALS,
+  COLUMN_TYPES,
   DOCUMENT_FORMATS,
   DOCUMENT_THEMES,
   MAX_BLOCKS,
+  MAX_SHEET_COLUMNS,
+  MAX_SHEET_NAME_CHARS,
+  MAX_SHEET_ROWS,
+  MAX_SHEETS,
   MAX_BLOCKS_PER_SLIDE,
   MAX_NOTES_CHARS,
   MAX_SLIDES,
@@ -245,37 +251,106 @@ export const validatePresentationSpec = (data: unknown) => {
   });
 };
 
+/* ------------------------------------------------------------------ *
+ * Workbook spec
+ * ------------------------------------------------------------------ */
+
+/**
+ * A cell is a scalar, never an object or array.
+ *
+ * `null` is meaningful and must be allowed: it is how the model says "this
+ * cell is empty", which the template behaviour depends on.
+ */
+const cellSchema = Joi.alternatives().try(
+  Joi.string().allow("").max(2000),
+  Joi.number(),
+  Joi.boolean(),
+  Joi.valid(null),
+);
+
+const sheetColumnSchema = Joi.object({
+  header: Joi.string().trim().allow("").max(200).required(),
+  type: Joi.string()
+    .valid(...COLUMN_TYPES)
+    .allow(null)
+    .optional(),
+  width: Joi.number().min(4).max(120).allow(null).optional(),
+  total: Joi.string()
+    .valid(...COLUMN_TOTALS)
+    .allow(null)
+    .optional(),
+});
+
+const sheetSchema = Joi.object({
+  // Length and character rules are enforced here so a bad name is a
+  // correctable validation error rather than a workbook Excel refuses to open.
+  name: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_SHEET_NAME_CHARS)
+    .required()
+    .messages({
+      "string.max": `Sheet name must be ${MAX_SHEET_NAME_CHARS} characters or fewer (an Excel limit)`,
+    }),
+  columns: Joi.array()
+    .items(sheetColumnSchema)
+    .min(1)
+    .max(MAX_SHEET_COLUMNS)
+    .required(),
+  rows: Joi.array()
+    .items(Joi.array().items(cellSchema).max(MAX_SHEET_COLUMNS))
+    .max(MAX_SHEET_ROWS)
+    .required(),
+  freezeHeader: Joi.boolean().allow(null).optional(),
+  notes: optionalText(1000),
+});
+
+export const workbookSpecSchema = Joi.object({
+  title: Joi.string().trim().max(MAX_TITLE_CHARS).required(),
+  author: optionalText(200),
+  sheets: Joi.array().items(sheetSchema).min(1).max(MAX_SHEETS).required(),
+});
+
+export const validateWorkbookSpec = (data: unknown) => {
+  return workbookSpecSchema.validate(data, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+};
+
 /** Dispatches to the right validator for the format's spec kind. */
-export const validateSpecForKind = (kind: SpecKind, data: unknown) =>
-  kind === "presentation"
-    ? validatePresentationSpec(data)
-    : validateDocumentSpec(data);
+export const validateSpecForKind = (kind: SpecKind, data: unknown) => {
+  if (kind === "presentation") return validatePresentationSpec(data);
+  if (kind === "workbook") return validateWorkbookSpec(data);
+  return validateDocumentSpec(data);
+};
 
 /* ------------------------------------------------------------------ *
  * Salvage
  * ------------------------------------------------------------------ */
 
 export interface PruneResult {
-  /** The spec with invalid blocks removed. Unchanged when nothing failed. */
+  /** The spec with invalid entries removed. Unchanged when nothing failed. */
   spec: unknown;
   dropped: number;
   total: number;
-  /** Human-readable reason per dropped block, for the log. */
+  /** Human-readable reason per dropped entry, for the log. */
   reasons: string[];
 }
 
 /**
- * Removes the individual blocks that fail validation, leaving the rest intact.
+ * Removes the individual entries that fail validation, leaving the rest intact.
+ * Blocks for documents and slides, table rows for workbooks.
  *
  * Exists because a whole-spec retry is a *reroll*, not a repair: the model
- * regenerates from scratch and typically returns a shorter document, so two
- * bad blocks out of 150 can cost half the content plus a second full model
- * call. Dropping the bad blocks keeps everything else and costs nothing.
+ * regenerates from scratch and typically returns less content, so two bad
+ * blocks out of 150 can cost half the document plus a second full model call.
+ * Dropping the bad entries keeps everything else and costs nothing.
  *
- * Only meaningful for block-level failures — a spec missing its title prunes
+ * Only meaningful for entry-level failures — a spec missing its title prunes
  * nothing, reports `dropped: 0`, and the caller falls through to a real retry.
  */
-export const pruneInvalidBlocks = (
+export const pruneInvalidEntries = (
   kind: SpecKind,
   data: unknown,
 ): PruneResult => {
@@ -283,14 +358,15 @@ export const pruneInvalidBlocks = (
   let dropped = 0;
   let total = 0;
 
-  const validator =
-    kind === "presentation" ? slideBlockSchema : blockSchema;
-
-  const filterBlocks = (blocks: unknown, label: string): unknown[] => {
-    if (!Array.isArray(blocks)) return [];
-    return blocks.filter((block, index) => {
+  const filterWith = (
+    schema: Joi.Schema,
+    entries: unknown,
+    label: string,
+  ): unknown[] => {
+    if (!Array.isArray(entries)) return [];
+    return entries.filter((entry, index) => {
       total += 1;
-      const { error } = validator.validate(block);
+      const { error } = schema.validate(entry);
       if (!error) return true;
       dropped += 1;
       reasons.push(`${label}[${index}]: ${error.message}`);
@@ -298,32 +374,54 @@ export const pruneInvalidBlocks = (
     });
   };
 
-  if (!data || typeof data !== "object") {
-    return { spec: data, dropped: 0, total: 0, reasons };
-  }
+  const untouched = { spec: data, dropped: 0, total: 0, reasons };
+  if (!data || typeof data !== "object") return untouched;
 
   if (kind === "presentation") {
     const source = data as { slides?: unknown };
-    if (!Array.isArray(source.slides)) {
-      return { spec: data, dropped: 0, total: 0, reasons };
-    }
+    if (!Array.isArray(source.slides)) return untouched;
+
     const slides = source.slides.map((slide, slideIndex) => {
       if (!slide || typeof slide !== "object") return slide;
       const typed = slide as { blocks?: unknown };
       return {
         ...typed,
-        blocks: filterBlocks(typed.blocks, `slides[${slideIndex}].blocks`),
+        blocks: filterWith(
+          slideBlockSchema,
+          typed.blocks,
+          `slides[${slideIndex}].blocks`,
+        ),
       };
     });
     return { spec: { ...source, slides }, dropped, total, reasons };
   }
 
-  const source = data as { blocks?: unknown };
-  if (!Array.isArray(source.blocks)) {
-    return { spec: data, dropped: 0, total: 0, reasons };
+  if (kind === "workbook") {
+    const source = data as { sheets?: unknown };
+    if (!Array.isArray(source.sheets)) return untouched;
+
+    // Rows are the workbook's repeating unit — one malformed row out of 200
+    // should not force a reroll of the whole sheet.
+    const rowSchema = Joi.array().items(cellSchema).max(MAX_SHEET_COLUMNS);
+    const sheets = source.sheets.map((sheet, sheetIndex) => {
+      if (!sheet || typeof sheet !== "object") return sheet;
+      const typed = sheet as { rows?: unknown };
+      return {
+        ...typed,
+        rows: filterWith(
+          rowSchema,
+          typed.rows,
+          `sheets[${sheetIndex}].rows`,
+        ),
+      };
+    });
+    return { spec: { ...source, sheets }, dropped, total, reasons };
   }
+
+  const source = data as { blocks?: unknown };
+  if (!Array.isArray(source.blocks)) return untouched;
   return {
-    spec: { ...source, blocks: filterBlocks(source.blocks, "blocks") },
+    spec: { ...source, blocks: filterWith(blockSchema, source.blocks, "blocks") },
     dropped,
     total,
     reasons,
