@@ -15,6 +15,15 @@ export interface UploadOptions {
   format?: string;
   quality?: string;
   moderation?: string;
+  /**
+   * Explicit Cloudinary public_id (relative to `folder`, no extension).
+   *
+   * Worth setting for anything a user downloads: browsers ignore the `download`
+   * attribute on cross-origin links, so the saved filename is always the URL's
+   * basename — which is Cloudinary's random id unless we name it here.
+   * Must be unique per file, since a repeat overwrites the earlier upload.
+   */
+  publicId?: string;
 }
 
 const normalizeModerationStatuses = (
@@ -43,6 +52,7 @@ export const uploadToCloudinary = async (
     format,
     quality,
     moderation,
+    publicId,
   } = options;
 
   if (typeof file === "string") {
@@ -52,6 +62,7 @@ export const uploadToCloudinary = async (
       format,
       quality,
       moderation,
+      ...(publicId ? { public_id: publicId, overwrite: true } : {}),
     });
     return {
       url: result.secure_url,
@@ -67,6 +78,7 @@ export const uploadToCloudinary = async (
           format,
           quality,
           moderation,
+          ...(publicId ? { public_id: publicId, overwrite: true } : {}),
         },
         (error, result?: UploadApiResponse) => {
           if (error || !result)

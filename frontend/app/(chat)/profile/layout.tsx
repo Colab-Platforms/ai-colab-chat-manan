@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
 import {
   LayoutDashboard, Wallet, CreditCard, BarChart3,
-  UserCircle, Users, Bot, Building, CreditCard as PlansIcon,
-  ArrowLeft, Menu, X, Archive, Settings, LifeBuoy,
+  UserCircle, ArrowLeft, Menu, X, Archive, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,21 +26,10 @@ const userNav = [
   { label: "Preferences", href: "/profile/preferences", icon: Settings },
 ];
 
-const adminNav = [
-  { label: "Users", href: "/profile/users", icon: Users },
-  { label: "Plans", href: "/profile/plans", icon: PlansIcon },
-  { label: "Models", href: "/profile/models", icon: Bot },
-  { label: "Assistants", href: "/profile/assistants", icon: Bot },
-  { label: "Providers", href: "/profile/providers", icon: Building },
-  { label: "Usage", href: "/profile/usage", icon: BarChart3 },
-  { label: "Support", href: "/profile/support", icon: LifeBuoy },
-];
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, hasRole } = useAuth();
+  const { user, isLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const isAdmin = hasRole("ADMIN") || hasRole("SUPERADMIN");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -50,11 +38,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (saved === "true") setCollapsed(true);
   }, []);
 
-  const isAdminRoute = adminNav.some(item => pathname === item.href);
-
   useEffect(() => {
     if (isLoading) return;
-    
+
     if (!user) {
       // Check if this was an intentional logout — if so, go to the landing
       // page rather than /login with a redirect parameter.
@@ -66,23 +52,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return;
       }
 
-      // Unauthenticated direct URL access: send to login with redirect.
-      // Admin routes are excluded so a non-admin logging in next doesn't
-      // land on an admin-only page.
-      if (isAdminRoute) {
-        router.replace("/login");
-      } else {
-        const redirectTo = pathname || "/profile";
-        router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
-      }
-      return;
+      const redirectTo = pathname || "/profile";
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
     }
-
-    // Role-based access control: block non-admins from admin routes
-    if (isAdminRoute && !isAdmin) {
-      router.replace("/404");
-    }
-  }, [user, isLoading, router, pathname, isAdminRoute, isAdmin]);
+  }, [user, isLoading, router, pathname]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -100,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <TooltipTrigger asChild>
           <Link href="#" onClick={(e) => {
             e.preventDefault();
-            const lastPath = localStorage.getItem("last_chat_path") || "/";
+            const lastPath = localStorage.getItem("last_chat_path") || "/home";
             router.push(lastPath);
           }}>
             <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded-lg cursor-pointer">
@@ -137,35 +110,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Tooltip>
         );
       })}
-
-      {isAdmin && (
-        <>
-          <div className="w-8 h-px bg-border/50 my-2" />
-          {adminNav.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Tooltip key={item.href}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-9 w-9 rounded-lg cursor-pointer ${
-                        isActive
-                          ? "bg-primary/15 text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
-                      }`}
-                    >
-                      <item.icon className="w-4 h-4" />
-                    </Button>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">{item.label}</TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </>
-      )}
     </>
   );
 
@@ -177,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Link href="#" onClick={(e) => {
           e.preventDefault();
           setMobileOpen(false);
-          const lastPath = localStorage.getItem("last_chat_path") || "/";
+          const lastPath = localStorage.getItem("last_chat_path") || "/home";
           router.push(lastPath);
         }}>
           <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground justify-start cursor-pointer w-full">
@@ -208,32 +152,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           );
         })}
-
-        {isAdmin && (
-          <>
-            <div className="pt-4 pb-1">
-              <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Admin</p>
-            </div>
-            {adminNav.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer
-                    ${isActive
-                      ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
-                    }`}
-                >
-                  <item.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </>
-        )}
       </nav>
     </>
   );
@@ -262,7 +180,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </AppSidebar>
   );
 
-  if (!user || (isAdminRoute && !isAdmin)) {
+  if (!user) {
     return null;
   }
 

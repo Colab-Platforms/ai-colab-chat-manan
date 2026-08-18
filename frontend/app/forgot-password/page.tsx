@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/");
+      router.replace("/home");
     }
   }, [user, router]);
 

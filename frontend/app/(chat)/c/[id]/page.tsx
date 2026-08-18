@@ -471,6 +471,37 @@ export default function ChatPage() {
                 toast.error(
                   `${modelsRef.current.find((m) => m.id === mid)?.name || "Model"}: ${errorMessage}`,
                 );
+              } else if (parsed.type === "document_started") {
+                // Generation outlives this SSE connection, so we only attach a
+                // PENDING placeholder here — DocumentCard polls it to completion
+                // on its own, leaving the user free to keep chatting.
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === currentMsgId
+                      ? {
+                          ...msg,
+                          modelResponses: msg.modelResponses?.map((mr: any) =>
+                            mr.model.id === mid
+                              ? {
+                                  ...mr,
+                                  generatedDocuments: [
+                                    ...(mr.generatedDocuments || []).filter(
+                                      (d: any) => d.id !== parsed.documentId,
+                                    ),
+                                    {
+                                      id: parsed.documentId,
+                                      status: "PENDING",
+                                      format: parsed.format || "PDF",
+                                      title: parsed.title || "Document",
+                                    },
+                                  ],
+                                }
+                              : mr,
+                          ),
+                        }
+                      : msg,
+                  ),
+                );
               } else if (parsed.type === "done") {
                 // Capture final usage/meta; actual state update happens after stream ends.
                 lastDonePayload = parsed;

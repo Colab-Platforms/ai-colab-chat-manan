@@ -38,7 +38,7 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 };
 
 export default function LoginPage() {
-  const { login, verifyEmailOtp, resendEmailOtp, user } = useAuth();
+  const { login, verifyEmailOtp, resendEmailOtp, user, hasRole } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<"login" | "verify">("login");
@@ -54,7 +54,7 @@ export default function LoginPage() {
 
   const startGoogleLogin = () => {
     const redirect = searchParams.get("redirect");
-    const redirectPath = redirect && redirect.startsWith("/") ? redirect : "/";
+    const redirectPath = redirect && redirect.startsWith("/") ? redirect : "/home";
     const apiBaseUrl = (
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
     ).replace(/\/+$/, "");
@@ -65,10 +65,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
+      if (hasRole("ADMIN") || hasRole("SUPERADMIN")) {
+        router.replace("/admin");
+        return;
+      }
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     }
-  }, [user, router, searchParams]);
+  }, [user, router, searchParams, hasRole]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -94,8 +98,12 @@ export default function LoginPage() {
         return;
       }
       toast.success("Login successful!");
+      if (result.isAdmin) {
+        router.replace("/admin");
+        return;
+      }
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Login failed"));
     } finally {
@@ -114,8 +122,12 @@ export default function LoginPage() {
         return;
       }
       toast.success("Email verified. Login successful!");
+      if (result.isAdmin) {
+        router.replace("/admin");
+        return;
+      }
       const redirect = searchParams.get("redirect");
-      router.replace(redirect && redirect.startsWith("/") ? redirect : "/");
+      router.replace(redirect && redirect.startsWith("/") ? redirect : "/home");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "OTP verification failed"));
     } finally {

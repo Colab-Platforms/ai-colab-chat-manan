@@ -8,6 +8,7 @@ import {
   FileText, File, Image as ImageIcon, Star, FileSpreadsheet
 } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { DocumentCard, type GeneratedDocument } from "./document-card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
 import useEmblaCarousel from "embla-carousel-react";
@@ -23,6 +24,9 @@ interface ModelResponse {
   isLiked?: boolean | null;
   isStarred?: boolean;
   finishReason?: string | null;
+  // Attached per response, not per message: in compare mode each model's
+  // answer produces its own document.
+  generatedDocuments?: GeneratedDocument[];
 }
 
 function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
@@ -446,6 +450,10 @@ export const MessageBubble = React.memo(function MessageBubble({
             )}
           </div>
 
+          {singleResp?.generatedDocuments?.map((generatedDocument) => (
+            <DocumentCard key={generatedDocument.id} document={generatedDocument} />
+          ))}
+
           {isLastMessage && singleResp?.status === "COMPLETED" && parsedSingle.questions.length > 0 && onFollowUpClick && (
             <FollowUpTabs questions={parsedSingle.questions} onClick={onFollowUpClick} />
           )}
@@ -595,6 +603,18 @@ export const MessageBubble = React.memo(function MessageBubble({
                           <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
                         ) : null}
                       </div>
+
+                      {resp?.generatedDocuments?.length ? (
+                        <div className="px-3 pb-1">
+                          {resp.generatedDocuments.map((generatedDocument) => (
+                            <DocumentCard
+                              key={generatedDocument.id}
+                              document={generatedDocument}
+                              className="max-w-full"
+                            />
+                          ))}
+                        </div>
+                      ) : null}
 
                       {isLastMessage && resp?.status === "COMPLETED" && parsedMulti.questions.length > 0 && onFollowUpClick && (
                         <div className="px-3 pb-2 pt-1">

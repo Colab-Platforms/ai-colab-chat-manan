@@ -21,6 +21,10 @@ import {
   parseSpreadsheetFromUrl,
 } from "@/utils/spreadsheet.js";
 import { parsePdfFromUrl } from "@/utils/pdf.js";
+import {
+  maybeGenerateDocumentFromChat,
+  prepareDocumentTurn,
+} from "@/modules/document/document.chat.js";
 
 const attachmentService = new AttachmentService();
 
@@ -620,6 +624,22 @@ interface SendMessageBody {
   attachmentIds?: number[];
 }
 
+/**
+ * Flattens a history entry's content to plain text.
+ *
+ * History content is either a bare string or the multipart array used for
+ * attachments/images, so the document intent classifier — which only ever
+ * reasons about words — needs the text parts pulled back out.
+ */
+function historyContentToText(content: any): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part: any) => part?.type === "text" && typeof part.text === "string")
+    .map((part: any) => part.text)
+    .join("\n");
+}
+
 function keepOnlyFirstImageMarkdown(content: string): string {
   if (!content) return content;
   const imageMarkdownRegex = /!\[[^\]]*]\(([^)]+)\)/g;
@@ -1123,6 +1143,44 @@ export async function streamChat(req: Request, res: Response) {
     }
     // ---------------------------------------
 
+    // -----------------------------------------------------------------------
+    // Document generation — pre-stream pass.
+    //
+    // Classifying BEFORE the answer streams is what stops the model from
+    // refusing ("I can't create files, paste the text again") while the
+    // pipeline renders the PDF anyway. Gated by a free regex, so ordinary
+    // turns pay nothing; only a real document request costs the extra call.
+    //
+    // Runs before the token budget is computed so the injected note is priced
+    // in rather than pushing the turn over the limit.
+    // -----------------------------------------------------------------------
+    const lastAssistantAnswer = [...conversationHistory]
+      .reverse()
+      .filter((m: any) => m.role === "assistant")
+      .map((m: any) => historyContentToText(m.content))
+      .find((text: string) => text.trim().length > 0);
+
+    const documentTurn = await prepareDocumentTurn({
+      chatId,
+      userPrompt: content,
+      lastAssistantAnswer,
+    });
+
+    if (documentTurn) {
+      // Deliberately NOT unshifted and NOT cache_control'd, unlike the persona
+      // and context blocks: this note changes every turn, so putting it at
+      // index 0 would invalidate the cached prefix behind it on every message.
+      // Slotting it after the stable system block keeps that prefix intact.
+      const firstNonSystem = conversationHistory.findIndex(
+        (m: any) => m.role !== "system" && m.role !== "SYSTEM",
+      );
+      conversationHistory.splice(
+        firstNonSystem === -1 ? conversationHistory.length : firstNonSystem,
+        0,
+        { role: "system", content: documentTurn.systemNote },
+      );
+    }
+
     const tokenLimits = await checkTokenLimitsAndSetupStream(
       res,
       wallet,
@@ -1605,6 +1663,26 @@ export async function streamChat(req: Request, res: Response) {
     });
 
     await maybeEnqueueDistillation(chatId, chat.folderId);
+
+    // Document generation — enqueue pass. Intent was already resolved before
+    // the stream (see prepareDocumentTurn above) and is handed back here, so
+    // the classifier is never paid for twice in one turn. The enqueue itself
+    // still has to wait for the answer, which is the document's source text.
+    const generatedDocument = await maybeGenerateDocumentFromChat({
+      userId,
+      chatId,
+      messageId: assistantMessage.id,
+      modelResponseId: (res as any).modelResponseId,
+      userPrompt: content,
+      assistantAnswer: fullContent,
+      intent: documentTurn?.intent ?? null,
+      effectiveFormat: documentTurn?.effectiveFormat,
+    });
+    if (generatedDocument) {
+      res.write(
+        `data: ${JSON.stringify({ type: "document_started", documentId: generatedDocument.documentId, format: generatedDocument.format, title: generatedDocument.title })}\n\n`,
+      );
+    }
 
     // Send done signal with usage info
     res.write(

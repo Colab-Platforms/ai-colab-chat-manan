@@ -23,7 +23,7 @@ export function setRouteUiFromPathname(pathname: string) {
   const parsed = match ? Number(match[1]) : NaN;
   const nextActiveChatId = Number.isNaN(parsed) ? null : parsed;
   const nextIsStarredRoute = pathname === "/starred";
-  const nextIsDraftRoute = pathname === "/" || pathname === "/new";
+  const nextIsDraftRoute = pathname === "/home" || pathname === "/new";
 
   if (
     state.activeChatId === nextActiveChatId &&

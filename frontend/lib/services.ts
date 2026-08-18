@@ -186,6 +186,21 @@ export const contextService = {
   delete: (id: number) => api.delete(`/contexts/${id}`),
 };
 
+export const documentService = {
+  list: (params?: Record<string, string>) => api.get("/documents", { params }),
+  getById: (id: number) => api.get(`/documents/${id}`),
+  create: (data: {
+    prompt: string;
+    chatId?: number;
+    messageId?: number;
+    title?: string;
+    theme?: string;
+    sourceText?: string;
+  }) => api.post("/documents", data),
+  retry: (id: number) => api.post(`/documents/${id}/retry`),
+  delete: (id: number) => api.delete(`/documents/${id}`),
+};
+
 export const supportService = {
   listTickets: (params?: Record<string, string>) =>
     api.get("/support/tickets", { params }),
@@ -193,4 +208,8 @@ export const supportService = {
     api.get("/support/contact", { params }),
   updateStatus: (id: number, status: string) =>
     api.patch(`/support/${id}/status`, { status }),
+};
+
+export const adminService = {
+  getOverview: () => api.get("/admin/overview"),
 };

@@ -8,7 +8,7 @@ import { useAuth } from "@/context/auth-context";
 
 const getSafeRedirectPath = (value: string | null) => {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/";
+    return "/home";
   }
   return value;
 };
@@ -65,9 +65,9 @@ export default function GoogleAuthCallbackPage() {
           localStorage.removeItem("signup_free_plan_prompt_seen");
         }
 
-        await completeGoogleLogin(token);
+        const { isAdmin } = await completeGoogleLogin(token);
         toast.success("Signed in with Google successfully");
-        router.replace(redirectPath);
+        router.replace(isAdmin ? "/admin" : redirectPath);
       } catch {
         toast.error("Unable to complete Google sign-in");
         router.replace("/login");

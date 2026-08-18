@@ -438,7 +438,7 @@ export function ChatLayoutView({ children }: { children: React.ReactNode }) {
     const resolveAndApply = async () => {
       let newId: number | null = null;
 
-      if (pathname === "/" || pathname === "/new") {
+      if (pathname === "/home" || pathname === "/new") {
         const raw = localStorage.getItem("selectedAssistantId");
         const parsed = raw ? Number(raw) : NaN;
         newId = Number.isNaN(parsed) ? null : parsed;
