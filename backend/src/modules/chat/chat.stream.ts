@@ -443,7 +443,7 @@ async function checkTokenLimitsAndSetupStream(
     wallet.tokensRemaining / tokenMultiplier,
   );
 
-  res.setHeader("Content-Type", "text-event-stream");
+  res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
@@ -1620,7 +1620,7 @@ export async function streamChat(req: Request, res: Response) {
 
       if (mr) {
         (res as any).modelResponseId = mr.id;
-      }
+      }  
 
       if (adjusted.finalBillableTotal > 0) {
         await tx.usageLog.create({

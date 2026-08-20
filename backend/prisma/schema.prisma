@@ -17,6 +17,20 @@ model Role {
   userRoles UserRole[]
 }
 
+
+model UserRole {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  roleId    Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  role      Role      @relation(fields: [roleId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
 model User {
   id                            Int                 @id @default(autoincrement())
   firstName                     String
@@ -102,18 +116,7 @@ model ContextMemory {
   @@index([sourceChatId])
 }
 
-model UserRole {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  roleId    Int
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-  role      Role      @relation(fields: [roleId], references: [id])
-  user      User      @relation(fields: [userId], references: [id])
 
-  @@unique([userId, roleId])
-}
 
 model UserWallet {
   id                 Int                 @id @default(autoincrement())
@@ -325,7 +328,7 @@ model ModelResponse {
   chat               Chat                @relation(fields: [chatId], references: [id])
   message            Message             @relation(fields: [messageId], references: [id])
   model              Model               @relation(fields: [modelId], references: [id])
-  generatedDocuments GeneratedDocument[]
+  generatedDocuments  []
   createdAt          DateTime            @default(now())
   completedAt        DateTime?
 
