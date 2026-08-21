@@ -78,6 +78,7 @@ class DocumentService {
       isDeleted: false,
       ...(query.status ? { status: query.status as any } : {}),
       ...(query.chatId ? { chatId: Number(query.chatId) } : {}),
+      ...(query.format ? { format: query.format as any } : {}),
     };
 
     const [items, total] = await Promise.all([

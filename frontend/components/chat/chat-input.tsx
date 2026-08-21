@@ -26,6 +26,7 @@ import {
   Maximize2,
   Minimize2,
   ChevronDown,
+  AudioLines,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,6 +46,15 @@ const MicButton = dynamic(
   () =>
     import("@/components/chat/mic-button").then((m) => ({
       default: m.MicButton,
+    })),
+  { ssr: false, loading: () => null },
+);
+
+// Dynamically imported so the Pipecat/WebRTC client never runs on the server
+const VoiceModal = dynamic(
+  () =>
+    import("@/components/chat/voice-modal").then((m) => ({
+      default: m.VoiceModal,
     })),
   { ssr: false, loading: () => null },
 );
@@ -332,6 +342,7 @@ export function ChatInput({
   const [enhancedPrompt, setEnhancedPrompt] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const dragCounterRef = useRef(0);
 
   // Speech-to-text: track the text that existed before mic was started
@@ -1437,6 +1448,19 @@ export function ChatInput({
                   <span className="hidden sm:inline">Enhance</span>
                 </Button>
 
+                {/* Conversation AI — opens the full-screen voice modal */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={`h-9 w-9 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 ${isExpanded ? "hidden" : ""}`}
+                  onClick={() => setIsVoiceOpen(true)}
+                  title="Talk to your AI"
+                  data-guide="voice"
+                >
+                  <AudioLines className="h-4.5 w-4.5" />
+                </Button>
+
                 {/* Mic — conditionally hidden in full screen */}
                 <div className={isExpanded ? "hidden" : ""}>
                   <MicButton
@@ -1518,6 +1542,7 @@ export function ChatInput({
           )}
         </div>
       </div>
+      <VoiceModal open={isVoiceOpen} onClose={() => setIsVoiceOpen(false)} />
     </>
   );
 }

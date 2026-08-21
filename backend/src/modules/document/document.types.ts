@@ -277,6 +277,7 @@ export interface ListDocumentsQuery {
   limit?: number;
   status?: string;
   chatId?: number;
+  format?: string;
 }
 
 // Caps mirror the spirit of the existing attachment-parsing limits: keep a

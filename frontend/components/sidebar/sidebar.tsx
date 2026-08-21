@@ -22,9 +22,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Plus, Search, Star } from "lucide-react";
+import { Plus, Search, Star, AudioLines, FolderArchive } from "lucide-react";
 import { chatService, folderService } from "@/lib/services";
-import { getRouteUiSnapshot, subscribeRouteUi, useIsStarredRoute } from "@/lib/route-ui-store";
+import { getRouteUiSnapshot, subscribeRouteUi, useIsStarredRoute, useIsVoiceRoute, useIsAssetsRoute } from "@/lib/route-ui-store";
 import { toast } from "@/components/ui/toast";
 import { AppSidebar } from "./app-sidebar";
 import type { Assistant, Chat, FolderItem } from "./sidebar-types";
@@ -85,6 +85,8 @@ function SidebarInner({
     routerRef.current = router;
   }, [router]);
   const isStarredRoute = useIsStarredRoute();
+  const isVoiceRoute = useIsVoiceRoute();
+  const isAssetsRoute = useIsAssetsRoute();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(searchQuery);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
@@ -504,6 +506,42 @@ function SidebarInner({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">Starred Messages</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-9 w-9 rounded-lg cursor-pointer ${
+              isVoiceRoute
+                ? "text-primary bg-primary/10 hover:bg-primary/15"
+                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+            }`}
+            onClick={() => { onMobileClose(); router.push("/voice"); }}
+          >
+            <AudioLines className="w-4 h-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Voice Chats</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-9 w-9 rounded-lg cursor-pointer ${
+              isAssetsRoute
+                ? "text-primary bg-primary/10 hover:bg-primary/15"
+                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+            }`}
+            onClick={() => { onMobileClose(); router.push("/assets"); }}
+          >
+            <FolderArchive className="w-4 h-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Assets Vault</TooltipContent>
       </Tooltip>
     </>
   );
