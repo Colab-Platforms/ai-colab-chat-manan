@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { chatService, folderService } from "@/lib/services";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 
 interface VoiceChatMenuProps {
   chatId: number;

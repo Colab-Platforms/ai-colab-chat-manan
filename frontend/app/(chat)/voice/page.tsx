@@ -15,7 +15,7 @@ import {
   Pin,
 } from "lucide-react";
 import { chatService } from "@/lib/services";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,

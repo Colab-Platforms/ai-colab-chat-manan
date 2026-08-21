@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ArrowLeft, AudioLines, PhoneCall } from "lucide-react";
 import { chatService } from "@/lib/services";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { DocumentCard, type GeneratedDocument } from "@/components/chat/document-card";
 

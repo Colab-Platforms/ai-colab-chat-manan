@@ -8,7 +8,7 @@ import { PipecatClient } from "@pipecat-ai/client-js";
 import { DailyTransport } from "@pipecat-ai/daily-transport";
 import { PipecatClientAudio, PipecatClientProvider } from "@pipecat-ai/client-react";
 import { voiceService, attachmentService } from "@/lib/services";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/lib/toast";
 import Orb from "@/components/ui/Orb";
 import { DocumentCard, type GeneratedDocument } from "@/components/chat/document-card";
 
