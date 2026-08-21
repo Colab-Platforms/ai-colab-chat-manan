@@ -27,9 +27,32 @@ interface ModelResponse {
   // Attached per response, not per message: in compare mode each model's
   // answer produces its own document.
   generatedDocuments?: GeneratedDocument[];
+  insufficientBalance?: boolean;
 }
 
-function parseFollowUpQuestions(text: string): { cleanText: string; questions: string[] } {
+// Historical FAILED responses (loaded from DB after a refresh) don't carry
+// the live `insufficientBalance` flag, so fall back to matching the known
+// backend copy for this failure mode.
+function isInsufficientBalanceFailure(resp?: ModelResponse | null): boolean {
+  if (!resp || resp.status !== "FAILED") return false;
+  if (resp.insufficientBalance) return true;
+  const text = (resp.content || "").toLowerCase();
+  return (
+    text.includes("insufficient tokens") ||
+    text.includes("insufficient balance") ||
+    text.includes("token limit exceeded")
+  );
+}
+
+// A user-initiated stop mid-stream is marked FAILED (there's no separate
+// "stopped" status), but it isn't an error — whatever text had streamed in
+// should stay on screen as-is, not flip to the destructive/retry UI.
+function isStoppedByUser(resp?: ModelResponse | null): boolean {
+  if (!resp || resp.status !== "FAILED") return false;
+  return resp.finishReason === "user_aborted";
+}
+
+function parseFollowUpQuestions(text: string, isStreaming: boolean = false): { cleanText: string; questions: string[] } {
   if (!text) return { cleanText: "", questions: [] };
   
   // Optimization: Only search for follow-up questions in the last 1500 characters
@@ -71,6 +94,30 @@ function parseFollowUpQuestions(text: string): { cleanText: string; questions: s
     }
   }
   
+  // While the response is still streaming in, the "```json" fence for follow-up
+  // questions (see the backend prompt instruction) arrives char-by-char before the
+  // array closes and matches the regex above. Left alone, the markdown renderer
+  // draws that unclosed fence as a raw code block. Hide everything from the fence
+  // onward until it's either complete (handled above) or the stream finishes.
+  if (isStreaming) {
+    const openFenceRegex = /```(?:json|JSON)/g;
+    let lastFenceIndex = -1;
+    let fenceMatch: RegExpExecArray | null;
+    while ((fenceMatch = openFenceRegex.exec(searchString)) !== null) {
+      lastFenceIndex = fenceMatch.index;
+    }
+    if (lastFenceIndex !== -1) {
+      const afterFence = searchString.slice(lastFenceIndex + "```json".length);
+      if (!afterFence.includes("```")) {
+        const globalIndex = startIndex + lastFenceIndex;
+        return {
+          cleanText: text.substring(0, globalIndex).replace(/[\s`\-]+$/, ""),
+          questions: [],
+        };
+      }
+    }
+  }
+
   return { cleanText: text.replace(/[\s`\-]+$/, ""), questions: [] };
 }
 
@@ -127,12 +174,14 @@ interface MessageBubbleProps {
   onToggleStar?: (responseId: number, isStarred: boolean) => void;
   onContinue?: (messageId: number, modelId: number) => void;
   onRetryAssistantResponse?: (assistantMessageId: number, modelId: number) => void;
+  onSwitchToFreeModel?: (assistantMessageId: number, modelId: number) => void;
 }
 
 export const MessageBubble = React.memo(function MessageBubble({
   message, activeModelTab, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersions, editVersionIndex, onEditVersionChange,
-  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar, onContinue, onRetryAssistantResponse
+  isLastMessage, onFollowUpClick, sharedView = false, onToggleStar, onContinue, onRetryAssistantResponse,
+  onSwitchToFreeModel
 }: MessageBubbleProps) {
   const isUser = message.role === "USER";
   const responses = message.modelResponses || [];
@@ -286,7 +335,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   const singleResps = !isMultiModel && uniqueModels[0] ? responsesByModel[uniqueModels[0].id] || [] : [];
   const singleVerIdx = !isMultiModel && uniqueModels[0] ? (versionIndices[uniqueModels[0].id] ?? (singleResps.length - 1)) : 0;
   const singleResp = singleResps[singleVerIdx] || singleResps[0];
-  const parsedSingle = parseFollowUpQuestions(singleResp?.content || "");
+  const parsedSingle = parseFollowUpQuestions(singleResp?.content || "", singleResp?.status === "STREAMING");
 
   // Version info
   const hasVersions = editVersions && editVersions.length > 1;
@@ -416,31 +465,52 @@ export const MessageBubble = React.memo(function MessageBubble({
           </div>
 
           {/* break-words and overflow-hidden prevent horizontal scrolling on long continuous strings */}
-          <div className="bg-muted/50 rounded-2xl rounded-tl-md px-4 py-2.5 break-words overflow-hidden w-full">
+          <div className=" rounded-2xl rounded-tl-md px-4 py-2.5 break-words overflow-hidden w-full">
             {singleResp ? (
-              parsedSingle.cleanText ? (
-                <div data-message-text="true" className="text-sm w-full max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
+              singleResp.status === "FAILED" && !isStoppedByUser(singleResp) ? (
+                isInsufficientBalanceFailure(singleResp) ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-destructive">
+                      You have insufficient balance. Do you want to switch to free models?
+                    </p>
+                    {!sharedView && onSwitchToFreeModel && uniqueModels[0] ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        type="button"
+                        onClick={() =>
+                          onSwitchToFreeModel(message.id, uniqueModels[0]!.id)
+                        }
+                      >
+                        Yes
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-destructive">
+                      {singleResp.content?.trim() || "Failed to generate a response. Please try again."}
+                    </p>
+                    {!sharedView && onRetryAssistantResponse && uniqueModels[0] ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        type="button"
+                        onClick={() =>
+                          onRetryAssistantResponse(message.id, uniqueModels[0]!.id)
+                        }
+                      >
+                        Try again
+                      </Button>
+                    ) : null}
+                  </div>
+                )
+              ) : parsedSingle.cleanText ? (
+                <div data-message-text="true" className="text-md w-full max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
                   <MarkdownRenderer content={parsedSingle.cleanText} />
                   {singleResp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
-                </div>
-              ) : singleResp.status === "FAILED" ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-destructive">
-                    {singleResp.content?.trim() || "Failed to generate a response. Please try again."}
-                  </p>
-                  {!sharedView && onRetryAssistantResponse && uniqueModels[0] ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      type="button"
-                      onClick={() =>
-                        onRetryAssistantResponse(message.id, uniqueModels[0]!.id)
-                      }
-                    >
-                      Try again
-                    </Button>
-                  ) : null}
                 </div>
               ) : (
                 <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
@@ -545,7 +615,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                 const mResps = responsesByModel[model.id] || [];
                 const verIdx = versionIndices[model.id] ?? (mResps.length - 1);
                 const resp = mResps[verIdx] || mResps[0];
-                const parsedMulti = parseFollowUpQuestions(resp?.content || "");
+                const parsedMulti = parseFollowUpQuestions(resp?.content || "", resp?.status === "STREAMING");
 
                 return (
                   <div
@@ -573,14 +643,27 @@ export const MessageBubble = React.memo(function MessageBubble({
 
                       {/* Card content */}
                       <div className="flex-1 px-3 py-2.5 text-sm overflow-y-auto max-h-[550px] scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20 w-full min-w-0 max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto">
-                        {parsedMulti.cleanText ? (
-                          <>
-                            <div data-message-text="true">
-                              <MarkdownRenderer content={parsedMulti.cleanText} />
+                        {resp?.status === "FAILED" && !isStoppedByUser(resp) ? (
+                          isInsufficientBalanceFailure(resp) ? (
+                            <div className="space-y-2">
+                              <p className="text-sm text-destructive">
+                                You have insufficient balance. Do you want to switch to free models?
+                              </p>
+                              {!sharedView && onSwitchToFreeModel ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs"
+                                  type="button"
+                                  onClick={() =>
+                                    onSwitchToFreeModel(message.id, model.id)
+                                  }
+                                >
+                                  Yes
+                                </Button>
+                              ) : null}
                             </div>
-                            {resp.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
-                          </>
-                        ) : resp?.status === "FAILED" ? (
+                          ) : (
                           <div className="space-y-2">
                             <p className="text-sm text-destructive">
                               {resp.content?.trim() || "Failed to generate a response. Please try again."}
@@ -599,6 +682,14 @@ export const MessageBubble = React.memo(function MessageBubble({
                               </Button>
                             ) : null}
                           </div>
+                          )
+                        ) : parsedMulti.cleanText ? (
+                          <>
+                            <div data-message-text="true">
+                              <MarkdownRenderer content={parsedMulti.cleanText} />
+                            </div>
+                            {resp?.status === "STREAMING" && <span className="inline-block w-1.5 h-4 bg-foreground/70 ml-0.5 animate-pulse" />}
+                          </>
                         ) : resp ? (
                           <TypingIndicator isImageMode={message.chatType === "IMAGE_GENERATION" || (typeof window !== "undefined" && localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")} />
                         ) : null}
@@ -702,15 +793,16 @@ export const MessageBubble = React.memo(function MessageBubble({
   for (let i = 0; i < pResps.length; i++) {
     const pr = pResps[i];
     const nr = nResps[i];
-    if (pr.id !== nr.id || pr.status !== nr.status || pr.content !== nr.content || pr.isLiked !== nr.isLiked || pr.isStarred !== nr.isStarred) {
+    if (pr.id !== nr.id || pr.status !== nr.status || pr.content !== nr.content || pr.isLiked !== nr.isLiked || pr.isStarred !== nr.isStarred || pr.insufficientBalance !== nr.insufficientBalance || pr.finishReason !== nr.finishReason) {
       return false;
     }
   }
-  
+
   if (pMsg.attachments?.length !== nMsg.attachments?.length) return false;
   if (prev.editVersions?.length !== next.editVersions?.length) return false;
 
   if (prev.onRetryAssistantResponse !== next.onRetryAssistantResponse) return false;
+  if (prev.onSwitchToFreeModel !== next.onSwitchToFreeModel) return false;
 
   return true;
 });

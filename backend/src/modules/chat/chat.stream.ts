@@ -474,7 +474,7 @@ async function checkTokenLimitsAndSetupStream(
 
     if (allowedPromptTokens <= 0) {
       res.write(
-        `data: ${JSON.stringify({ type: "error", message: "Insufficient tokens for this prompt length." })}\n\n`,
+        `data: ${JSON.stringify({ type: "error", code: "INSUFFICIENT_BALANCE", message: "Insufficient tokens for this prompt length." })}\n\n`,
       );
       res.write("data: [DONE]\n\n");
       res.end();
@@ -898,7 +898,7 @@ export async function streamChat(req: Request, res: Response) {
     // Check wallet
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if ((!wallet || wallet.tokensRemaining <= 0 ) && !isfreeModel) {
-      res.status(400).json({ status: false, message: "Token limit exceeded" });
+      res.status(400).json({ status: false, code: "INSUFFICIENT_BALANCE", message: "Token limit exceeded" });
       return;
     }
 
@@ -1745,7 +1745,7 @@ export async function regenerateChat(req: Request, res: Response) {
 
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Token limit exceeded" });
+      res.status(400).json({ status: false, code: "INSUFFICIENT_BALANCE", message: "Token limit exceeded" });
       return;
     }
 
@@ -2469,7 +2469,7 @@ export async function editAndResend(req: Request, res: Response) {
     // Check wallet
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Token limit exceeded" });
+      res.status(400).json({ status: false, code: "INSUFFICIENT_BALANCE", message: "Token limit exceeded" });
       return;
     }
 
@@ -2999,7 +2999,7 @@ export async function prepareEditMulti(req: Request, res: Response) {
     // Check user tokens mapping
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Token limit exceeded" });
+      res.status(400).json({ status: false, code: "INSUFFICIENT_BALANCE", message: "Token limit exceeded" });
       return;
     }
 
@@ -3104,7 +3104,7 @@ export async function continueChatStream(req: Request, res: Response) {
 
     const wallet = await prisma.userWallet.findUnique({ where: { userId } });
     if (!wallet || wallet.tokensRemaining <= 0) {
-      res.status(400).json({ status: false, message: "Token limit exceeded" });
+      res.status(400).json({ status: false, code: "INSUFFICIENT_BALANCE", message: "Token limit exceeded" });
       return;
     }
 

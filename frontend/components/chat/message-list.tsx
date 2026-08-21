@@ -34,6 +34,7 @@ interface MessageListProps {
   scrollContainerId?: string;
   onContinue?: (messageId: number, modelId: number) => void;
   onRetryAssistantResponse?: (assistantMessageId: number, modelId: number) => void;
+  onSwitchToFreeModel?: (assistantMessageId: number, modelId: number) => void;
 }
 
 /**
@@ -131,7 +132,8 @@ function processMessagesWithVersions(
 export function MessageList({
   messages, activeModelTabs, onModelTabChange, onRegenerate, onFeedback,
   onEditMessage, editVersionIndices = {}, onEditVersionChange, onFollowUpClick,
-  showSelectionTooltip = true, sharedView = false, onToggleStar, bottomAnchorId, forceScrollToBottom = false, scrollContainerId, onContinue, onRetryAssistantResponse
+  showSelectionTooltip = true, sharedView = false, onToggleStar, bottomAnchorId, forceScrollToBottom = false, scrollContainerId, onContinue, onRetryAssistantResponse,
+  onSwitchToFreeModel
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -177,6 +179,7 @@ export function MessageList({
               onToggleStar={onToggleStar}
               onContinue={onContinue}
               onRetryAssistantResponse={onRetryAssistantResponse}
+              onSwitchToFreeModel={onSwitchToFreeModel}
             />
           ))}
           <div id={bottomAnchorId} ref={bottomRef} />
