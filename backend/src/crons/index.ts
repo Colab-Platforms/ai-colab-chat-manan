@@ -3,6 +3,7 @@ import manualSubscriptionExpiryCron from "./manualSubscriptionExpiry.js";
 import manualRenewalRemindersCron from "./manualRenewalReminders.js";
 import contextDistillationCron from "./contextDistillation.js";
 import documentGenerationCron from "./documentGeneration.js";
+import voiceMemorySummaryCron from "./voiceMemorySummary.js";
 
 export const startCronJobs = () => {
     subscriptionExpiryCron();
@@ -10,5 +11,6 @@ export const startCronJobs = () => {
     manualRenewalRemindersCron();
     contextDistillationCron();
     documentGenerationCron();
+    voiceMemorySummaryCron();
     console.log("⏰ Cron jobs started");
 };

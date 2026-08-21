@@ -159,7 +159,7 @@ export const attachmentService = {
 
 export const userPreferenceService = {
   getPreferences: () => api.get("/preferences"),
-  updatePreferences: (data: { enableFollowUpQuestions?: boolean }) =>
+  updatePreferences: (data: { enableFollowUpQuestions?: boolean; voiceId?: string | null }) =>
     api.put("/preferences", data),
 };
 
@@ -199,6 +199,12 @@ export const documentService = {
   }) => api.post("/documents", data),
   retry: (id: number) => api.post(`/documents/${id}/retry`),
   delete: (id: number) => api.delete(`/documents/${id}`),
+};
+
+export const voiceService = {
+  createSession: (voiceId?: string, chatId?: number, attachmentIds?: number[]) =>
+    api.post("/voice/session", { voiceId, chatId, attachmentIds }),
+  listOptions: () => api.get("/voice/options"),
 };
 
 export const supportService = {

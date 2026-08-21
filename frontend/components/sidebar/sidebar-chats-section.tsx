@@ -3,11 +3,11 @@
 import { memo, type Dispatch, type SetStateAction } from "react";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Star } from "lucide-react";
+import { ChevronRight, Star, AudioLines, FolderArchive } from "lucide-react";
 import { ChatItem } from "@/components/sidebar/sidebar-chat-item";
 import { SIDEBAR_SECTION_HEADER_ROW, SIDEBAR_SECTION_TITLE } from "@/components/sidebar/sidebar-section-styles";
 import type { Chat, FolderItem } from "@/components/sidebar/sidebar-types";
-import { useIsStarredRoute } from "@/lib/route-ui-store";
+import { useIsStarredRoute, useIsVoiceRoute, useIsAssetsRoute } from "@/lib/route-ui-store";
 
 export const ChatsSection = memo(function ChatsSection({
   chatsExpanded,
@@ -51,6 +51,8 @@ export const ChatsSection = memo(function ChatsSection({
   onLoadMore?: () => void;
 }) {
   const isStarredRoute = useIsStarredRoute();
+  const isVoiceRoute = useIsVoiceRoute();
+  const isAssetsRoute = useIsAssetsRoute();
   return (
     <>
       <div className={`${SIDEBAR_SECTION_HEADER_ROW}`}>
@@ -85,6 +87,28 @@ export const ChatsSection = memo(function ChatsSection({
           >
             <Star className={`w-4 h-4 ${isStarredRoute ? "fill-current text-yellow-500" : "text-muted-foreground"}`} />
             <span>Starred Messages</span>
+          </button>
+          <button
+            onClick={() => { onMobileClose(); router.push("/voice"); }}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+              isVoiceRoute
+                ? "bg-gradient-to-r from-primary/20 to-primary/10 text-foreground font-medium"
+                : "text-foreground hover:bg-sidebar-accent"
+            }`}
+          >
+            <AudioLines className={`w-4 h-4 ${isVoiceRoute ? "text-primary" : "text-muted-foreground"}`} />
+            <span>Voice Chats</span>
+          </button>
+          <button
+            onClick={() => { onMobileClose(); router.push("/assets"); }}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+              isAssetsRoute
+                ? "bg-gradient-to-r from-primary/20 to-primary/10 text-foreground font-medium"
+                : "text-foreground hover:bg-sidebar-accent"
+            }`}
+          >
+            <FolderArchive className={`w-4 h-4 ${isAssetsRoute ? "text-primary" : "text-muted-foreground"}`} />
+            <span>Assets Vault</span>
           </button>
           {unfoldered.map((chat) => (
             <ChatItem

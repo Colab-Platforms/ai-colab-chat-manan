@@ -110,10 +110,12 @@ class ChatService {
       filterFields: [
         { key: "folderId", field: "folderId", type: "number" },
         { key: "isArchived", field: "isArchived", type: "boolean" },
+        { key: "capability", field: "capability", type: "string" },
       ],
       sortFields: [
         { key: "updatedAt", field: "updatedAt" },
         { key: "createdAt", field: "createdAt" },
+        { key: "title", field: "title" },
       ],
       defaultSort: { key: "updatedAt", order: "desc" },
       softDelete: { field: "isDeleted", value: false },
@@ -126,6 +128,13 @@ class ChatService {
       where.folderId = null;
     }
 
+    // Voice chats live in their own tab (see voice.service.ts / /voice
+    // page) and shouldn't clutter the regular sidebar/chat list — only
+    // include them when explicitly requested via ?capability=VOICE.
+    if (!query.capability) {
+      where.capability = { not: "VOICE" };
+    }
+
     const [chats, totalRecords] = await Promise.all([
       prisma.chat.findMany({
         where,
@@ -134,6 +143,7 @@ class ChatService {
         orderBy,
         include: {
           assistant: { select: { id: true, name: true, icon: true } },
+          _count: { select: { messages: true } },
         },
       }),
       prisma.chat.count({ where }),
@@ -146,6 +156,21 @@ class ChatService {
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId, isDeleted: false },
       include: {
+        generatedDocuments: {
+          where: { isDeleted: false },
+          select: {
+            id: true,
+            status: true,
+            format: true,
+            title: true,
+            fileName: true,
+            fileUrl: true,
+            fileSize: true,
+            lastError: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
         messages: {
           where: { isDeleted: false },
           orderBy: { createdAt: "asc" },

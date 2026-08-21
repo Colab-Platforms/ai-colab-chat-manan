@@ -2,11 +2,18 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Plus, Eye, Edit2, Trash2, Compass } from "lucide-react";
+import { Sparkles, Plus, Eye, Edit2, Trash2, Compass, AudioLines } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ContextModal } from "@/components/contexts/ContextModal";
@@ -23,6 +30,7 @@ import {
   contextService,
   folderService,
   userPreferenceService,
+  voiceService,
 } from "@/lib/services";
 import { toast } from "@/lib/toast";
 
@@ -65,6 +73,11 @@ export default function PreferencesPage() {
   const [loadingPrefs, setLoadingPrefs] = useState(true);
   const [togglingFollowUp, setTogglingFollowUp] = useState(false);
 
+  // ── Voice preference state ───────────────────────────────────────────────
+  const [voiceOptions, setVoiceOptions] = useState<{ id: string; name: string }[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
+  const [savingVoice, setSavingVoice] = useState(false);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchContexts = useCallback(async () => {
@@ -95,6 +108,7 @@ export default function PreferencesPage() {
       const res = await userPreferenceService.getPreferences();
       const prefs = res?.data?.data;
       setFollowUpEnabled(prefs?.enableFollowUpQuestions ?? false);
+      setSelectedVoiceId(prefs?.voiceId ?? "");
     } catch {
       setFollowUpEnabled(false);
     } finally {
@@ -102,11 +116,21 @@ export default function PreferencesPage() {
     }
   }, []);
 
+  const fetchVoiceOptions = useCallback(async () => {
+    try {
+      const res = await voiceService.listOptions();
+      setVoiceOptions(res?.data?.data ?? []);
+    } catch {
+      setVoiceOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     fetchContexts();
     fetchFolders();
     fetchPreferences();
-  }, [fetchContexts, fetchFolders, fetchPreferences]);
+    fetchVoiceOptions();
+  }, [fetchContexts, fetchFolders, fetchPreferences, fetchVoiceOptions]);
 
   // Keep folders updated when created elsewhere (e.g. sidebar)
   useEffect(() => {
@@ -238,6 +262,19 @@ export default function PreferencesPage() {
       toast.error("Failed to update preference");
     } finally {
       setTogglingFollowUp(false);
+    }
+  };
+
+  const handleVoiceChange = async (val: string) => {
+    const nextVoiceId = val === "default" ? null : val;
+    setSavingVoice(true);
+    try {
+      await userPreferenceService.updatePreferences({ voiceId: nextVoiceId });
+      setSelectedVoiceId(nextVoiceId ?? "");
+    } catch {
+      toast.error("Failed to update voice");
+    } finally {
+      setSavingVoice(false);
     }
   };
 
@@ -424,6 +461,44 @@ export default function PreferencesPage() {
                 disabled={togglingFollowUp || loadingPrefs}
                 id="follow-up-toggle"
               />
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* ── Voice ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <AudioLines className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-semibold">Voice</h2>
+        </div>
+
+        <Card className="border-border/30 bg-card/80 backdrop-blur-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">Assistant Voice</p>
+                <p className="text-xs text-muted-foreground">
+                  Choose the voice ColabAI speaks with during voice calls.
+                </p>
+              </div>
+              <Select
+                value={selectedVoiceId || "default"}
+                onValueChange={handleVoiceChange}
+                disabled={savingVoice || loadingPrefs}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  {voiceOptions.map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

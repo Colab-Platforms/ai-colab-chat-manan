@@ -4,12 +4,16 @@ type RouteUiState = {
   activeChatId: number | null;
   isDraftRoute: boolean;
   isStarredRoute: boolean;
+  isVoiceRoute: boolean;
+  isAssetsRoute: boolean;
 };
 
 const state: RouteUiState = {
   activeChatId: null,
   isDraftRoute: true,
   isStarredRoute: false,
+  isVoiceRoute: false,
+  isAssetsRoute: false,
 };
 
 const listeners = new Set<() => void>();
@@ -23,12 +27,16 @@ export function setRouteUiFromPathname(pathname: string) {
   const parsed = match ? Number(match[1]) : NaN;
   const nextActiveChatId = Number.isNaN(parsed) ? null : parsed;
   const nextIsStarredRoute = pathname === "/starred";
-  const nextIsDraftRoute = pathname === "/home" || pathname === "/new";
+  const nextIsVoiceRoute = pathname === "/voice";
+  const nextIsAssetsRoute = pathname === "/assets";
+  const nextIsDraftRoute = pathname === "/" || pathname === "/new";
 
   if (
     state.activeChatId === nextActiveChatId &&
     state.isDraftRoute === nextIsDraftRoute &&
-    state.isStarredRoute === nextIsStarredRoute
+    state.isStarredRoute === nextIsStarredRoute &&
+    state.isVoiceRoute === nextIsVoiceRoute &&
+    state.isAssetsRoute === nextIsAssetsRoute
   ) {
     return;
   }
@@ -36,6 +44,8 @@ export function setRouteUiFromPathname(pathname: string) {
   state.activeChatId = nextActiveChatId;
   state.isDraftRoute = nextIsDraftRoute;
   state.isStarredRoute = nextIsStarredRoute;
+  state.isVoiceRoute = nextIsVoiceRoute;
+  state.isAssetsRoute = nextIsAssetsRoute;
   emit();
 }
 
@@ -64,5 +74,13 @@ export function useIsDraftRoute() {
 
 export function useIsStarredRoute() {
   return useSyncExternalStore(subscribeRouteUi, () => state.isStarredRoute, () => false);
+}
+
+export function useIsVoiceRoute() {
+  return useSyncExternalStore(subscribeRouteUi, () => state.isVoiceRoute, () => false);
+}
+
+export function useIsAssetsRoute() {
+  return useSyncExternalStore(subscribeRouteUi, () => state.isAssetsRoute, () => false);
 }
 
