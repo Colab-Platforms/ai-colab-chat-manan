@@ -252,6 +252,15 @@ export const getThemeCss = (theme: DocumentTheme): string => {
       font-size: 9.5pt;
     }
 
+    .inline-code {
+      font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+      background: ${t.accentSoft};
+      border: 1px solid ${t.border};
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+
     pre {
       background: ${t.accentSoft};
       border: 1px solid ${t.border};

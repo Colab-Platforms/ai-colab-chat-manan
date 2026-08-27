@@ -1,4 +1,5 @@
 import { getThemeCss } from "./document.theme.js";
+import { parseFormattedText, parseInlineSegments } from "./document.textFormatting.js";
 import type {
   DocumentBlock,
   DocumentSpec,
@@ -21,9 +22,35 @@ const escapeHtml = (value: unknown): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-/** Preserve paragraph line breaks without letting any markup through. */
-const escapeMultiline = (value: unknown): string =>
-  escapeHtml(value).replace(/\r?\n/g, "<br />");
+/** Renders `**bold**` / `` `code` `` within a single line — no bullets, no line breaks. */
+const renderInline = (value: unknown): string =>
+  parseInlineSegments(value)
+    .map((segment) => {
+      const escaped = escapeHtml(segment.text);
+      if (segment.bold) return `<strong>${escaped}</strong>`;
+      if (segment.code) return `<code class="inline-code">${escaped}</code>`;
+      return escaped;
+    })
+    .join("");
+
+/**
+ * Full text-field renderer: inline bold/code plus per-line bullet detection,
+ * for the multi-line fields that previously went through `escapeMultiline`.
+ */
+const renderFormatted = (value: unknown): string =>
+  parseFormattedText(value)
+    .map((line) => {
+      const inner = line.segments
+        .map((segment) => {
+          const escaped = escapeHtml(segment.text);
+          if (segment.bold) return `<strong>${escaped}</strong>`;
+          if (segment.code) return `<code class="inline-code">${escaped}</code>`;
+          return escaped;
+        })
+        .join("");
+      return line.bullet ? `•&nbsp;${inner}` : inner;
+    })
+    .join("<br />");
 
 /**
  * Image hosts we are willing to have Chromium fetch. Anything else — including
@@ -56,51 +83,51 @@ const renderBlock = (block: DocumentBlock): string => {
   switch (block.type) {
     case "heading": {
       const level = block.level === 1 ? 1 : block.level === 2 ? 2 : 3;
-      return `<h${level}>${escapeHtml(block.text)}</h${level}>`;
+      return `<h${level}>${renderInline(block.text)}</h${level}>`;
     }
 
     case "paragraph":
-      return `<p>${escapeMultiline(block.text)}</p>`;
+      return `<p>${renderFormatted(block.text)}</p>`;
 
     case "list": {
       const tag = block.ordered ? "ol" : "ul";
       const items = block.items
-        .map((item) => `<li>${escapeMultiline(item)}</li>`)
+        .map((item) => `<li>${renderFormatted(item)}</li>`)
         .join("");
       return `<${tag}>${items}</${tag}>`;
     }
 
     case "table": {
       const head = block.columns
-        .map((column) => `<th>${escapeHtml(column)}</th>`)
+        .map((column) => `<th>${renderInline(column)}</th>`)
         .join("");
       const body = block.rows
         .map((row) => {
           // Pad or trim so a ragged row from the model cannot break the grid.
           const cells = block.columns.map(
-            (_column, index) => `<td>${escapeMultiline(row?.[index] ?? "")}</td>`,
+            (_column, index) => `<td>${renderFormatted(row?.[index] ?? "")}</td>`,
           );
           return `<tr>${cells.join("")}</tr>`;
         })
         .join("");
       const caption = block.caption
-        ? `<div class="table-caption">${escapeHtml(block.caption)}</div>`
+        ? `<div class="table-caption">${renderInline(block.caption)}</div>`
         : "";
       return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${caption}`;
     }
 
     case "callout": {
       const title = block.title
-        ? `<div class="callout__title">${escapeHtml(block.title)}</div>`
+        ? `<div class="callout__title">${renderInline(block.title)}</div>`
         : "";
-      return `<div class="callout callout--${escapeHtml(block.variant)}">${title}<p>${escapeMultiline(block.text)}</p></div>`;
+      return `<div class="callout callout--${escapeHtml(block.variant)}">${title}<p>${renderFormatted(block.text)}</p></div>`;
     }
 
     case "keyValue": {
       const rows = block.items
         .map(
           (item) =>
-            `<tr><td class="kv__label">${escapeHtml(item.label)}</td><td>${escapeMultiline(item.value)}</td></tr>`,
+            `<tr><td class="kv__label">${renderInline(item.label)}</td><td>${renderFormatted(item.value)}</td></tr>`,
         )
         .join("");
       return `<table class="kv"><tbody>${rows}</tbody></table>`;
@@ -108,9 +135,9 @@ const renderBlock = (block: DocumentBlock): string => {
 
     case "quote": {
       const attribution = block.attribution
-        ? `<span class="attribution">— ${escapeHtml(block.attribution)}</span>`
+        ? `<span class="attribution">— ${renderInline(block.attribution)}</span>`
         : "";
-      return `<blockquote>${escapeMultiline(block.text)}${attribution}</blockquote>`;
+      return `<blockquote>${renderFormatted(block.text)}${attribution}</blockquote>`;
     }
 
     case "code":
@@ -119,7 +146,7 @@ const renderBlock = (block: DocumentBlock): string => {
     case "image": {
       if (!isAllowedImageUrl(block.url)) return "";
       const caption = block.caption
-        ? `<figcaption>${escapeHtml(block.caption)}</figcaption>`
+        ? `<figcaption>${renderInline(block.caption)}</figcaption>`
         : "";
       const widthClass = block.width === "half" ? " width--half" : "";
       return `<figure class="figure${widthClass}"><img src="${escapeHtml(block.url)}" />${caption}</figure>`;
