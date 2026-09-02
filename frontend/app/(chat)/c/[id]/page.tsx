@@ -378,6 +378,7 @@ export default function ChatPage() {
     attachmentIds?: number[],
     signal?: AbortSignal,
     tempUserMsgId?: number,
+    replaceModelId?: number,
   ) => {
     return fetch(`${apiUrl}/chats/${chatId}/send`, {
       method: "POST",
@@ -393,6 +394,7 @@ export default function ChatPage() {
         userMessageId,
         assistantMessageId,
         ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
+        ...(replaceModelId ? { replaceModelId } : {}),
       }),
       signal,
     }).then(async (response) => {
@@ -679,6 +681,7 @@ export default function ChatPage() {
           attachmentIds,
           controller.signal,
           undefined,
+          oldModelId,
         );
       }
       window.setTimeout(() => fetchChat(true), 2000);

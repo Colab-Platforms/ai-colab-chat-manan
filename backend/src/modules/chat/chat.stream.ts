@@ -622,6 +622,7 @@ interface SendMessageBody {
   userMessageId?: number;
   assistantMessageId?: number;
   attachmentIds?: number[];
+  replaceModelId?: number;
 }
 
 /**
@@ -851,6 +852,7 @@ export async function streamChat(req: Request, res: Response) {
     userMessageId,
     assistantMessageId,
     attachmentIds,
+    replaceModelId,
   } = req.body as SendMessageBody;
   const abortController = new AbortController();
   const isClientAborted = setupClientAbortTracking(req, res, abortController);
@@ -964,6 +966,19 @@ export async function streamChat(req: Request, res: Response) {
           role: "ASSISTANT",
           content: "",
           chatType: chatType || "STANDARD",
+        },
+      });
+    }
+
+    // A retry that switches models (e.g. "switch to free model" after an
+    // insufficient-balance failure) supersedes the prior failed attempt on
+    // this message instead of adding a second model to it.
+    if (replaceModelId && replaceModelId !== modelId) {
+      await prisma.modelResponse.deleteMany({
+        where: {
+          messageId: assistantMessage.id,
+          modelId: replaceModelId,
+          status: "FAILED",
         },
       });
     }
