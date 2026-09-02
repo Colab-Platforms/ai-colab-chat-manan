@@ -410,6 +410,7 @@ export default function ChatPage() {
       let lastDonePayload: any = null;
       let streamEndedWithError = false;
       const revealer = createSmoothRevealer({
+        disabled: chatType === "IMAGE_GENERATION",
         onUpdate: (text) => {
           setMessages((prev) =>
             prev.map((msg) =>
@@ -977,6 +978,7 @@ export default function ChatPage() {
       let accumulated = "";
       let buffer = "";
       revealer = createSmoothRevealer({
+        disabled: localStorage.getItem("preferredChatType") === "IMAGE_GENERATION",
         onUpdate: (text) => {
           setMessages((prev) =>
             prev.map((msg) =>
@@ -1331,6 +1333,7 @@ export default function ChatPage() {
       let buffer = "";
       revealer = createSmoothRevealer({
         initialShown: existingContent,
+        disabled: localStorage.getItem("preferredChatType") === "IMAGE_GENERATION",
         onUpdate: (text) => {
           setMessages((prev) =>
             prev.map((msg) =>

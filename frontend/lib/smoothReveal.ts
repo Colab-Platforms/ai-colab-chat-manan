@@ -16,6 +16,7 @@ interface SmoothRevealOptions {
   minCharsPerTick?: number;
   maxCharsPerTick?: number;
   catchUpFraction?: number;
+  disabled?: boolean;
 }
 
 export interface SmoothRevealer {
@@ -37,6 +38,7 @@ export function createSmoothRevealer(
     minCharsPerTick = 1,
     maxCharsPerTick = 32,
     catchUpFraction = 0.25,
+    disabled = false,
   } = options;
 
   let target = initialShown;
@@ -82,13 +84,22 @@ export function createSmoothRevealer(
   return {
     push(fullText: string) {
       target = fullText;
+      const shouldBypass = disabled || fullText.includes("data:image/");
+      if (shouldBypass) {
+        stopTimer();
+        shown = fullText;
+        onUpdate(shown);
+        settleWaiters();
+        return;
+      }
       if (!timer && target.length > shown.length) {
         timer = setInterval(tick, tickMs);
       }
     },
     finish() {
       return new Promise<void>((resolve) => {
-        if (shown.length >= target.length) {
+        const shouldBypass = disabled || target.includes("data:image/");
+        if (shouldBypass || shown.length >= target.length) {
           resolve();
           return;
         }

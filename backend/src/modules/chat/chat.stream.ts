@@ -654,7 +654,7 @@ function keepOnlyFirstImageMarkdown(content: string): string {
 }
 
 const EMPTY_IMAGE_RESPONSE_ERROR =
-  "Image generation failed: the request was blocked by safety checks or produced no image output.";
+  "Image generation failed: You have insufficient tokens for the image generation you should have minium 10K token for image generation.";
 
 const FAILED_GENERATION_USER_MESSAGE =
   "Failed to generate a response. Please try again.";

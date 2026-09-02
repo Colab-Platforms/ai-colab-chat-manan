@@ -44,6 +44,14 @@ function isInsufficientBalanceFailure(resp?: ModelResponse | null): boolean {
   );
 }
 
+function isImageGenerationMessage(message: Message): boolean {
+  return (
+    message.chatType === "IMAGE_GENERATION" ||
+    (typeof window !== "undefined" &&
+      localStorage.getItem("preferredChatType") === "IMAGE_GENERATION")
+  );
+}
+
 // A user-initiated stop mid-stream is marked FAILED (there's no separate
 // "stopped" status), but it isn't an error — whatever text had streamed in
 // should stay on screen as-is, not flip to the destructive/retry UI.
@@ -471,9 +479,11 @@ export const MessageBubble = React.memo(function MessageBubble({
                 isInsufficientBalanceFailure(singleResp) ? (
                   <div className="space-y-2">
                     <p className="text-sm text-destructive">
-                      You have insufficient balance. Do you want to switch to free models?
+                      {isImageGenerationMessage(message)
+                        ? "You have insufficient balance for the image generation model."
+                        : "You have insufficient balance. Do you want to switch to free models?"}
                     </p>
-                    {!sharedView && onSwitchToFreeModel && uniqueModels[0] ? (
+                    {!isImageGenerationMessage(message) && !sharedView && onSwitchToFreeModel && uniqueModels[0] ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -647,9 +657,11 @@ export const MessageBubble = React.memo(function MessageBubble({
                           isInsufficientBalanceFailure(resp) ? (
                             <div className="space-y-2">
                               <p className="text-sm text-destructive">
-                                You have insufficient balance. Do you want to switch to free models?
+                                {isImageGenerationMessage(message)
+                                  ? "You have insufficient balance for the image generation model."
+                                  : "You have insufficient balance. Do you want to switch to free models?"}
                               </p>
-                              {!sharedView && onSwitchToFreeModel ? (
+                              {!isImageGenerationMessage(message) && !sharedView && onSwitchToFreeModel ? (
                                 <Button
                                   variant="outline"
                                   size="sm"
