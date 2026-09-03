@@ -20,6 +20,7 @@ import {
 import { dlog } from "./document.logger.js";
 import { isAllowedImageUrl } from "./document.html.js";
 import { getCalloutColors, getThemeTokens, type ThemeTokens } from "./document.theme.js";
+import { parseFormattedText, parseInlineSegments } from "./document.textFormatting.js";
 import type {
   DocumentBlock,
   DocumentSpec,
@@ -212,30 +213,54 @@ const prefetchImages = async (
 
 const ORDERED_LIST_REFERENCE = "document-ordered-list";
 
-/**
- * Splits embedded newlines into Word line breaks.
- *
- * The model puts real newlines inside paragraph text; without this they
- * collapse into one run and the paragraph loses its shape.
- */
 const multilineRuns = (
   t: ThemeTokens,
   value: string,
   extra: object = {},
-): TextRun[] =>
-  String(value ?? "")
-    .split(/\r?\n/)
-    .map(
-      (line, index) =>
+): TextRun[] => {
+  const runs: TextRun[] = [];
+  parseFormattedText(value).forEach((line, lineIndex) => {
+    const segments = line.bullet
+      ? [{ text: "• ", bold: false, code: false }, ...line.segments]
+      : line.segments;
+    segments.forEach((segment, segmentIndex) => {
+      runs.push(
         new TextRun({
-          text: line,
-          font: t.bodyFontName,
+          text: segment.text,
+          font: segment.code ? t.monoFontName : t.bodyFontName,
           size: hp(t.baseFontPt),
           color: hex(t.text),
-          ...(index > 0 ? { break: 1 } : {}),
+          bold: segment.bold || undefined,
+          ...(segment.code
+            ? { shading: { fill: hex(t.accentSoft) } }
+            : {}),
+          ...(lineIndex > 0 && segmentIndex === 0 ? { break: 1 } : {}),
           ...extra,
         }),
-    );
+      );
+    });
+  });
+  return runs;
+};
+
+
+const inlineRuns = (
+  t: ThemeTokens,
+  value: string,
+  extra: object = {},
+): TextRun[] =>
+  parseInlineSegments(value).map(
+    (segment) =>
+      new TextRun({
+        text: segment.text,
+        font: segment.code ? t.monoFontName : t.bodyFontName,
+        size: hp(t.baseFontPt),
+        color: hex(t.text),
+        bold: segment.bold || undefined,
+        ...(segment.code ? { shading: { fill: hex(t.accentSoft) } } : {}),
+        ...extra,
+      }),
+  );
 
 const headingParagraph = (t: ThemeTokens, level: 1 | 2 | 3, text: string) => {
   const sizePt = level === 1 ? 20 : level === 2 ? 15 : 12.5;
@@ -243,16 +268,18 @@ const headingParagraph = (t: ThemeTokens, level: 1 | 2 | 3, text: string) => {
     // Word's own "keep with next" — the CSS renderer uses page-break-after.
     keepNext: true,
     spacing: { before: tw(level === 1 ? 18 : 14), after: tw(6) },
-    children: [
-      new TextRun({
-        text,
-        bold: t.headingWeight >= 600,
-        font: t.headingFontName,
-        size: hp(sizePt),
-        // h3 drops to body colour, matching the CSS theme.
-        color: hex(level === 3 ? t.text : t.accent),
-      }),
-    ],
+    children: parseInlineSegments(text).map(
+      (segment) =>
+        new TextRun({
+          text: segment.text,
+          bold: segment.bold || t.headingWeight >= 600,
+          font: segment.code ? t.monoFontName : t.headingFontName,
+          size: hp(sizePt),
+          // h3 drops to body colour, matching the CSS theme.
+          color: hex(level === 3 ? t.text : t.accent),
+          ...(segment.code ? { shading: { fill: hex(t.accentSoft) } } : {}),
+        }),
+    ),
   });
 };
 
@@ -330,15 +357,11 @@ const renderBlock = (
           tableCell(
             [
               new Paragraph({
-                children: [
-                  new TextRun({
-                    text: String(column ?? ""),
-                    bold: true,
-                    font: t.bodyFontName,
-                    size: hp(9.5),
-                    color: hex(t.tableHeaderText),
-                  }),
-                ],
+                children: inlineRuns(t, String(column ?? ""), {
+                  bold: true,
+                  size: hp(9.5),
+                  color: hex(t.tableHeaderText),
+                }),
               }),
             ],
             { fill: t.tableHeaderBg, borderColor: t.border },
@@ -377,15 +400,11 @@ const renderBlock = (
         table,
         new Paragraph({
           spacing: { before: tw(3), after: tw(8) },
-          children: [
-            new TextRun({
-              text: block.caption,
-              italics: true,
-              font: t.bodyFontName,
-              size: hp(9),
-              color: hex(t.muted),
-            }),
-          ],
+          children: inlineRuns(t, block.caption, {
+            italics: true,
+            size: hp(9),
+            color: hex(t.muted),
+          }),
         }),
       ];
     }
@@ -398,15 +417,10 @@ const renderBlock = (
         children.push(
           new Paragraph({
             spacing: { after: tw(2) },
-            children: [
-              new TextRun({
-                text: block.title,
-                bold: true,
-                font: t.bodyFontName,
-                size: hp(t.baseFontPt),
-                color: hex(colors.border),
-              }),
-            ],
+            children: inlineRuns(t, block.title, {
+              bold: true,
+              color: hex(colors.border),
+            }),
           }),
         );
       }
@@ -474,15 +488,10 @@ const renderBlock = (
                     margins: { top: tw(3), bottom: tw(3), right: tw(10) },
                     children: [
                       new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: item.label,
-                            bold: true,
-                            font: t.bodyFontName,
-                            size: hp(t.baseFontPt),
-                            color: hex(t.muted),
-                          }),
-                        ],
+                        children: inlineRuns(t, item.label, {
+                          bold: true,
+                          color: hex(t.muted),
+                        }),
                       }),
                     ],
                   }),
@@ -507,13 +516,20 @@ const renderBlock = (
       });
       if (block.attribution) {
         runs.push(
-          new TextRun({
-            text: `— ${block.attribution}`,
-            break: 1,
-            font: t.bodyFontName,
-            size: hp(9.5),
-            color: hex(t.muted),
-          }),
+          ...parseInlineSegments(`— ${block.attribution}`).map(
+            (segment, index) =>
+              new TextRun({
+                text: segment.text,
+                font: segment.code ? t.monoFontName : t.bodyFontName,
+                size: hp(9.5),
+                color: hex(t.muted),
+                bold: segment.bold || undefined,
+                ...(segment.code
+                  ? { shading: { fill: hex(t.accentSoft) } }
+                  : {}),
+                ...(index === 0 ? { break: 1 } : {}),
+              }),
+          ),
         );
       }
       return [
@@ -598,14 +614,10 @@ const renderBlock = (
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: tw(10) },
-            children: [
-              new TextRun({
-                text: block.caption,
-                font: t.bodyFontName,
-                size: hp(9),
-                color: hex(t.muted),
-              }),
-            ],
+            children: inlineRuns(t, block.caption, {
+              size: hp(9),
+              color: hex(t.muted),
+            }),
           }),
         );
       }
