@@ -19,6 +19,7 @@ Run one instance of `run_bot()` per active voice session (spawned by
 import json
 import sys
 
+from deepgram import LiveOptions
 from loguru import logger
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
@@ -54,7 +55,28 @@ logger.add(sys.stderr, level="INFO")
 VOICE_SYSTEM_PROMPT = """You are Colab AI, the user's personal AI companion, speaking with them out loud.
 
 Identity:
-- Your name is ColabAI. If asked who you are, say you're ColabAI — never call yourself "a personal AI assistant/companion" as your identity, and never mention being built on an underlying language model unless directly asked.
+- Your name is Colab AI — always exactly those two words, spoken and written separately. Never merge, blend, or nickname it into a single word like "Colabbi", "Colabbai", "Colabby", "Colobai", or anything similar — that is always wrong, even if it sounds more natural to say out loud. If you catch yourself about to say a merged version, say "Colab AI" instead.
+- If asked who you are in passing, give a 1-2 sentence answer: your name, and a one-line description of what the platform does. Never mention being built on an underlying language model unless directly asked.
+- Only if the user explicitly asks for detail about the platform/company/what it does (e.g. "what is Colab AI exactly", "tell me more about this platform", "who made this") give the fuller picture, spoken naturally and broken into a couple of short sentences rather than read as one block:
+  Colab AI is a unified, multi-model AI workspace that brings ChatGPT, Claude, Gemini, and other top AI models under one roof, instead of juggling separate tabs and subscriptions. It's built to feel less like a simple chatbot and more like an intelligent workspace for everyday work — a clean space to chat with top AI models, keep projects organized, dig into files, and turn AI output into ready-to-use documents.
+
+Guardrails (very important, always enforce):
+- If the user uses abusive, adult/seductive, sexually explicit, or otherwise inappropriate language, or asks you to engage in that kind of talk, do not comply and do not engage with the content at all. Politely decline, briefly say that's not something you can help with, and steer the conversation back to something you can actually help with.
+- Never mirror, repeat, or escalate inappropriate language back to the user, even to quote it. Keep the redirect short and non-judgmental — no lecturing.
+- This applies for the rest of the conversation, not just the message it appears in — if it happens again, decline again the same way.
+
+Features:
+- If asked what the platform can do, give a short, spoken-style answer covering just 2-3 of the most relevant features in a sentence or two — do not list all of them and do not read out the emoji/label formatting below.
+- Only if the user explicitly asks for a full list or more detail, walk through the features conversationally:
+  Project context memory that remembers your work automatically; folder-based workspaces instead of hundreds of loose chats; instant PDF, Word, Excel, and PowerPoint generation from AI output; 100+ AI models under one subscription; the ability to compare answers from multiple models side by side; unlimited free models so you're never fully cut off; 50,000 free tokens to try premium models; a transparent token wallet; web and mobile sync; and new AI providers added on an ongoing basis at no extra cost.
+
+Real-time data:
+- You have no live internet access, no news feed, and no market-data connection — only the generate_document tool. If asked for anything that requires up-to-the-moment information (stock prices, today's/yesterday's news, live scores, current weather, exchange rates, or anything else that changes day to day), say plainly that you don't have live access to that right now rather than guessing.
+- Never invent specific numbers, prices, headlines, or scores to sound helpful. A brief honest "I don't have real-time access to that" is always better than a made-up answer.
+
+Language:
+- Always reply in the same language the user is currently speaking, matching it turn by turn. If they speak English, reply in English; if they switch to Hindi mid-conversation, switch to Hindi immediately on your next reply — without being asked to. Never wait for an explicit instruction like "speak in Hindi" to make the switch; the change in the user's own words is the only signal you need.
+- If the user mixes languages in the same sentence, mirror that mix naturally rather than forcing everything into one language.
 
 Rules for every reply:
 - Speak the way a real person talks: short sentences, contractions, no markdown, no lists, no headings.
@@ -115,12 +137,9 @@ class EmotionAwareTTSProcessor(FrameProcessor):
         if isinstance(frame, TextFrame) and frame.text and not self._tag_resolved:
             self._buffer += frame.text
 
-            # Tag not fully arrived yet — hold everything, emit nothing.
             if "]" not in self._buffer:
                 if len(self._buffer) > 200:
-                    # Safety valve: no closing "]" within a reasonable
-                    # length means the model didn't emit a tag at all this
-                    # turn. Stop buffering so speech isn't dropped entirely.
+  
                     self._tag_resolved = True
                     await self.push_frame(TextFrame(text=self._buffer), direction)
                     self._buffer = ""
@@ -130,29 +149,13 @@ class EmotionAwareTTSProcessor(FrameProcessor):
             self._tag_resolved = True
             self._buffer = ""
 
-            # pipecat-ai 0.0.62's ElevenLabsTTSService has no public per-utterance
-            # settings setter (update_setting() is an inherited no-op for this
-            # service) — it only rebuilds voice_settings from self._settings at
-            # __init__ time. Mutating _settings and recomputing the cached
-            # payload is the only way to change delivery per-turn on this
-            # version; re-check pipecat's ElevenLabsTTSService source if
             # upgrading, this may become unnecessary.
             self._tts._settings["stability"] = cue.stability
             self._tts._settings["style"] = cue.style
             self._tts._voice_settings = self._tts._set_voice_settings()
 
             if clean_text:
-                # Whatever text arrived bundled with the tag in this same
-                # network chunk (the upstream provider doesn't always
-                # deliver one token per chunk) would otherwise reach TTS as
-                # one large TextFrame — ElevenLabs' websocket flushes audio
-                # based on the text it's been given, so a big first chunk
-                # means a long silence, then a long burst, instead of
-                # natural streaming speech. Splitting on whitespace here
-                # re-creates token-sized pieces so TTS starts generating
-                # audio for the first word(s) immediately, matching the
-                # smooth per-token flow every later frame already gets via
-                # plain pass-through below.
+
                 for piece in clean_text.split(" "):
                     if piece:
                         await self.push_frame(TextFrame(text=piece + " "), direction)
@@ -195,18 +198,15 @@ async def run_bot(room_url: str, token: str, voice_id: str | None, chat_id: int)
         DailyParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
-            # 0.4s (tried for lower latency) was shorter than a normal
-            # thinking-pause mid-sentence, so every such pause got treated
-            # as a full turn-end — one utterance was getting fragmented into
-            # several separate messages/replies. 0.7s is close to Pipecat's
-            # 0.8s default; still a little snappier, without cutting off
-            # natural pauses.
             vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.7)),
             transcription_enabled=False,  # Deepgram service below owns STT
         ),
     )
 
-    stt = DeepgramSTTService(api_key=settings.deepgram_api_key)
+    stt = DeepgramSTTService(
+        api_key=settings.deepgram_api_key,
+        live_options=LiveOptions(language="multi"),
+    )
 
     llm = OpenAILLMService(
         api_key=settings.openrouter_api_key,
@@ -222,16 +222,9 @@ async def run_bot(room_url: str, token: str, voice_id: str | None, chat_id: int)
 
     emotion_processor = EmotionAwareTTSProcessor(tts)
 
-    # Handles the RTVI client<->bot handshake (@pipecat-ai/client-js sends
-    # "client-ready" over the Daily data channel once connected; without this
-    # processor nothing ever replies "bot-ready" and the frontend's
-    # client.connect() hangs on "Connecting..." forever).
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
-    # Seed with this chat's prior turns + the same personalisation memory
-    # text-chat uses, so a voice call picks up context instead of starting
-    # cold every time. Best-effort — node_client falls back to empty on
-    # any failure so a Node hiccup never blocks the call from starting.
+
     voice_context = await node_client.fetch_context(chat_id)
     system_prompt = VOICE_SYSTEM_PROMPT
     if voice_context["contextText"]:
@@ -244,9 +237,6 @@ async def run_bot(room_url: str, token: str, voice_id: str | None, chat_id: int)
     )
     context_aggregator = llm.create_context_aggregator(context)
 
-    # Only a brand-new chat gets a proactive greeting — resuming an existing
-    # one (voice_context["history"] non-empty) waits for the user as normal,
-    # so ColabAI doesn't re-greet every time someone reopens a conversation.
     is_new_chat = not voice_context["history"]
 
     async def handle_generate_document(
@@ -266,10 +256,7 @@ async def run_bot(room_url: str, token: str, voice_id: str | None, chat_id: int)
                 {"status": "started", "message": "Document generation has started in the background."}
             )
             if result.get("document"):
-                # One push is enough — DocumentCard on the frontend self-polls
-                # PENDING/PROCESSING until COMPLETED/FAILED, same as it does
-                # in the text-chat flow. We just need to hand it the initial
-                # row so a card appears in the call at all.
+
                 await llm_service.push_frame(
                     RTVIServerMessageFrame(
                         data={"type": "document_generated", "document": result["document"]}
@@ -310,10 +297,7 @@ async def run_bot(room_url: str, token: str, voice_id: str | None, chat_id: int)
 
     @rtvi.event_handler("on_client_ready")
     async def on_client_ready(rtvi):
-        # set_client_ready() only flips a flag and fires this event — it does
-        # NOT send "bot-ready" itself. Without this handler calling
-        # set_bot_ready() explicitly, the frontend's client.connect() waits
-        # on "Connecting..." forever even though everything else works.
+
         await rtvi.set_bot_ready()
 
         if is_new_chat:
@@ -327,11 +311,7 @@ async def run_bot(room_url: str, token: str, voice_id: str | None, chat_id: int)
                 "Keep it to 1-2 sentences. Still follow the Emotion tag rule."
             )
             context.messages.append({"role": "system", "content": greeting_instruction})
-            # Triggers the LLM directly (BaseOpenAILLMService reacts to
-            # OpenAILLMContextFrame by generating a completion from
-            # context.messages) instead of waiting for user speech —
-            # queued at the pipeline source so it flows through the same
-            # path a real turn would.
+
             await task.queue_frames([OpenAILLMContextFrame(context)])
 
     @transport.event_handler("on_first_participant_joined")
