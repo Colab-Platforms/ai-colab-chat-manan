@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { motion, type Variants } from "framer-motion";
-import { chatService, messageService, modelService, assistantService } from "@/lib/services";
+import { chatService, messageService, modelService, assistantService, videoService } from "@/lib/services";
 import * as LucideIcons from "lucide-react";
 import { ChatInput } from "@/components/chat/chat-input";
+import { VideoGenerateDialog, type VideoGenerateParams } from "@/components/chat/video-generate-dialog";
 import { MessageSquare, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { ChatHyperspeedBackground } from "@/components/chat/ChatHyperspeedBackground";
@@ -44,6 +45,7 @@ export function NewChatPage() {
   const [maxModels, setMaxModels] = useState<number>(1); // 1 = single mode (default)
   const [isSending, setIsSending] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
 
   const [assistant, setAssistant] = useState<any | null>(null);
 
@@ -190,6 +192,40 @@ export function NewChatPage() {
     }
   };
 
+  /**
+   * Video generation has no "pending first message" step the way normal
+   * chat does — it's a direct API call, not a chat.stream.ts turn — so this
+   * creates the chat, kicks off the video against it, and navigates
+   * straight there. The new /c/[id] page fetches that video from the
+   * server on mount and interleaves it into the message timeline by
+   * createdAt, so nothing needs to be threaded through sessionStorage.
+   */
+  const handleGenerateVideo = async (params: VideoGenerateParams) => {
+    const rawPendingFolderId = localStorage.getItem("pending_new_chat_folder_id");
+    const pendingFolderId = rawPendingFolderId ? Number(rawPendingFolderId) : null;
+    const validPendingFolderId = pendingFolderId && !Number.isNaN(pendingFolderId) ? pendingFolderId : null;
+
+    const payload: any = {
+      title: params.prompt.substring(0, 50),
+      capability: "STANDARD",
+    };
+    if (validPendingFolderId) payload.folderId = validPendingFolderId;
+    if (assistant?.id) payload.assistantId = assistant.id;
+
+    const chatRes = await chatService.create(payload);
+    const chatId = chatRes.data.data.id;
+    localStorage.removeItem("pending_new_chat_folder_id");
+
+    window.dispatchEvent(
+      new CustomEvent("refresh-chats", {
+        detail: { immediate: true, refreshFolders: Boolean(validPendingFolderId) },
+      }),
+    );
+
+    await videoService.create({ ...params, chatId });
+    router.push(`/c/${chatId}`);
+  };
+
   const handleEnhancePrompt = async (prompt: string) => {
     const res = await messageService.enhancePrompt(prompt);
     return res.data.data;
@@ -292,6 +328,7 @@ export function NewChatPage() {
             onModelChange={handleModelChange}
             maxModels={maxModels}
             onSend={handleSend}
+            onGenerateVideoClick={() => setVideoDialogOpen(true)}
             onEnhancePrompt={handleEnhancePrompt}
             isSending={isSending}
             forceReset={true}
@@ -301,6 +338,11 @@ export function NewChatPage() {
           />
         </div>
       </div>
+      <VideoGenerateDialog
+        open={videoDialogOpen}
+        onOpenChange={setVideoDialogOpen}
+        onSubmit={handleGenerateVideo}
+      />
     </div>
   );
 }

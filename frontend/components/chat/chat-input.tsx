@@ -27,6 +27,7 @@ import {
   Minimize2,
   ChevronDown,
   AudioLines,
+  Film,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -102,6 +103,14 @@ interface ChatInputProps {
   draftStorageKey?: string;
   onCapabilityChange?: (type: ChatType) => void;
   chatType?: ChatType;
+  /**
+   * Video generation is deliberately NOT a ChatType — it doesn't route
+   * through chat.stream.ts's capability/model-switching machinery the way
+   * IMAGE_GENERATION does, it's a standalone async job (see modules/video on
+   * the backend). This just opens the caller's own video dialog; it never
+   * touches chatType/handleChatTypeChange.
+   */
+  onGenerateVideoClick?: () => void;
 }
 
 type ChatType =
@@ -331,6 +340,7 @@ export function ChatInput({
   draftStorageKey,
   onCapabilityChange,
   chatType: propChatType,
+  onGenerateVideoClick,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1538,6 +1548,18 @@ export function ChatInput({
                   </motion.button>
                 );
               })}
+              {onGenerateVideoClick && (
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={onGenerateVideoClick}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer bg-background/70 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground"
+                >
+                  <Film className="w-3.5 h-3.5" />
+                  Video Gen
+                </motion.button>
+              )}
             </div>
           )}
         </div>

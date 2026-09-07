@@ -87,6 +87,8 @@ class ModelService {
       updateData.capabilities = data.capabilities;
     if (data.tokenMultiplier !== undefined)
       updateData.tokenMultiplier = data.tokenMultiplier;
+    if (data.videoCostPerSecond !== undefined)
+      updateData.videoCostPerSecond = data.videoCostPerSecond;
 
     const updated = await prisma.model.update({
       where: { id: modelId },

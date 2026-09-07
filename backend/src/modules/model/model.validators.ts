@@ -12,12 +12,18 @@ export const createModelSchema = Joi.object({
         "IMAGE_GENERATION",
         "WEB_SEARCH",
         "VISION",
+        "VOICE",
+        "VIDEO_GENERATION",
       ),
     )
     .min(1)
     .required(),
   description: Joi.string().trim().allow(null, "").optional(),
   tokenMultiplier: Joi.number().optional(),
+  // Wallet tokens per second of video — only meaningful for a
+  // VIDEO_GENERATION model, but not conditionally required here since
+  // capabilities can be set before this is calibrated.
+  videoCostPerSecond: Joi.number().integer().min(0).optional(),
   isActive: Joi.boolean().optional(),
   defaultForCapabilities: Joi.array()
     .items(
@@ -27,6 +33,8 @@ export const createModelSchema = Joi.object({
         "IMAGE_GENERATION",
         "WEB_SEARCH",
         "VISION",
+        "VOICE",
+        "VIDEO_GENERATION",
       ),
     )
     .optional(),
@@ -44,12 +52,15 @@ export const updateModelSchema = Joi.object({
         "IMAGE_GENERATION",
         "WEB_SEARCH",
         "VISION",
+        "VOICE",
+        "VIDEO_GENERATION",
       ),
     )
     .min(1)
     .optional(),
   description: Joi.string().trim().allow(null, "").optional(),
   tokenMultiplier: Joi.number().optional(),
+  videoCostPerSecond: Joi.number().integer().min(0).optional(),
   isActive: Joi.boolean().optional(),
   defaultForCapabilities: Joi.array()
     .items(
@@ -59,6 +70,8 @@ export const updateModelSchema = Joi.object({
         "IMAGE_GENERATION",
         "WEB_SEARCH",
         "VISION",
+        "VOICE",
+        "VIDEO_GENERATION",
       ),
     )
     .optional(),

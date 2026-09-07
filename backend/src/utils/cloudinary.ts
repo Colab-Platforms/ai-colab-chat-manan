@@ -11,7 +11,7 @@ interface UploadResult {
 
 export interface UploadOptions {
   folder?: string;
-  resourceType?: "image" | "raw" | "auto";
+  resourceType?: "image" | "raw" | "auto" | "video";
   format?: string;
   quality?: string;
   moderation?: string;
@@ -99,9 +99,17 @@ export const uploadToCloudinary = async (
 
 /**
  * Delete a file from Cloudinary by its public ID.
+ *
+ * `resourceType` must match what the asset was uploaded with — Cloudinary
+ * namespaces destroy() by resource type, so deleting a "video" or "raw"
+ * upload without passing it here silently does nothing (`image` is the
+ * SDK's own default).
  */
-export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
-  await cloudinary.uploader.destroy(publicId);
+export const deleteFromCloudinary = async (
+  publicId: string,
+  resourceType: "image" | "raw" | "video" = "image",
+): Promise<void> => {
+  await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
 };
 
 /**

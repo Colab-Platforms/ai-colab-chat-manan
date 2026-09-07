@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, Column } from "@/components/dashboard/data-table";
 import { modelService, modelProviderService } from "@/lib/services";
-import { Loader2, Eye, Pencil, Trash2, Save, Plus, MessageSquare, Globe, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Loader2, Eye, Pencil, Trash2, Save, Plus, MessageSquare, Globe, Sparkles, Image as ImageIcon, Film } from "lucide-react";
 import { toast } from "@/lib/toast";
 
 const CAPABILITY_OPTIONS = [
@@ -17,6 +17,7 @@ const CAPABILITY_OPTIONS = [
   { value: "IMAGE_GENERATION", label: "Image Gen", icon: ImageIcon, color: "bg-pink-500/10 text-pink-600 border-pink-200 dark:border-pink-800" },
   { value: "WEB_SEARCH", label: "Web Search", icon: Globe, color: "bg-green-500/10 text-green-600 border-green-200 dark:border-green-800" },
   { value: "VISION", label: "Vision", icon: Eye, color: "bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800" },
+  { value: "VIDEO_GENERATION", label: "Video Gen", icon: Film, color: "bg-red-500/10 text-red-600 border-red-200 dark:border-red-800" },
 ];
 
 function CapabilityToggle({
@@ -82,7 +83,7 @@ export default function ModelsAdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const defaultForm = { name: "", externalId: "", description: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true, defaultForCapabilities: [] as string[], tokenMultiplier: 1.0 };
+  const defaultForm = { name: "", externalId: "", description: "", modelProviderId: 0, capabilities: ["STANDARD"], isActive: true, defaultForCapabilities: [] as string[], tokenMultiplier: 1.0, videoCostPerSecond: 0 };
   const [form, setForm] = useState(defaultForm);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const handleFilterChange = (key: string, value: string) => setActiveFilters((prev) => ({ ...prev, [key]: value }));
@@ -115,6 +116,7 @@ export default function ModelsAdminPage() {
       isActive: m.isActive,
       defaultForCapabilities: m.defaultForCapabilities || [],
       tokenMultiplier: m.tokenMultiplier || 1.0,
+      videoCostPerSecond: m.videoCostPerSecond || 0,
     });
     setEditModel(m);
   };
@@ -189,6 +191,9 @@ export default function ModelsAdminPage() {
               <div><span className="text-muted-foreground">Description:</span> <span className="text-muted-foreground whitespace-pre-wrap">{viewModel.description || "N/A"}</span></div>
               <div><span className="text-muted-foreground">Provider:</span> {viewModel.modelProvider?.name}</div>
               <div><span className="text-muted-foreground">Token Multiplier:</span> {viewModel.tokenMultiplier || 1.0}x</div>
+              {viewModel.capabilities?.includes("VIDEO_GENERATION") && (
+                <div><span className="text-muted-foreground">Video Cost:</span> {viewModel.videoCostPerSecond || 0} tokens/sec</div>
+              )}
               <div>
                 <span className="text-muted-foreground block mb-1">Capabilities:</span>
                 <div className="flex flex-wrap gap-1">{viewModel.capabilities?.map((c: string) => <Badge key={c} variant="outline">{c.replace(/_/g, " ")}</Badge>)}</div>
@@ -237,6 +242,13 @@ export default function ModelsAdminPage() {
                 <label className="text-sm font-medium">Token Multiplier</label>
                 <Input type="number" step="0.1" value={form.tokenMultiplier} onChange={(e) => setForm({ ...form, tokenMultiplier: parseFloat(e.target.value) || 1.0 })} placeholder="e.g. 1.0" />
               </div>
+              {form.capabilities.includes("VIDEO_GENERATION") && (
+                <div className="col-span-2 space-y-1">
+                  <label className="text-sm font-medium">Video Cost (tokens/sec)</label>
+                  <Input type="number" step="1" min="0" value={form.videoCostPerSecond} onChange={(e) => setForm({ ...form, videoCostPerSecond: parseInt(e.target.value) || 0 })} placeholder="e.g. 14355" />
+                  <p className="text-xs text-muted-foreground">Wallet tokens charged per second of generated video. Calibrate against OpenRouter&apos;s actual per-second price (GET /api/v1/videos/models).</p>
+                </div>
+              )}
             </div>
 
             <div className="h-px bg-border" />

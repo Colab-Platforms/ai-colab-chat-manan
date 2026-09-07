@@ -63,6 +63,7 @@ model User {
   preference                    UserPreference?
   walletTransactions            WalletTransaction[]
   generatedDocuments            GeneratedDocument[]
+  generatedVideos               GeneratedVideo[]
   payments                      Payment[]
   invoices                      Invoice[]
   supportRequests               SupportRequest[]
@@ -198,6 +199,7 @@ model Chat {
   responses          ModelResponse[]
   usageLogs          UsageLog[]
   generatedDocuments GeneratedDocument[]
+  generatedVideos    GeneratedVideo[]
 
   @@index([userId])
   @@index([folderId])
@@ -290,6 +292,67 @@ model GeneratedDocument {
   @@index([modelResponseId])
 }
 
+enum GeneratedVideoStatus {
+  PENDING
+  SUBMITTED
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model GeneratedVideo {
+  id                 Int                  @id @default(autoincrement())
+  userId             Int
+  chatId             Int?
+  messageId          Int?
+  modelId            Int
+  status             GeneratedVideoStatus @default(PENDING)
+  prompt             String
+  duration           Int                  @default(4)
+  resolution         String               @default("720p")
+  aspectRatio        String               @default("16:9")
+  // Image-to-video inputs (OpenRouter's frame_images) — public HTTPS URLs
+  // from the same attachment upload flow chat already uses. Presence of
+  // either drives the cheaper "with video input" pricing tier some models
+  // offer (see Model.videoCostPerSecondByResolutionImageInput).
+  firstFrameUrl      String?
+  lastFrameUrl       String?
+  // OpenRouter's own job id (POST /api/v1/videos response) — set once
+  // submission succeeds, used to poll/download and to correlate an
+  // incoming webhook back to this row.
+  externalJobId      String?
+  // Wallet tokens debited up front, before the (paid) provider call is
+  // made. Refunded in full on failure/cancellation/expiry, or partially
+  // reconciled against actualCostUsd on success — see
+  // video.generation.service.ts.
+  reservedTokens     Int
+  actualCostUsd      Decimal?
+  fileUrl            String?
+  cloudinaryPublicId String?
+  thumbnailUrl       String?
+  fileSize           Int?
+  attempts           Int                  @default(0)
+  lastError          String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  isDeleted          Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+  user               User                 @relation(fields: [userId], references: [id])
+  chat               Chat?                @relation(fields: [chatId], references: [id])
+  message            Message?             @relation(fields: [messageId], references: [id])
+  model              Model                @relation(fields: [modelId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([chatId])
+  @@index([messageId])
+  @@index([externalJobId])
+}
+
 model Message {
   id                 Int                 @id @default(autoincrement())
   chatId             Int
@@ -308,6 +371,7 @@ model Message {
   modelResponses     ModelResponse[]
   usageLogs          UsageLog[]
   generatedDocuments GeneratedDocument[]
+  generatedVideos    GeneratedVideo[]
 
   @@index([chatId])
   @@index([createdAt])
@@ -355,6 +419,7 @@ enum ModelCapability {
   WEB_SEARCH
   VISION
   VOICE
+  VIDEO_GENERATION
 }
 
 enum ResponseStatus {
@@ -379,10 +444,34 @@ model Model {
   defaultForCapabilities ModelCapability[] @default([])
   tokenMultiplier        Float             @default(1.0)
   isFreeModel            Boolean           @default(false)
+  // Wallet tokens charged per second of generated video, used when a model's
+  // price does not vary by resolution. Some providers (e.g. Seedance 2.0)
+  // charge per-pixel — 4K costs ~11x what 480p does — so a single flat rate
+  // would badly underprice the expensive tiers; videoCostPerSecondByResolution
+  // below overrides this per resolution, and this remains the fallback for
+  // any resolution not present in that map (and the only rate for models
+  // whose price genuinely doesn't vary by resolution).
+  videoCostPerSecond     Int?
+  // Optional map of resolution string ("480p", "720p", "1080p", "4K", ...)
+  // to wallet tokens/second, for models priced per-pixel or per-tier rather
+  // than flat. Calibrated from OpenRouter's actual GET /api/v1/videos/models
+  // pricing_skus (token-formula models) or duration_seconds_* SKUs (flat
+  // per-resolution models like Veo). Null/absent falls back to
+  // videoCostPerSecond above.
+  videoCostPerSecondByResolution Json?
+  // Same shape as videoCostPerSecondByResolution, but for image-to-video
+  // (GeneratedVideo.firstFrameUrl/lastFrameUrl set) — some providers charge
+  // LESS for image-conditioned generation than pure text-to-video (e.g.
+  // Seedance 2.0's own pricing_skus: video_tokens_with_video_input is ~39%
+  // cheaper than video_tokens). Null/absent falls back to
+  // videoCostPerSecondByResolution / videoCostPerSecond, i.e. same price
+  // regardless of image input (true for Veo, which has no distinct tier).
+  videoCostPerSecondByResolutionImageInput Json?
   assistants             Assistant[]
   modelProvider          ModelProvider     @relation(fields: [modelProviderId], references: [id])
   responses              ModelResponse[]
   usageLogs              UsageLog[]
+  generatedVideos        GeneratedVideo[]
 
   @@unique([modelProviderId, externalId])
 }

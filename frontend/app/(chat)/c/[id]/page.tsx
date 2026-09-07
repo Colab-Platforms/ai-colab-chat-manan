@@ -5,6 +5,9 @@ import { notFound, useParams } from "next/navigation";
 import { chatService, modelService, messageService, assistantService } from "@/lib/services";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
+import { VideoGenerateDialog, type VideoGenerateParams } from "@/components/chat/video-generate-dialog";
+import { videoService } from "@/lib/services";
+import type { GeneratedVideo } from "@/components/chat/video-card";
 import { toast } from "@/lib/toast";
 import { createSmoothRevealer } from "@/lib/smoothReveal";
 import * as LucideIcons from "lucide-react";
@@ -87,6 +90,35 @@ export default function ChatPage() {
   const streamAbortControllersRef = useRef<AbortController[]>([]);
   const stopRequestedRef = useRef(false);
   const [chatCapability, setChatCapability] = useState<any>("STANDARD");
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [videos, setVideos] = useState<GeneratedVideo[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    videoService
+      .list({ chatId: String(chatId) })
+      .then((res) => {
+        if (!cancelled && res.data?.data?.items) setVideos(res.data.data.items);
+      })
+      .catch(() => {
+        /* no videos yet, or a transient failure — either way, start empty */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId]);
+
+  const handleGenerateVideo = useCallback(
+    async (params: VideoGenerateParams) => {
+      const res = await videoService.create({ ...params, chatId });
+      if (res.data?.data) setVideos((prev) => [...prev, res.data.data]);
+    },
+    [chatId],
+  );
+
+  const handleVideoDeleted = useCallback((id: number) => {
+    setVideos((prev) => prev.filter((v) => v.id !== id));
+  }, []);
   const [maxModels, setMaxModels] = useState<number>(1); // 1 = single mode (default)
 
   useEffect(() => {
@@ -1496,6 +1528,13 @@ export default function ChatPage() {
         bottomAnchorId="chat-bottom-anchor"
         forceScrollToBottom={shouldForceScrollFromStarred}
         scrollContainerId="chat-scroll-container"
+        videos={videos}
+        onVideoDeleted={handleVideoDeleted}
+      />
+      <VideoGenerateDialog
+        open={videoDialogOpen}
+        onOpenChange={setVideoDialogOpen}
+        onSubmit={handleGenerateVideo}
       />
       <ChatInput
         models={models}
@@ -1503,6 +1542,7 @@ export default function ChatPage() {
         onModelChange={handleModelChange}
         maxModels={maxModels}
         onSend={(content, attachmentIds, chatType, attachmentObjects) => sendMessage(content, attachmentIds, undefined, chatType, attachmentObjects)}
+        onGenerateVideoClick={() => setVideoDialogOpen(true)}
         onEnhancePrompt={handleEnhancePrompt}
         isSending={isSending}
         onStopStreaming={stopStreaming}

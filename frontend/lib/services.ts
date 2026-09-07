@@ -201,6 +201,25 @@ export const documentService = {
   delete: (id: number) => api.delete(`/documents/${id}`),
 };
 
+export const videoService = {
+  listModels: () => api.get("/videos/models"),
+  list: (params?: Record<string, string>) => api.get("/videos", { params }),
+  getById: (id: number) => api.get(`/videos/${id}`),
+  create: (data: {
+    prompt: string;
+    chatId?: number;
+    messageId?: number;
+    modelId?: number;
+    duration?: number;
+    resolution?: string;
+    aspectRatio?: string;
+    firstFrameUrl?: string;
+    lastFrameUrl?: string;
+  }) => api.post("/videos", data),
+  retry: (id: number) => api.post(`/videos/${id}/retry`),
+  delete: (id: number) => api.delete(`/videos/${id}`),
+};
+
 export const voiceService = {
   createSession: (voiceId?: string, chatId?: number, attachmentIds?: number[]) =>
     api.post("/voice/session", { voiceId, chatId, attachmentIds }),
