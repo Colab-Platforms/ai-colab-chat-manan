@@ -9,8 +9,7 @@ export async function seedModels() {
 
   if (!openRouter) {
     console.log(
-      "  ⚠️ OpenRouter provider not found — run modelProviders seed first.",
-    );
+      "  ⚠️ OpenRouter provider not found — run modelProviders seed first.");
     return;
   }
 
@@ -167,6 +166,110 @@ export async function seedModels() {
       isActive: true,
       tokenMultiplier: 0,
     },
+    {
+      name: "Seedance 2.0",
+      externalId: "bytedance/seedance-2.0",
+      modelProviderId: openRouter.id,
+      capabilities: ["VIDEO_GENERATION"],
+      description: "ByteDance's full-quality video model — 480p/720p/1080p/4K, 4-15s clips",
+      isActive: true,
+      // Calibrated 2026-09-07 straight from OpenRouter's live
+      // GET /api/v1/videos/models pricing_skus (not the marketing page,
+      // which only quotes the 480p/4K endpoints): video_tokens=$0.000007/tok
+      // (480p/720p tier), video_tokens_1080p=$0.0000077/tok,
+      // video_tokens_4k=$0.000004/tok. Tokens/sec = width*height*24/1024
+      // (OpenRouter's own formula) at each resolution's standard size
+      // (854x480 / 1280x720 / 1920x1080 / 3840x2160). Verified against the
+      // model page's own Providers table: 720p computes to exactly
+      // $0.1512/sec, matching the table's quoted example precisely.
+      // Each break-even $/sec × 63,362 tokens/$ (Pro plan: ₹1499/mo ÷
+      // 1,000,000 tokens ÷ ₹94.98/$) × 1.5 margin:
+      //   480p:  $0.06728/sec → 6,394 tokens/sec
+      //   720p:  $0.1512/sec  → 14,371 tokens/sec
+      //   1080p: $0.37422/sec → 35,570 tokens/sec
+      //   4K:    $0.7776/sec  → 73,904 tokens/sec
+      // videoCostPerSecond is only a last-resort fallback for a resolution
+      // string outside this map — every resolution this model actually
+      // supports is in videoCostPerSecondByResolution below.
+      videoCostPerSecond: 14371,
+      videoCostPerSecondByResolution: {
+        "480p": 6394,
+        "720p": 14371,
+        "1080p": 35570,
+        "4K": 73904,
+      },
+      // Image-to-video (frame_images) is CHEAPER on this model — its own
+      // pricing_skus: video_tokens_with_video_input=$0.0000043/tok (480p/720p,
+      // ~39% below text-only), video_tokens_1080p_with_video_input=$0.0000047,
+      // video_tokens_4k_with_video_input=$0.0000024. Same tokens/sec formula
+      // and margin as above:
+      //   480p:  $0.04133/sec → 3,928 tokens/sec
+      //   720p:  $0.09288/sec → 8,829 tokens/sec
+      //   1080p: $0.22842/sec → 21,714 tokens/sec
+      //   4K:    $0.46656/sec → 44,345 tokens/sec
+      videoCostPerSecondByResolutionImageInput: {
+        "480p": 3928,
+        "720p": 8829,
+        "1080p": 21714,
+        "4K": 44345,
+      },
+    },
+    {
+      name: "Seedance 2.0 Mini",
+      externalId: "bytedance/seedance-2.0-mini",
+      modelProviderId: openRouter.id,
+      capabilities: ["VIDEO_GENERATION"],
+      description: "ByteDance's cheapest video model — 480p/720p, 4-15s clips, text/image/video/audio inputs",
+      isActive: true,
+      // Same method as Seedance 2.0 above, using this model's own
+      // pricing_skus: video_tokens=$0.0000035/tok (flat across 480p/720p —
+      // no _1080p/_4k keys since this model only supports those two
+      // resolutions). Tokens/sec via the same width*height*24/1024 formula:
+      //   480p (854x480):  9,611 tok/sec × $0.0000035 = $0.03364/sec → 3,197 tokens/sec
+      //   720p (1280x720): 21,600 tok/sec × $0.0000035 = $0.0756/sec  → 7,185 tokens/sec
+      videoCostPerSecond: 3197,
+      videoCostPerSecondByResolution: {
+        "480p": 3197,
+        "720p": 7185,
+      },
+      // video_tokens_with_video_input=$0.0000021/tok (flat, ~40% below
+      // text-only) — same formula/margin:
+      //   480p: $0.02018/sec → 1,918 tokens/sec
+      //   720p: $0.04536/sec → 4,312 tokens/sec
+      videoCostPerSecondByResolutionImageInput: {
+        "480p": 1918,
+        "720p": 4312,
+      },
+    },
+    {
+      name: "Veo 3.1 Lite",
+      externalId: "google/veo-3.1-lite",
+      modelProviderId: openRouter.id,
+      capabilities: ["VIDEO_GENERATION"],
+      description: "Google's cost-effective video model — 720p/1080p with native audio, 4/6/8s clips, 16:9/9:16",
+      isActive: true,
+      // Unlike Seedance, Veo's pricing_skus are already flat $/sec per
+      // resolution (no token-pixel formula) — duration_seconds_with_audio
+      // (1080p, the model's larger/default tier) = $0.08/sec,
+      // duration_seconds_with_audio_720p = $0.05/sec. Priced for the
+      // with-audio rate since there's no audio toggle in the UI and Veo's
+      // audio is native/on by default.
+      //   720p:  $0.05/sec → 4,752 tokens/sec
+      //   1080p: $0.08/sec → 7,603 tokens/sec
+      // Also fixed a real bug this pricing check surfaced: Veo 3.1 Lite's
+      // actual supported_durations are [4, 6, 8] only (not every integer
+      // 4-8) — the dialog previously offered 5s/7s, which OpenRouter would
+      // have rejected.
+      // No videoCostPerSecondByResolutionImageInput — Veo's pricing_skus
+      // have no distinct video/image-input tier (unlike Seedance), so
+      // image-to-video on this model costs the same as text-to-video and
+      // just falls back to videoCostPerSecondByResolution above.
+      videoCostPerSecond: 4752,
+      videoCostPerSecondByResolution: {
+        "720p": 4752,
+        "1080p": 7603,
+      },
+    },
   ];
 
   for (const model of MODELS) {
@@ -183,6 +286,10 @@ export async function seedModels() {
         description: model.description,
         isActive: model.isActive,
         tokenMultiplier: (model as any).tokenMultiplier ?? 1.0,
+        videoCostPerSecond: (model as any).videoCostPerSecond ?? null,
+        videoCostPerSecondByResolution: (model as any).videoCostPerSecondByResolution ?? undefined,
+        videoCostPerSecondByResolutionImageInput:
+          (model as any).videoCostPerSecondByResolutionImageInput ?? undefined,
       },
       create: {
         ...model,

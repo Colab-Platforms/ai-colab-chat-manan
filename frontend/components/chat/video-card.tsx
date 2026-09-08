@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Download, Film, Loader2, Maximize, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, Download, Film, Loader2, Maximize, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { videoService } from "@/lib/services";
 import { toast } from "@/lib/toast";
@@ -57,6 +57,9 @@ const FAILURE_LABEL: Record<string, string> = {
   EXPIRED: "Video generation expired",
 };
 
+const cleanErrorMessage = (message?: string | null): string =>
+  (message ?? "").replace(/\s*request\s*id\s*:.*$/i, "").trim();
+
 export function VideoCard({
   video: initial,
   className,
@@ -100,16 +103,6 @@ export function VideoCard({
       clearInterval(timer);
     };
   }, [video.id, isWorking]);
-
-  const handleRetry = useCallback(async () => {
-    try {
-      const res = await videoService.retry(video.id);
-      startedAt.current = Date.now();
-      if (res.data?.data) setVideo(res.data.data);
-    } catch {
-      /* keep the failed state visible */
-    }
-  }, [video.id]);
 
   const handleDelete = useCallback(async () => {
     setIsDeleting(true);
@@ -200,7 +193,7 @@ export function VideoCard({
     return (
       <div
         className={cn(
-          "mt-2 w-full max-w-md rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3",
+          "mt-2 w-full max-w-md rounded-2xl border border-border/60 bg-muted/30 px-4 py-3",
           className,
         )}
       >
@@ -209,24 +202,12 @@ export function VideoCard({
             <AlertCircle className="h-4 w-4 text-destructive" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-destructive">
+            <p className="text-sm font-medium text-foreground">
               {FAILURE_LABEL[video.status] ?? "Couldn't generate the video"}
             </p>
             <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-              {video.lastError || "Something went wrong while generating the video."}
+              {cleanErrorMessage(video.lastError) || "Something went wrong while generating the video."}
             </p>
-            {video.status === "FAILED" && (
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                className="mt-2 h-7 text-xs"
-                onClick={handleRetry}
-              >
-                <RefreshCw className="mr-1.5 h-3 w-3" />
-                Try again{video.reservedTokens ? ` (${video.reservedTokens} tokens)` : ""}
-              </Button>
-            )}
           </div>
         </div>
       </div>
